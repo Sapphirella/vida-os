@@ -203,46 +203,38 @@
   }
 
   /* ========================================================================
-     5. 首页（桌面）
+     5. 首页（桌面 · 12 列挂件网格，参照 InternalBeyond Desk 体系）
      ===================================================================== */
   function renderDesk() {
     const p = state.profile;
-    const hero = `
-      <div class="content-inner">
-        <div class="desk-layout">
-          <div class="desk-side">
-            <div class="hero">
-              <div class="hero-top">
-                <div class="hero-avatar" id="heroAvatar">${icon('user')}</div>
-                <div class="hero-greet">
-                  <span class="hi" id="heroGreet">${greeting()}</span>
-                  <span class="name" id="heroName">${esc(p.name || 'VidaOS')}</span>
-                </div>
+    $('#view-desk').innerHTML = `
+      <div class="content-inner" style="max-width:var(--home-w)">
+        <div class="dgrid">
+          <div class="hero dk-full">
+            <div class="hero-row1">
+              <div class="hero-avatar" id="heroAvatar">${icon('user')}</div>
+              <div class="hero-greet">
+                <span class="hi" id="heroGreet">${greeting()}</span>
+                <span class="name" id="heroName">${esc(p.name || 'VidaOS')}</span>
               </div>
-              <div class="hero-time" id="heroTime">--:--</div>
-              <div class="hero-date" id="heroDate">—</div>
-              <div class="hero-signature" id="heroSignature">${esc(p.signature || '')}</div>
             </div>
-
-            <div class="section-label">我的空间</div>
-            <div class="func-grid">
-              ${FUNCS.map((f) => `
-                <button class="func-btn" data-action="func" data-func="${f.id}">
-                  ${funcCount(f.id) ? `<span class="func-count">${funcCount(f.id)}</span>` : ''}
-                  <span class="func-icon">${icon(f.icon)}</span>
-                  <span class="func-name">${f.label}</span>
-                  <span class="func-en">${f.en}</span>
-                </button>`).join('')}
-            </div>
+            <div class="hero-day" id="heroDate">—</div>
+            <div class="hero-time" id="heroTime">--:--</div>
+            <div class="hero-sig" id="heroSignature">${esc(p.signature || '')}</div>
           </div>
 
-          <div class="desk-main">
-            ${renderCalendarCard()}
-            ${renderPlayerCard()}
-          </div>
+          ${FUNCS.map((f) => `
+            <button class="app-tile dk-3" data-action="func" data-func="${f.id}">
+              <span class="at-ic">${icon(f.icon)}</span>
+              <span class="at-name">${f.label}</span>
+              <span class="at-en">${f.en}</span>
+            </button>`).join('')}
+
+          ${renderCalendarCard()}
+          ${renderAgendaCard()}
+          ${renderPlayerCard()}
         </div>
       </div>`;
-    $('#view-desk').innerHTML = hero;
     hydrateAvatar();
     tick();
   }
@@ -270,14 +262,14 @@
     const heroDate = $('#heroDate');
     if (heroDate && currentView === 'desk') {
       const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
-      heroDate.textContent = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${wd}`;
+      heroDate.textContent = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 · 星期${wd}`;
     }
     const heroGreet = $('#heroGreet');
     if (heroGreet && currentView === 'desk') heroGreet.textContent = greeting();
   }
 
   /* ------------------------------------------------------------------------
-     5.1 日历（双卡式）
+     5.1 日历月历挂件（事项日打点）
      --------------------------------------------------------------------- */
   const calState = { y: new Date().getFullYear(), m: new Date().getMonth(), sel: todayStr() };
 
@@ -289,60 +281,71 @@
 
   function renderCalendarCard() {
     const { y, m, sel } = calState;
-    const first = new Date(y, m, 1);
     const days = new Date(y, m + 1, 0).getDate();
-    const lead = first.getDay(); // 0=周日
-    const weeks = Math.ceil((lead + days) / 7);
+    const lead = new Date(y, m, 1).getDay(); // 0=周日
     let cells = '';
-    for (let i = 0; i < weeks * 7; i++) {
+    for (let i = 0; i < lead + days; i++) {
       const dayNum = i - lead + 1;
-      if (dayNum < 1 || dayNum > days) {
-        cells += `<div class="cal-day dim"></div>`;
-      } else {
-        const dateStr = `${y}-${pad(m + 1)}-${pad(dayNum)}`;
-        const hasEvent = scheduleEventsFor(dateStr).length > 0;
-        const cls = ['cal-day'];
-        if (dateStr === todayStr()) cls.push('today');
-        if (dateStr === sel) cls.push('selected');
-        cells += `<button class="${cls.join(' ')}" data-action="cal-day" data-date="${dateStr}">
-          ${dayNum}
-          ${hasEvent ? `<span class="dots"><span class="dot"></span></span>` : ''}
-        </button>`;
-      }
+      if (dayNum < 1) { cells += `<div class="cal-day dim"></div>`; continue; }
+      const dateStr = `${y}-${pad(m + 1)}-${pad(dayNum)}`;
+      const hasEvent = scheduleEventsFor(dateStr).length > 0;
+      const cls = ['cal-day'];
+      if (dateStr === todayStr()) cls.push('today');
+      if (dateStr === sel) cls.push('selected');
+      cells += `<button class="${cls.join(' ')}" data-action="cal-day" data-date="${dateStr}">
+        <span class="dn">${dayNum}</span>
+        ${hasEvent ? `<span class="dots"><span class="dot"></span></span>` : ''}
+      </button>`;
     }
-    const evs = scheduleEventsFor(sel);
-    const selD = new Date(sel + 'T00:00:00');
+    // 补足到 6 行（42 格），保持网格整齐
+    for (let i = 0; i < Math.max(0, 42 - (lead + days)); i++) cells += `<div class="cal-day dim"></div>`;
+
+    return `
+      <div class="wgt glass dk-6">
+        <div class="wgt-top">
+          <span class="wgt-title">日历</span>
+          <span class="wgt-lab" style="margin-left:8px">Calendar</span>
+          <div class="wgt-sp"></div>
+          <button class="icon-glass" data-action="cal-today" title="回到今天" style="width:30px;height:30px">${icon('refresh')}</button>
+        </div>
+        <div class="cal-head">
+          <button class="cal-nav" data-action="cal-prev">${icon('chevronLeft')}</button>
+          <div class="cal-month">${y} 年 ${m + 1} 月</div>
+          <button class="cal-nav" data-action="cal-next">${icon('chevronRight')}</button>
+        </div>
+        <div class="cal-weekdays">${['日', '一', '二', '三', '四', '五', '六'].map((w) => `<span>${w}</span>`).join('')}</div>
+        <div class="cal-grid">${cells}</div>
+      </div>`;
+  }
+
+  /* ------------------------------------------------------------------------
+     5.2 当日日程挂件（与月历双卡并列）
+     --------------------------------------------------------------------- */
+  function renderAgendaCard() {
+    const evs = scheduleEventsFor(calState.sel);
+    const selD = new Date(calState.sel + 'T00:00:00');
     const selLabel = `${selD.getMonth() + 1}月${selD.getDate()}日`;
 
     return `
-      <div class="card glass calendar-card">
-        <div class="cal-panel">
-          <div class="cal-head">
-            <button class="cal-nav" data-action="cal-prev">${icon('chevronLeft')}</button>
-            <div class="cal-month">${y}年${m + 1}月</div>
-            <button class="cal-nav" data-action="cal-next">${icon('chevronRight')}</button>
-            <button class="cal-nav" data-action="cal-today" style="margin-left:6px">${icon('refresh')}</button>
-          </div>
-          <div class="cal-weekdays">${['日', '一', '二', '三', '四', '五', '六'].map((w) => `<span>${w}</span>`).join('')}</div>
-          <div class="cal-grid">${cells}</div>
+      <div class="wgt glass dk-6">
+        <div class="wgt-top">
+          <span class="wgt-title">日程</span>
+          <span class="wgt-lab" style="margin-left:8px">Agenda</span>
+          <div class="wgt-sp"></div>
+          <span class="ag-date-line">${selLabel}</span>
+          <button class="icon-glass" data-action="cal-add" title="添加当日日程" style="width:30px;height:30px">${icon('plus')}</button>
         </div>
-        <div class="cal-schedule">
-          <div class="cal-schedule-head">
-            <span class="cal-schedule-date">${selLabel} 日程</span>
-            <button class="icon-glass mini" data-action="cal-add" style="width:32px;height:32px">${icon('plus')}</button>
-          </div>
-          <div class="cal-schedule-list">
-            ${evs.length ? evs.map((e) => `
-              <div class="cal-event ${e.done ? 'done' : ''}">
-                <span class="bar"></span>
-                <button class="ev-body" data-action="cal-event" data-id="${e.id}" style="text-align:left">
-                  <div class="ev-title">${esc(e.title || e.note || '未命名')}</div>
-                  <div class="ev-time">${esc(e.time || '')} ${esc(e.category || '')}</div>
-                </button>
-                <button class="check ${e.done ? 'on' : ''}" data-action="cal-toggle" data-id="${e.id}">${icon('check')}</button>
-              </div>`).join('')
-              : `<div class="empty"><span class="ed">这一天还没有安排</span></div>`}
-          </div>
+        <div class="agenda-list">
+          ${evs.length ? evs.map((e) => `
+            <div class="ag-event ${e.done ? 'done' : ''}">
+              <span class="bar"></span>
+              <button class="ev-body" data-action="cal-event" data-id="${e.id}">
+                <div class="ev-title">${esc(e.title || e.note || '未命名日程')}</div>
+                <div class="ev-time">${esc(e.time || '')}${e.category ? ' · ' + esc(e.category) : ''}</div>
+              </button>
+              <button class="check ${e.done ? 'on' : ''}" data-action="cal-toggle" data-id="${e.id}">${icon('check')}</button>
+            </div>`).join('')
+            : `<div class="agenda-empty">${icon('calendar')}<span>这一天还没有安排</span></div>`}
         </div>
       </div>`;
   }
@@ -368,45 +371,50 @@
     const t = currentTrack();
     const hasTrack = !!t;
     return `
-      <div class="card glass player-card">
-        <div class="card-head">
-          <div class="card-title">音乐<span class="en">Music</span></div>
-          <span class="hint">${state.tracks.length} 首</span>
+      <div class="wgt glass dk-full player-card">
+        <div class="wgt-top">
+          <span class="wgt-title">音乐</span>
+          <span class="wgt-lab" style="margin-left:8px">Music</span>
+          <div class="wgt-sp"></div>
+          <span class="ag-date-line">${state.tracks.length} 首</span>
         </div>
         ${hasTrack ? `
+        <div class="player-inner">
           <div class="player-cover ${player.playing ? 'playing' : ''}">${icon(t.builtin ? 'droplet' : 'music')}</div>
-          <div class="player-info">
-            <div class="player-title">${esc(t.title || '未命名')}</div>
-            <div class="player-artist">${esc(t.artist || '未知')}</div>
-          </div>
-          <div class="slider-track" data-action="seek">
-            <div class="rail"><div class="fill" id="seekFill" style="width:${seekPct()}%"></div></div>
-            <div class="thumb" id="seekThumb" style="left:${seekPct()}%"></div>
-          </div>
-          <div class="player-time">
-            <span id="curTime">${fmtSec(player.time)}</span>
-            <span id="durTime">${t.builtin ? '∞' : fmtSec(player.dur)}</span>
-          </div>
-          <div class="player-controls">
-            <button class="player-btn" data-action="player-prev">${icon('prev')}</button>
-            <button class="player-btn play" data-action="player-play">${icon(player.playing ? 'pause' : 'play')}</button>
-            <button class="player-btn" data-action="player-next">${icon('next')}</button>
-          </div>
-          <div class="player-extra">
-            <span class="icon-glass" data-action="player-add">${icon('plus')}</span>
-            <span class="icon-glass" data-action="player-edit" style="width:32px;height:32px">${icon('pen')}</span>
-            <div class="slider-track vol" data-action="vol">
-              <div class="rail"><div class="fill" style="width:${player.vol * 100}%"></div></div>
+          <div class="player-main">
+            <div class="player-line">
+              <div class="player-title">${esc(t.title || '未命名')}</div>
+              <div class="player-artist">${esc(t.artist || '未知')}</div>
             </div>
-            <span class="icon-glass" data-action="player-del">${icon('trash')}</span>
-          </div>`
+            <div class="slider-track" data-action="seek">
+              <div class="rail"><div class="fill" id="seekFill" style="width:${seekPct()}%"></div></div>
+              <div class="thumb" id="seekThumb" style="left:${seekPct()}%"></div>
+            </div>
+            <div class="player-time">
+              <span id="curTime">${fmtSec(player.time)}</span>
+              <span id="durTime">${t.builtin ? '∞' : fmtSec(player.dur)}</span>
+            </div>
+            <div class="player-ctl">
+              <button class="player-btn" data-action="player-prev" title="上一首">${icon('prev')}</button>
+              <button class="player-btn play" data-action="player-play" title="${player.playing ? '暂停' : '播放'}">${icon(player.playing ? 'pause' : 'play')}</button>
+              <button class="player-btn" data-action="player-next" title="下一首">${icon('next')}</button>
+            </div>
+          </div>
+          <div class="player-side">
+            <div class="slider-track vol" data-action="vol"><div class="rail"><div class="fill" style="width:${player.vol * 100}%"></div></div></div>
+            <button class="icon-glass" data-action="player-add" title="添加本地音乐">${icon('plus')}</button>
+            <button class="icon-glass" data-action="player-edit" title="编辑曲目信息">${icon('pen')}</button>
+            <button class="icon-glass" data-action="player-del" title="删除当前音乐">${icon('trash')}</button>
+          </div>
+        </div>`
           : `
-          <div class="empty">
-            <span style="font-size:34px;display:block">${icon('music')}</span>
-            <span class="et">还没有音乐</span>
-            <span class="ed">添加本地音频，或点下方体验内置雨声音景</span>
-            <button class="glass-btn" data-action="player-add" style="margin-top:8px">${icon('plus')} 添加音乐</button>
-          </div>`}
+        <div class="agenda-empty" style="padding:14px 8px 8px">
+          <span class="ag-date-line">还没有音乐，点下方「＋」导入本地音频，或试试内置「雨声 · 白噪音」音景</span>
+        </div>
+        <div class="player-ctl" style="justify-content:flex-end;margin-top:2px">
+          <button class="glass-btn" data-action="player-add">${icon('plus')} 添加本地音乐</button>
+          <button class="glass-btn" data-action="player-boot">${icon('play')} 播放内置雨声</button>
+        </div>`}
       </div>`;
   }
 
@@ -715,7 +723,7 @@
     $('#view-collection').innerHTML = `
       <div class="content-inner">
         <div class="hero" style="padding:24px">
-          <div class="hero-top">
+          <div class="hero-row1">
             <div class="collection-cover" style="width:56px;height:56px">${c.cover ? imgTag(c.cover, '') : icon('folder')}</div>
             <div class="hero-greet">
               <span class="name">${esc(c.name)}</span>
@@ -1663,6 +1671,7 @@
       case 'player-play': togglePlay(); break;
       case 'player-next': playNext(); break;
       case 'player-prev': playPrev(); break;
+      case 'player-boot': { ensureBuiltinTrack(); const b = state.tracks.find((t) => t.builtin); if (b) playTrack(b); break; }
       case 'player-add': $('#audioInput').click(); break;
       case 'player-edit': editTrackDialog(currentTrack()); break;
       case 'player-del': confirmDialog('删除音乐', '确定删除这首音乐吗？', () => { mutate(() => { state.tracks = state.tracks.filter((t) => t.id !== player.currentId); }); if (player.playing) stopCurrent(); renderDesk(); return true; }); break;
