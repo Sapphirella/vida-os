@@ -1,1219 +1,2054 @@
 /**
- * VidaOS - Personal Blog System
- * iOS Liquid Glass Style
- * All data stored locally in localStorage
+ * VidaOS — 应用主逻辑
+ * 纯前端 SPA：路由 / 首页 / 日历 / 音乐 / 便签 / 空间 / 动态 / 信箱 / 收藏夹 /
+ * 编辑器 / 导入导出 / PWA。数据经 VidaStore 持久化到本地。
  */
+(function () {
+  'use strict';
 
-// ==========================================
-// State Management
-// ==========================================
-const AppState = {
-    posts: [],
-    currentView: 'home',
-    editingPostId: null,
-    tempImages: [],
-    tempTags: [],
-    confirmCallback: null,
-};
+  /* ========================================================================
+     1. 基础工具
+     ===================================================================== */
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-// ==========================================
-// Storage
-// ==========================================
-const Storage = {
-    KEY: 'vidaos_data',
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+  function icon(name, cls) { return Icons.svg(name, cls || ''); }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function nowISO() { return new Date().toISOString(); }
+  function todayStr() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+  function dateOf(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+  function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
-    load() {
-        try {
-            const data = localStorage.getItem(this.KEY);
-            if (data) {
-                const parsed = JSON.parse(data);
-                AppState.posts = parsed.posts || [];
-            }
-        } catch (e) {
-            console.error('Failed to load data:', e);
-            AppState.posts = [];
-        }
-    },
-
-    save() {
-        try {
-            localStorage.setItem(this.KEY, JSON.stringify({ posts: AppState.posts }));
-        } catch (e) {
-            console.error('Failed to save data:', e);
-            showToast('保存失败，存储空间可能已满', 'error');
-        }
-    },
-
-    clear() {
-        localStorage.removeItem(this.KEY);
-        AppState.posts = [];
-    }
-};
-
-// ==========================================
-// Utilities
-// ==========================================
-function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-}
-
-function formatDate(dateStr) {
-    const date = new Date(dateStr);
+  function fmtDateTime(iso) {
+    const d = new Date(iso);
+    const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return `${sameYear ? '' : d.getFullYear() + '年'}${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+  }
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  }
+  function fmtRelative(iso) {
+    const d = new Date(iso); const diff = Date.now() - d.getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return '刚刚';
+    if (m < 60) return m + ' 分钟前';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + ' 小时前';
+    const day = Math.floor(h / 24);
+    if (day === 1) return '昨天';
+    if (day < 7) return day + ' 天前';
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  }
+  function greeting() {
+    const h = new Date().getHours();
+    if (h < 5) return '夜深了';
+    if (h < 9) return '早上好';
+    if (h < 12) return '上午好';
+    if (h < 14) return '中午好';
+    if (h < 18) return '下午好';
+    return '晚上好';
+  }
+  function stripMd(md) {
+    return String(md || '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[#>*_~`\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
-    if (minutes < 1) return '刚刚';
-    if (minutes < 60) return `${minutes}分钟前`;
-    if (hours < 24) return `${hours}小时前`;
-    if (days < 7) return `${days}天前`;
+  /* ========================================================================
+     2. 状态与持久化
+     ===================================================================== */
+  let state = null;
+  const urlCache = {};
 
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
+  async function persist() {
+    try { await VidaStore.saveState(state); }
+    catch (e) { toast('保存失败：存储空间可能已满'); console.error(e); }
+  }
+  function mutate(fn) { fn(); persist(); }
 
-function formatFullDate(dateStr) {
-    const date = new Date(dateStr);
-    const months = ['January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'];
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} / ${days[date.getDay()]}`;
-}
+  async function fileURL(id) {
+    if (!id) return null;
+    if (urlCache[id]) return urlCache[id];
+    const blob = await VidaStore.getFile(id);
+    if (!blob) return null;
+    const url = URL.createObjectURL(blob);
+    urlCache[id] = url;
+    return url;
+  }
 
-function formatTime(dateStr) {
-    const date = new Date(dateStr);
-    return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
-}
-
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = `toast ${type} show`;
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, 2500);
-}
-
-// ==========================================
-// Post Management
-// ==========================================
-const PostManager = {
-    create(title, content, type, images = [], tags = []) {
-        const post = {
-            id: generateId(),
-            title: title.trim(),
-            content: content.trim(),
-            type,
-            images,
-            tags,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        };
-        AppState.posts.unshift(post);
-        Storage.save();
-        return post;
-    },
-
-    update(id, updates) {
-        const index = AppState.posts.findIndex(p => p.id === id);
-        if (index === -1) return null;
-        AppState.posts[index] = {
-            ...AppState.posts[index],
-            ...updates,
-            updatedAt: new Date().toISOString(),
-        };
-        Storage.save();
-        return AppState.posts[index];
-    },
-
-    delete(id) {
-        const index = AppState.posts.findIndex(p => p.id === id);
-        if (index === -1) return false;
-        AppState.posts.splice(index, 1);
-        Storage.save();
-        return true;
-    },
-
-    get(id) {
-        return AppState.posts.find(p => p.id === id);
-    },
-
-    getAll() {
-        return [...AppState.posts];
-    },
-
-    getByType(type) {
-        return AppState.posts.filter(p => p.type === type);
-    },
-
-    getByTag(tag) {
-        return AppState.posts.filter(p => p.tags.includes(tag));
-    },
-
-    getRecent(limit = 10) {
-        return AppState.posts.slice(0, limit);
-    },
-
-    getAllTags() {
-        const tagMap = new Map();
-        AppState.posts.forEach(post => {
-            post.tags.forEach(tag => {
-                tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
-            });
-        });
-        return Array.from(tagMap.entries()).sort((a, b) => b[1] - a[1]);
-    },
-
-    getAllImages() {
-        const images = [];
-        AppState.posts.forEach(post => {
-            post.images.forEach(img => {
-                images.push({ src: img, postId: post.id, postTitle: post.title });
-            });
-        });
-        return images;
-    },
-
-    getUniqueDays() {
-        const days = new Set();
-        AppState.posts.forEach(post => {
-            days.add(post.createdAt.split('T')[0]);
-        });
-        return days.size;
+  async function hydrateImages(root) {
+    const imgs = root ? Array.from(root.querySelectorAll('img[data-fid]')) : [];
+    for (const img of imgs) {
+      const url = await fileURL(img.getAttribute('data-fid'));
+      if (url) img.src = url; else img.remove();
     }
-};
+  }
 
-// ==========================================
-// Import / Export
-// ==========================================
-const DataIO = {
-    // Export to JSON
-    exportJSON() {
-        const data = { posts: AppState.posts, exportDate: new Date().toISOString() };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        this.downloadFile(blob, `vidaos_export_${this.dateSuffix()}.json`);
-    },
+  function imgTag(fid, cls) {
+    return `<img data-fid="${esc(fid)}" class="${cls || ''}" alt="">`;
+  }
 
-    // Export to TXT
-    exportTXT() {
-        let content = '=== VidaOS Export ===\n';
-        content += `Export Date: ${new Date().toLocaleString('zh-CN')}\n`;
-        content += `Total Posts: ${AppState.posts.length}\n`;
-        content += '='.repeat(40) + '\n\n';
+  /* ========================================================================
+     3. Markdown 渲染
+     ===================================================================== */
+  function mdToHtml(text) {
+    try {
+      return DOMPurify.sanitize(marked.parse(text || ''), { USE_PROFILES: { html: true } });
+    } catch (e) { return esc(text || ''); }
+  }
 
-        AppState.posts.forEach((post, i) => {
-            content += `[${i + 1}] ${post.title || 'Untitled'}\n`;
-            content += `Type: ${post.type}\n`;
-            content += `Date: ${new Date(post.createdAt).toLocaleString('zh-CN')}\n`;
-            content += `Tags: ${post.tags.join(', ') || 'None'}\n`;
-            content += '-' * 30 + '\n';
-            content += post.content + '\n';
-            if (post.images.length > 0) {
-                content += `\n[Images: ${post.images.length}]\n`;
-            }
-            content += '\n' + '='.repeat(40) + '\n\n';
-        });
+  /* ========================================================================
+     4. 路由
+     ===================================================================== */
+  const TABS = [
+    { id: 'desk', label: '桌面', en: 'Desk', icon: 'grid' },
+    { id: 'notes', label: '便签', en: 'Notes', icon: 'note' },
+    { id: 'data', label: '数据', en: 'Data', icon: 'database' },
+    { id: 'settings', label: '设置', en: 'Settings', icon: 'settings' },
+  ];
+  const FUNCS = [
+    { id: 'space', label: '空间', en: 'Space', icon: 'layers' },
+    { id: 'moments', label: '动态', en: 'Moments', icon: 'message' },
+    { id: 'mailbox', label: '信箱', en: 'Mailbox', icon: 'mail' },
+    { id: 'favorites', label: '收藏夹', en: 'Fav', icon: 'bookmark' },
+  ];
+  const VIEW_META = {
+    desk: { title: 'VidaOS', sub: '桌面 · Desk' },
+    notes: { title: '便签', sub: 'Notes' },
+    data: { title: '数据', sub: 'Data' },
+    settings: { title: '设置', sub: 'Settings' },
+    space: { title: '空间', sub: 'Space' },
+    collection: { title: '合集', sub: 'Collection' },
+    article: { title: '阅读', sub: 'Article' },
+    moments: { title: '动态', sub: 'Moments' },
+    mailbox: { title: '信箱', sub: 'Mailbox' },
+    favorites: { title: '收藏夹', sub: 'Favorites' },
+  };
 
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        this.downloadFile(blob, `vidaos_export_${this.dateSuffix()}.txt`);
-    },
+  let currentTab = 'desk';
+  let currentView = 'desk';
+  let viewParams = {};
+  let stack = [];
 
-    // Export to Markdown
-    exportMarkdown() {
-        let content = '# VidaOS Blog Export\n\n';
-        content += `> Exported on ${new Date().toLocaleString('zh-CN')}\n\n`;
-        content += `---\n\n`;
+  function switchTab(tab) {
+    currentTab = tab;
+    currentView = tab;
+    viewParams = {};
+    stack = [];
+    state.settings.lastTab = tab;
+    persist();
+    render();
+    $('#content').scrollTop = 0;
+  }
 
-        AppState.posts.forEach(post => {
-            content += `## ${post.title || 'Untitled'}\n\n`;
-            content += `**Type:** ${post.type} | **Date:** ${new Date(post.createdAt).toLocaleString('zh-CN')}\n\n`;
-            if (post.tags.length > 0) {
-                content += `**Tags:** ${post.tags.map(t => `#${t}`).join(' ')}\n\n`;
-            }
-            content += post.content + '\n\n';
-            if (post.images.length > 0) {
-                post.images.forEach(img => {
-                    content += `![Image](${img})\n\n`;
-                });
-            }
-            content += `---\n\n`;
-        });
+  function push(view, params) {
+    stack.push({ view: currentView, params: viewParams });
+    currentView = view;
+    viewParams = params || {};
+    render();
+    $('#content').scrollTop = 0;
+  }
 
-        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-        this.downloadFile(blob, `vidaos_export_${this.dateSuffix()}.md`);
-    },
-
-    // Export to PDF
-    exportPDF() {
-        const element = document.createElement('div');
-        element.style.cssText = 'padding: 40px; font-family: system-ui, sans-serif; color: #333; line-height: 1.7;';
-
-        let html = '<h1 style="text-align:center; color: #007AFF;">VidaOS</h1>';
-        html += `<p style="text-align:center; color: #666;">Exported on ${new Date().toLocaleString('zh-CN')}</p>`;
-        html += '<hr style="margin: 20px 0;">';
-
-        AppState.posts.forEach(post => {
-            html += `<h2>${escapeHtml(post.title || 'Untitled')}</h2>`;
-            html += `<p style="color: #666; font-size: 14px;">`;
-            html += `Type: ${post.type} | Date: ${new Date(post.createdAt).toLocaleString('zh-CN')}</p>`;
-            if (post.tags.length > 0) {
-                html += `<p style="color: #007AFF; font-size: 13px;">Tags: ${post.tags.map(t => '#' + escapeHtml(t)).join(' ')}</p>`;
-            }
-            html += '<div style="margin: 16px 0;">';
-            const lines = post.content.split('\n');
-            lines.forEach(line => {
-                if (line.trim()) {
-                    html += `<p>${escapeHtml(line)}</p>`;
-                } else {
-                    html += '<br>';
-                }
-            });
-            html += '</div>';
-            html += '<hr style="margin: 24px 0; border-color: #eee;">';
-        });
-
-        element.innerHTML = html;
-        document.body.appendChild(element);
-
-        const opt = {
-            margin: [15, 15],
-            filename: `vidaos_export_${this.dateSuffix()}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        html2pdf().set(opt).from(element).save().then(() => {
-            document.body.removeChild(element);
-            showToast('PDF 导出成功');
-        }).catch(err => {
-            document.body.removeChild(element);
-            console.error('PDF export failed:', err);
-            showToast('PDF 导出失败', 'error');
-        });
-    },
-
-    // Import
-    importData(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const content = e.target.result;
-                    const ext = file.name.split('.').pop().toLowerCase();
-
-                    if (ext === 'json') {
-                        const data = JSON.parse(content);
-                        if (data.posts && Array.isArray(data.posts)) {
-                            AppState.posts = [...data.posts, ...AppState.posts];
-                            Storage.save();
-                            resolve({ count: data.posts.length, type: 'JSON' });
-                        } else {
-                            reject(new Error('无效的 JSON 格式'));
-                        }
-                    } else if (ext === 'txt') {
-                        const posts = this.parseTXT(content);
-                        AppState.posts = [...posts, ...AppState.posts];
-                        Storage.save();
-                        resolve({ count: posts.length, type: 'TXT' });
-                    } else if (ext === 'md' || ext === 'markdown') {
-                        const posts = this.parseMarkdown(content);
-                        AppState.posts = [...posts, ...AppState.posts];
-                        Storage.save();
-                        resolve({ count: posts.length, type: 'Markdown' });
-                    } else {
-                        reject(new Error('不支持的文件格式'));
-                    }
-                } catch (err) {
-                    reject(err);
-                }
-            };
-            reader.onerror = () => reject(new Error('文件读取失败'));
-            reader.readAsText(file);
-        });
-    },
-
-    parseTXT(content) {
-        const posts = [];
-        const sections = content.split(/={40,}/).filter(s => s.trim());
-
-        sections.forEach(section => {
-            const lines = section.trim().split('\n');
-            if (lines.length < 2) return;
-
-            let title = '';
-            let type = 'diary';
-            let date = new Date().toISOString();
-            let tags = [];
-            let bodyLines = [];
-            let inBody = false;
-
-            lines.forEach(line => {
-                if (line.startsWith('[') && line.includes(']')) {
-                    title = line.replace(/^\[\d+\]\s*/, '').trim();
-                } else if (line.startsWith('Type:')) {
-                    type = line.replace('Type:', '').trim();
-                } else if (line.startsWith('Date:')) {
-                    const d = new Date(line.replace('Date:', '').trim());
-                    if (!isNaN(d)) date = d.toISOString();
-                } else if (line.startsWith('Tags:')) {
-                    tags = line.replace('Tags:', '').split(',').map(t => t.trim()).filter(t => t && t !== 'None');
-                } else if (line.startsWith('-') && line.replace(/-/g, '').trim() === '') {
-                    inBody = true;
-                } else if (inBody && !line.startsWith('[Images:')) {
-                    bodyLines.push(line);
-                }
-            });
-
-            if (bodyLines.length > 0 || title) {
-                posts.push({
-                    id: generateId(),
-                    title,
-                    content: bodyLines.join('\n').trim(),
-                    type,
-                    images: [],
-                    tags,
-                    createdAt: date,
-                    updatedAt: date,
-                });
-            }
-        });
-
-        return posts;
-    },
-
-    parseMarkdown(content) {
-        const posts = [];
-        // Split by horizontal rules, looking for h2 headings
-        const sections = content.split(/\n---\s*\n/).filter(s => s.trim());
-
-        sections.forEach(section => {
-            const lines = section.trim().split('\n');
-            let title = '';
-            let type = 'diary';
-            let date = new Date().toISOString();
-            let tags = [];
-            let bodyLines = [];
-            let inBody = false;
-
-            lines.forEach(line => {
-                if (line.startsWith('## ')) {
-                    title = line.replace('## ', '').trim();
-                } else if (line.startsWith('**Type:**')) {
-                    const match = line.match(/Type:\s*(\w+)/);
-                    if (match) type = match[1];
-                } else if (line.startsWith('**Date:**')) {
-                    const d = new Date(line.replace('**Date:**', '').replace(/\*\*/g, '').trim());
-                    if (!isNaN(d)) date = d.toISOString();
-                } else if (line.startsWith('**Tags:**')) {
-                    const tagStr = line.replace('**Tags:**', '').replace(/\*\*/g, '').trim();
-                    tags = tagStr.split(/\s+/).map(t => t.replace(/^#/, '')).filter(Boolean);
-                } else if (line.startsWith('>')) {
-                    // skip metadata lines
-                } else if (line.startsWith('![')) {
-                    // skip images for now
-                } else if (line.trim() && !line.startsWith('#')) {
-                    bodyLines.push(line);
-                }
-            });
-
-            if (bodyLines.length > 0 || title) {
-                posts.push({
-                    id: generateId(),
-                    title,
-                    content: bodyLines.join('\n').trim(),
-                    type,
-                    images: [],
-                    tags,
-                    createdAt: date,
-                    updatedAt: date,
-                });
-            }
-        });
-
-        return posts;
-    },
-
-    downloadFile(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast(`${filename} 导出成功`);
-    },
-
-    dateSuffix() {
-        const d = new Date();
-        return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  function goBack() {
+    if (stack.length) {
+      const prev = stack.pop();
+      currentView = prev.view;
+      viewParams = prev.params;
+      render();
     }
-};
+  }
 
-// ==========================================
-// UI Rendering
-// ==========================================
-const UI = {
-    updateStats() {
-        document.getElementById('totalPosts').textContent = AppState.posts.length;
-        document.getElementById('totalPhotos').textContent = PostManager.getAllImages().length;
-        document.getElementById('totalTags').textContent = PostManager.getAllTags().length;
-        document.getElementById('totalDays').textContent = PostManager.getUniqueDays();
-    },
+  function renderTabbar() {
+    $('#tabbarInner').innerHTML = TABS.map((t) => `
+      <button class="tab-item ${currentTab === t.id ? 'active' : ''}" data-action="tab" data-tab="${t.id}">
+        ${icon(t.icon)}
+        <span>${t.label}</span>
+      </button>`).join('');
+  }
 
-    updateHeroDateTime() {
-        const now = new Date();
-        document.getElementById('heroDate').textContent = formatFullDate(now);
-        document.getElementById('heroTime').textContent = formatTime(now);
-        document.getElementById('statusTime').textContent = formatTime(now);
-    },
+  function updateTopbar() {
+    const meta = VIEW_META[currentView] || { title: currentView, sub: '' };
+    let sub = meta.sub;
+    if (currentView === 'collection') {
+      const c = state.collections.find((x) => x.id === viewParams.collectionId);
+      sub = c ? c.name : '合集';
+    } else if (currentView === 'article') {
+      const a = state.articles.find((x) => x.id === viewParams.articleId);
+      sub = a && a.title ? a.title : '文章';
+    }
+    $('#topTitle').textContent = meta.title;
+    $('#topSub').textContent = sub;
+    $('#topBack').classList.toggle('visible', stack.length > 0);
+  }
 
-    renderPostsList(containerId, posts) {
-        const container = document.getElementById(containerId);
-        if (!posts.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                    <p>还没有记录哦</p>
-                    <p class="empty-sub">点击下方按钮开始你的第一篇日记</p>
+  function render() {
+    updateTopbar();
+    renderTabbar();
+    const views = ['desk', 'notes', 'data', 'settings', 'space', 'collection', 'article', 'moments', 'mailbox', 'favorites'];
+    views.forEach((v) => { const el = $('#view-' + v); if (el) el.classList.toggle('active', v === currentView); });
+    const fn = RENDERERS[currentView];
+    if (fn) fn();
+  }
+
+  /* ========================================================================
+     5. 首页（桌面）
+     ===================================================================== */
+  function renderDesk() {
+    const p = state.profile;
+    const hero = `
+      <div class="content-inner">
+        <div class="desk-layout">
+          <div class="desk-side">
+            <div class="hero">
+              <div class="hero-top">
+                <div class="hero-avatar" id="heroAvatar">${icon('user')}</div>
+                <div class="hero-greet">
+                  <span class="hi" id="heroGreet">${greeting()}</span>
+                  <span class="name" id="heroName">${esc(p.name || 'VidaOS')}</span>
                 </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = posts.map(post => this.createPostCard(post)).join('');
-
-        // Attach click handlers
-        container.querySelectorAll('.post-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const id = card.dataset.id;
-                openDetailModal(id);
-            });
-        });
-    },
-
-    createPostCard(post) {
-        const imagesHtml = post.images.length > 0
-            ? `<div class="post-images">${post.images.slice(0, 3).map(img =>
-                `<img src="${escapeHtml(img)}" class="post-image-thumb" loading="lazy" alt="">`
-            ).join('')}${post.images.length > 3 ? `<div class="post-image-thumb" style="display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.05);font-size:14px;color:var(--text-secondary);">+${post.images.length - 3}</div>` : ''}</div>`
-            : '';
-
-        const tagsHtml = post.tags.length > 0
-            ? `<div class="post-tags">${post.tags.map(tag => `<span class="post-tag">${escapeHtml(tag)}</span>`).join('')}</div>`
-            : '';
-
-        const typeLabels = { diary: '日记', photo: '照片', rant: '吐槽' };
-
-        return `
-            <article class="post-card" data-id="${post.id}">
-                <span class="post-type-badge ${post.type}">${typeLabels[post.type] || post.type}</span>
-                <div class="post-header">
-                    <h3 class="post-title">${escapeHtml(post.title || '无标题')}</h3>
-                    <span class="post-time">${formatDate(post.createdAt)}</span>
-                </div>
-                <div class="post-content">${escapeHtml(post.content)}</div>
-                ${imagesHtml}
-                ${tagsHtml}
-            </article>
-        `;
-    },
-
-    renderTimeline() {
-        const container = document.getElementById('timeline');
-        const posts = PostManager.getAll();
-
-        if (!posts.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <p>时间线为空</p>
-                </div>
-            `;
-            return;
-        }
-
-        const grouped = {};
-        posts.forEach(post => {
-            const date = post.createdAt.split('T')[0];
-            if (!grouped[date]) grouped[date] = [];
-            grouped[date].push(post);
-        });
-
-        container.innerHTML = Object.entries(grouped).map(([date, dayPosts]) => {
-            const items = dayPosts.map(post => `
-                <div class="timeline-item">
-                    <div class="timeline-dot"></div>
-                    <div class="timeline-content">
-                        <div class="timeline-date">${formatDate(post.createdAt)} ${formatTime(post.createdAt)}</div>
-                        <div class="timeline-title">${escapeHtml(post.title || '无标题')}</div>
-                        <div class="timeline-text">${escapeHtml(post.content.substring(0, 100))}${post.content.length > 100 ? '...' : ''}</div>
-                    </div>
-                </div>
-            `).join('');
-            return items;
-        }).join('');
-
-        // Add click handlers
-        container.querySelectorAll('.timeline-content').forEach(el => {
-            el.addEventListener('click', () => {
-                const item = el.closest('.timeline-item');
-                const index = Array.from(container.querySelectorAll('.timeline-item')).indexOf(item);
-                let count = 0;
-                for (const [, dayPosts] of Object.entries(grouped)) {
-                    if (count + dayPosts.length > index) {
-                        openDetailModal(dayPosts[index - count].id);
-                        break;
-                    }
-                    count += dayPosts.length;
-                }
-            });
-        });
-    },
-
-    renderTags() {
-        const container = document.getElementById('tagsCloud');
-        const tags = PostManager.getAllTags();
-
-        if (!tags.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                    <p>还没有标签</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = tags.map(([tag, count]) => `
-            <button class="tag-cloud-item" data-tag="${escapeHtml(tag)}">
-                <span>${escapeHtml(tag)}</span>
-                <span class="tag-count">${count}</span>
-            </button>
-        `).join('');
-
-        container.querySelectorAll('.tag-cloud-item').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const tag = btn.dataset.tag;
-                const posts = PostManager.getByTag(tag);
-                switchView('home');
-                this.renderPostsList('postsList', posts);
-                document.querySelector('.section-title').textContent = `#${tag}`;
-            });
-        });
-    },
-
-    renderGallery() {
-        const container = document.getElementById('galleryGrid');
-        const images = PostManager.getAllImages();
-
-        if (!images.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                    <p>还没有照片</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = images.map(img => `
-            <div class="gallery-item" data-post-id="${img.postId}">
-                <img src="${escapeHtml(img.src)}" loading="lazy" alt="${escapeHtml(img.postTitle || '')}">
+              </div>
+              <div class="hero-time" id="heroTime">--:--</div>
+              <div class="hero-date" id="heroDate">—</div>
+              <div class="hero-signature" id="heroSignature">${esc(p.signature || '')}</div>
             </div>
-        `).join('');
 
-        container.querySelectorAll('.gallery-item').forEach(item => {
-            item.addEventListener('click', () => {
-                openDetailModal(item.dataset.postId);
-            });
-        });
-    },
-};
+            <div class="section-label">我的空间</div>
+            <div class="func-grid">
+              ${FUNCS.map((f) => `
+                <button class="func-btn" data-action="func" data-func="${f.id}">
+                  ${funcCount(f.id) ? `<span class="func-count">${funcCount(f.id)}</span>` : ''}
+                  <span class="func-icon">${icon(f.icon)}</span>
+                  <span class="func-name">${f.label}</span>
+                  <span class="func-en">${f.en}</span>
+                </button>`).join('')}
+            </div>
+          </div>
 
-// ==========================================
-// Modal Functions
-// ==========================================
-function openEditModal(mode = 'create', postId = null) {
-    const modal = document.getElementById('editModal');
-    const titleEl = document.getElementById('modalTitle');
-    const titleInput = document.getElementById('postTitle');
-    const contentInput = document.getElementById('postContent');
-    const previewEl = document.getElementById('markdownPreview');
-    const imageGrid = document.getElementById('imagePreviewGrid');
-    const tagsPreview = document.getElementById('tagsPreview');
-    const typeInputs = document.querySelectorAll('input[name="postType"]');
-
-    // Reset state
-    AppState.tempImages = [];
-    AppState.tempTags = [];
-    AppState.editingPostId = postId;
-    imageGrid.innerHTML = '';
-    tagsPreview.innerHTML = '';
-    contentInput.style.display = 'block';
-    previewEl.classList.remove('active');
-    document.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('[data-mode="write"]').classList.add('active');
-
-    if (mode === 'edit' && postId) {
-        const post = PostManager.get(postId);
-        if (!post) return;
-        titleEl.textContent = '编辑';
-        titleInput.value = post.title;
-        contentInput.value = post.content;
-        AppState.tempImages = [...post.images];
-        AppState.tempTags = [...post.tags];
-        typeInputs.forEach(input => {
-            input.checked = input.value === post.type;
-        });
-    } else {
-        titleEl.textContent = mode === 'photo' ? '发照片' : mode === 'rant' ? '吐槽' : '写日记';
-        titleInput.value = '';
-        contentInput.value = '';
-        const targetType = mode === 'photo' ? 'photo' : mode === 'rant' ? 'rant' : 'diary';
-        typeInputs.forEach(input => {
-            input.checked = input.value === targetType;
-        });
-    }
-
-    // Render temp images
-    AppState.tempImages.forEach(img => addImagePreview(img));
-    // Render temp tags
-    AppState.tempTags.forEach(tag => addTagChip(tag));
-
-    modal.classList.add('active');
-    titleInput.focus();
-}
-
-function closeEditModal() {
-    document.getElementById('editModal').classList.remove('active');
-    AppState.editingPostId = null;
-    AppState.tempImages = [];
-    AppState.tempTags = [];
-}
-
-function openDetailModal(postId) {
-    const post = PostManager.get(postId);
-    if (!post) return;
-
-    const modal = document.getElementById('detailModal');
-    const titleEl = document.getElementById('detailTitle');
-    const bodyEl = document.getElementById('detailBody');
-
-    titleEl.textContent = post.title || '文章详情';
-
-    const typeLabels = { diary: '日记', photo: '照片', rant: '吐槽' };
-    const typeColors = { diary: '#007AFF', photo: '#34C759', rant: '#FF3B30' };
-
-    const imagesHtml = post.images.length > 0
-        ? `<div class="detail-images">${post.images.map(img =>
-            `<img src="${escapeHtml(img)}" alt="">`
-        ).join('')}</div>`
-        : '';
-
-    const tagsHtml = post.tags.length > 0
-        ? `<div class="detail-tags">${post.tags.map(tag =>
-            `<span class="post-tag">${escapeHtml(tag)}</span>`
-        ).join('')}</div>`
-        : '';
-
-    // Convert markdown-like content to HTML
-    const contentHtml = post.content
-        .split('\n')
-        .map(line => {
-            if (line.startsWith('# ')) return `<h1>${escapeHtml(line.slice(2))}</h1>`;
-            if (line.startsWith('## ')) return `<h2>${escapeHtml(line.slice(3))}</h2>`;
-            if (line.startsWith('### ')) return `<h3>${escapeHtml(line.slice(4))}</h3>`;
-            if (line.startsWith('- ')) return `<li>${escapeHtml(line.slice(2))}</li>`;
-            if (line.startsWith('> ')) return `<blockquote>${escapeHtml(line.slice(2))}</blockquote>`;
-            if (line.trim() === '') return '<br>';
-            return `<p>${escapeHtml(line)}</p>`;
-        })
-        .join('');
-
-    bodyEl.innerHTML = `
-        <div class="detail-meta">
-            <span style="color:${typeColors[post.type] || '#007AFF'}">${typeLabels[post.type] || post.type}</span>
-            <span>${new Date(post.createdAt).toLocaleString('zh-CN')}</span>
+          <div class="desk-main">
+            ${renderCalendarCard()}
+            ${renderPlayerCard()}
+          </div>
         </div>
-        ${imagesHtml}
-        <div class="detail-content">${contentHtml}</div>
-        ${tagsHtml}
-    `;
+      </div>`;
+    $('#view-desk').innerHTML = hero;
+    hydrateAvatar();
+    tick();
+  }
 
-    // Store current post ID for edit/delete
-    modal.dataset.currentPostId = postId;
+  function funcCount(id) {
+    if (id === 'space') return state.articles.length;
+    if (id === 'moments') return state.moments.length;
+    if (id === 'mailbox') return state.letters.length;
+    if (id === 'favorites') return state.favorites.length;
+    return 0;
+  }
 
-    modal.classList.add('active');
-}
+  function hydrateAvatar() {
+    const el = $('#heroAvatar');
+    if (!el || !state.profile.avatar) return;
+    fileURL(state.profile.avatar).then((url) => { if (url) el.innerHTML = `<img src="${url}" alt="">`; });
+  }
 
-function closeDetailModal() {
-    document.getElementById('detailModal').classList.remove('active');
-    delete document.getElementById('detailModal').dataset.currentPostId;
-}
+  function tick() {
+    const d = new Date();
+    const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const topClock = $('#topClock'); if (topClock) topClock.textContent = hm;
+    const heroTime = $('#heroTime');
+    if (heroTime && currentView === 'desk') heroTime.textContent = hm;
+    const heroDate = $('#heroDate');
+    if (heroDate && currentView === 'desk') {
+      const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+      heroDate.textContent = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${wd}`;
+    }
+    const heroGreet = $('#heroGreet');
+    if (heroGreet && currentView === 'desk') heroGreet.textContent = greeting();
+  }
 
-function openImportModal() {
-    document.getElementById('importModal').classList.add('active');
-}
+  /* ------------------------------------------------------------------------
+     5.1 日历（双卡式）
+     --------------------------------------------------------------------- */
+  const calState = { y: new Date().getFullYear(), m: new Date().getMonth(), sel: todayStr() };
 
-function closeImportModal() {
-    document.getElementById('importModal').classList.remove('active');
-}
+  function scheduleEventsFor(dateStr) {
+    return state.notes.schedule
+      .filter((s) => s.date === dateStr)
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  }
 
-function openConfirmModal(title, message, onConfirm) {
-    document.getElementById('confirmTitle').textContent = title;
-    document.getElementById('confirmMessage').textContent = message;
-    AppState.confirmCallback = onConfirm;
-    document.getElementById('confirmModal').classList.add('active');
-}
+  function renderCalendarCard() {
+    const { y, m, sel } = calState;
+    const first = new Date(y, m, 1);
+    const days = new Date(y, m + 1, 0).getDate();
+    const lead = first.getDay(); // 0=周日
+    const weeks = Math.ceil((lead + days) / 7);
+    let cells = '';
+    for (let i = 0; i < weeks * 7; i++) {
+      const dayNum = i - lead + 1;
+      if (dayNum < 1 || dayNum > days) {
+        cells += `<div class="cal-day dim"></div>`;
+      } else {
+        const dateStr = `${y}-${pad(m + 1)}-${pad(dayNum)}`;
+        const hasEvent = scheduleEventsFor(dateStr).length > 0;
+        const cls = ['cal-day'];
+        if (dateStr === todayStr()) cls.push('today');
+        if (dateStr === sel) cls.push('selected');
+        cells += `<button class="${cls.join(' ')}" data-action="cal-day" data-date="${dateStr}">
+          ${dayNum}
+          ${hasEvent ? `<span class="dots"><span class="dot"></span></span>` : ''}
+        </button>`;
+      }
+    }
+    const evs = scheduleEventsFor(sel);
+    const selD = new Date(sel + 'T00:00:00');
+    const selLabel = `${selD.getMonth() + 1}月${selD.getDate()}日`;
 
-function closeConfirmModal() {
-    document.getElementById('confirmModal').classList.remove('active');
-    AppState.confirmCallback = null;
-}
+    return `
+      <div class="card glass calendar-card">
+        <div class="cal-panel">
+          <div class="cal-head">
+            <button class="cal-nav" data-action="cal-prev">${icon('chevronLeft')}</button>
+            <div class="cal-month">${y}年${m + 1}月</div>
+            <button class="cal-nav" data-action="cal-next">${icon('chevronRight')}</button>
+            <button class="cal-nav" data-action="cal-today" style="margin-left:6px">${icon('refresh')}</button>
+          </div>
+          <div class="cal-weekdays">${['日', '一', '二', '三', '四', '五', '六'].map((w) => `<span>${w}</span>`).join('')}</div>
+          <div class="cal-grid">${cells}</div>
+        </div>
+        <div class="cal-schedule">
+          <div class="cal-schedule-head">
+            <span class="cal-schedule-date">${selLabel} 日程</span>
+            <button class="icon-glass mini" data-action="cal-add" style="width:32px;height:32px">${icon('plus')}</button>
+          </div>
+          <div class="cal-schedule-list">
+            ${evs.length ? evs.map((e) => `
+              <div class="cal-event ${e.done ? 'done' : ''}">
+                <span class="bar"></span>
+                <button class="ev-body" data-action="cal-event" data-id="${e.id}" style="text-align:left">
+                  <div class="ev-title">${esc(e.title || e.note || '未命名')}</div>
+                  <div class="ev-time">${esc(e.time || '')} ${esc(e.category || '')}</div>
+                </button>
+                <button class="check ${e.done ? 'on' : ''}" data-action="cal-toggle" data-id="${e.id}">${icon('check')}</button>
+              </div>`).join('')
+              : `<div class="empty"><span class="ed">这一天还没有安排</span></div>`}
+          </div>
+        </div>
+      </div>`;
+  }
 
-// ==========================================
-// Image & Tag Helpers
-// ==========================================
-function addImagePreview(dataUrl) {
-    const grid = document.getElementById('imagePreviewGrid');
-    const div = document.createElement('div');
-    div.className = 'image-preview-item';
-    div.innerHTML = `
-        <img src="${dataUrl}" alt="">
-        <button class="image-preview-remove" onclick="removeTempImage(this)">&times;</button>
-    `;
-    grid.appendChild(div);
-}
+  /* ------------------------------------------------------------------------
+     5.2 音乐播放器
+     --------------------------------------------------------------------- */
+  const player = { currentId: null, playing: false, time: 0, dur: 0, vol: 0.7 };
+  let audioEl = null;
+  let audioCtx = null, noiseSrc = null, noiseGain = null;
+  let tickTimer = null;
 
-function removeTempImage(btn) {
-    const item = btn.closest('.image-preview-item');
-    const img = item.querySelector('img');
-    const idx = AppState.tempImages.indexOf(img.src);
-    if (idx > -1) AppState.tempImages.splice(idx, 1);
-    item.remove();
-}
+  function ensureBuiltinTrack() {
+    if (!state.tracks.some((t) => t.builtin)) {
+      state.tracks.unshift({ id: 'builtin-rain', title: '雨声 · 白噪音', artist: 'VidaOS 内置音景', builtin: true, createdAt: nowISO() });
+      persist();
+    }
+  }
 
-function addTagChip(tag) {
-    const container = document.getElementById('tagsPreview');
-    const chip = document.createElement('span');
-    chip.className = 'tag-chip';
-    chip.innerHTML = `${escapeHtml(tag)} <span class="remove-tag" onclick="removeTempTag(this, '${escapeHtml(tag)}')">&times;</span>`;
-    container.appendChild(chip);
-}
+  function currentTrack() { return state.tracks.find((t) => t.id === player.currentId) || state.tracks[0] || null; }
 
-function removeTempTag(btn, tag) {
-    const idx = AppState.tempTags.indexOf(tag);
-    if (idx > -1) AppState.tempTags.splice(idx, 1);
-    btn.closest('.tag-chip').remove();
-}
+  function renderPlayerCard() {
+    const t = currentTrack();
+    const hasTrack = !!t;
+    return `
+      <div class="card glass player-card">
+        <div class="card-head">
+          <div class="card-title">音乐<span class="en">Music</span></div>
+          <span class="hint">${state.tracks.length} 首</span>
+        </div>
+        ${hasTrack ? `
+          <div class="player-cover ${player.playing ? 'playing' : ''}">${icon(t.builtin ? 'droplet' : 'music')}</div>
+          <div class="player-info">
+            <div class="player-title">${esc(t.title || '未命名')}</div>
+            <div class="player-artist">${esc(t.artist || '未知')}</div>
+          </div>
+          <div class="slider-track" data-action="seek">
+            <div class="rail"><div class="fill" id="seekFill" style="width:${seekPct()}%"></div></div>
+            <div class="thumb" id="seekThumb" style="left:${seekPct()}%"></div>
+          </div>
+          <div class="player-time">
+            <span id="curTime">${fmtSec(player.time)}</span>
+            <span id="durTime">${t.builtin ? '∞' : fmtSec(player.dur)}</span>
+          </div>
+          <div class="player-controls">
+            <button class="player-btn" data-action="player-prev">${icon('prev')}</button>
+            <button class="player-btn play" data-action="player-play">${icon(player.playing ? 'pause' : 'play')}</button>
+            <button class="player-btn" data-action="player-next">${icon('next')}</button>
+          </div>
+          <div class="player-extra">
+            <span class="icon-glass" data-action="player-add">${icon('plus')}</span>
+            <span class="icon-glass" data-action="player-edit" style="width:32px;height:32px">${icon('pen')}</span>
+            <div class="slider-track vol" data-action="vol">
+              <div class="rail"><div class="fill" style="width:${player.vol * 100}%"></div></div>
+            </div>
+            <span class="icon-glass" data-action="player-del">${icon('trash')}</span>
+          </div>`
+          : `
+          <div class="empty">
+            <span style="font-size:34px;display:block">${icon('music')}</span>
+            <span class="et">还没有音乐</span>
+            <span class="ed">添加本地音频，或点下方体验内置雨声音景</span>
+            <button class="glass-btn" data-action="player-add" style="margin-top:8px">${icon('plus')} 添加音乐</button>
+          </div>`}
+      </div>`;
+  }
 
-// ==========================================
-// View Navigation
-// ==========================================
-function switchView(viewName) {
-    // Update views
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById(viewName + 'View').classList.add('active');
+  function seekPct() {
+    const t = currentTrack();
+    if (!t) return 0;
+    if (t.builtin) return 100;
+    if (!player.dur) return 0;
+    return Math.min(100, (player.time / player.dur) * 100);
+  }
+  function fmtSec(s) {
+    s = Math.max(0, Math.floor(s || 0));
+    return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+  }
 
-    // Update bottom nav
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.view === viewName);
+  function startRain() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!noiseSrc) {
+        const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        noiseSrc = audioCtx.createBufferSource();
+        noiseSrc.buffer = buf; noiseSrc.loop = true;
+        const lp = audioCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+        noiseGain = audioCtx.createGain(); noiseGain.gain.value = player.vol * 0.4;
+        noiseSrc.connect(lp); lp.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+        noiseSrc.start();
+      }
+      if (noiseGain) noiseGain.gain.value = player.vol * 0.4;
+    } catch (e) { console.error(e); }
+  }
+  function stopRain() {
+    if (noiseSrc) { try { noiseSrc.stop(); } catch (e) {} noiseSrc.disconnect(); noiseSrc = null; noiseGain = null; }
+  }
+
+  async function playTrack(t, autoplay) {
+    player.currentId = t.id;
+    stopCurrent();
+    if (t.builtin) {
+      startRain();
+      player.playing = true; player.time = 0; player.dur = 0;
+      startTick();
+    } else {
+      const url = await fileURL(t.fileId);
+      if (!url) { toast('音频文件不存在'); return; }
+      if (!audioEl) {
+        audioEl = new Audio();
+        audioEl.addEventListener('timeupdate', () => { player.time = audioEl.currentTime; player.dur = audioEl.duration || 0; updatePlayerProgress(); });
+        audioEl.addEventListener('ended', () => { playNext(); });
+        audioEl.addEventListener('loadedmetadata', () => { player.dur = audioEl.duration || 0; });
+      }
+      audioEl.src = url; audioEl.volume = player.vol;
+      try { await audioEl.play(); player.playing = true; player.time = audioEl.currentTime; startTick(); }
+      catch (e) { toast('无法播放（浏览器限制自动播放）'); player.playing = false; }
+    }
+    render();
+  }
+
+  function stopCurrent() {
+    if (audioEl) { audioEl.pause(); audioEl.src = ''; }
+    stopRain();
+    player.playing = false;
+  }
+
+  function togglePlay() {
+    const t = currentTrack();
+    if (!t) return;
+    if (player.playing) {
+      if (t.builtin) stopRain(); else audioEl && audioEl.pause();
+      player.playing = false; stopTick();
+    } else {
+      playTrack(t, true);
+      return;
+    }
+    render();
+  }
+
+  function playNext() { const list = state.tracks; if (!list.length) return; const i = list.findIndex((t) => t.id === player.currentId); const next = list[(i + 1) % list.length]; playTrack(next); }
+  function playPrev() { const list = state.tracks; if (!list.length) return; const i = list.findIndex((t) => t.id === player.currentId); const prev = list[(i - 1 + list.length) % list.length]; playTrack(prev); }
+
+  function startTick() {
+    stopTick();
+    if (player.playing) {
+      tickTimer = setInterval(() => {
+        const t = currentTrack();
+        if (t && t.builtin) { player.time += 0.5; }
+        updatePlayerProgress();
+      }, 500);
+    }
+  }
+  function stopTick() { if (tickTimer) { clearInterval(tickTimer); tickTimer = null; } }
+
+  function updatePlayerProgress() {
+    const fill = $('#seekFill'), thumb = $('#seekThumb'), cur = $('#curTime');
+    if (!fill) return;
+    const pct = seekPct();
+    fill.style.width = pct + '%';
+    if (thumb) thumb.style.left = pct + '%';
+    if (cur) cur.textContent = fmtSec(player.time);
+  }
+
+  function seekTo(clientX) {
+    const t = currentTrack();
+    if (!t || t.builtin) return;
+    const track = document.querySelector('.player-card .slider-track[data-action="seek"]');
+    if (!track) return;
+    const r = track.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    if (audioEl && player.dur) { audioEl.currentTime = pct * player.dur; player.time = audioEl.currentTime; }
+    updatePlayerProgress();
+  }
+  function setVolume(clientX) {
+    const track = document.querySelector('.player-card .slider-track[data-action="vol"]');
+    if (!track) return;
+    const r = track.getBoundingClientRect();
+    player.vol = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    if (audioEl) audioEl.volume = player.vol;
+    if (noiseGain) noiseGain.gain.value = player.vol * 0.4;
+    renderPlayerInlineVol();
+  }
+  function renderPlayerInlineVol() {
+    const card = document.querySelector('.player-card');
+    if (!card) return;
+    const fill = card.querySelector('.slider-track[data-action="vol"] .fill');
+    if (fill) fill.style.width = (player.vol * 100) + '%';
+  }
+
+  /* ========================================================================
+     6. 便签
+     ===================================================================== */
+  let noteSection = 'inspiration';
+  let noteFilter = ''; // category filter ('' = 全部)
+
+  const NOTE_SECS = [
+    { id: 'inspiration', label: '灵感', icon: 'sparkle', ph: '记下一个灵感…' },
+    { id: 'schedule', label: '日程', icon: 'calendar', ph: '' },
+    { id: 'todo', label: '待办', icon: 'check', ph: '添加一件待办…' },
+  ];
+
+  function renderNotes() {
+    const cats = state.categories[noteSection] || [];
+    const chips = [`<button class="chip ${noteFilter === '' ? 'active' : ''}" data-action="chip" data-sec="${noteSection}" data-cat="">全部</button>`]
+      .concat(cats.map((c) => `<button class="chip ${noteFilter === c ? 'active' : ''}" data-action="chip" data-sec="${noteSection}" data-cat="${esc(c)}">${esc(c)}</button>`))
+      .concat([`<button class="chip" data-action="chip-add" data-sec="${noteSection}">＋</button>`,
+        `<button class="chip" data-action="cats-manage" data-sec="${noteSection}" style="color:var(--text-3)">${icon('settings')}</button>`])
+      .join('');
+
+    let compose = '';
+    if (noteSection === 'inspiration') {
+      compose = `<div class="note-compose"><input id="noteCompose" placeholder="${NOTE_SECS[0].ph}"><button class="glass-btn btn-primary" data-action="note-add" data-sec="inspiration">${icon('plus')}</button></div>`;
+    } else if (noteSection === 'todo') {
+      compose = `<div class="note-compose"><input id="noteCompose" placeholder="${NOTE_SECS[2].ph}"><button class="glass-btn btn-primary" data-action="note-add" data-sec="todo">${icon('plus')}</button></div>`;
+    } else {
+      compose = `<div class="page-toolbar"><div class="grow"></div><button class="glass-btn btn-primary" data-action="sched-new">${icon('plus')} 新建日程</button></div>`;
+    }
+
+    const list = renderNoteList();
+
+    $('#view-notes').innerHTML = `
+      <div class="content-inner">
+        <div class="segment">
+          ${NOTE_SECS.map((s) => `<button class="segment-item ${noteSection === s.id ? 'active' : ''}" data-action="segment" data-sec="${s.id}">${s.label}</button>`).join('')}
+        </div>
+        <div class="chip-row">${chips}</div>
+        ${compose}
+        ${list}
+      </div>`;
+  }
+
+  function renderNoteList() {
+    const items = state.notes[noteSection].filter((n) => noteFilter === '' || n.category === noteFilter);
+    // 排序：日程按时间，其余按创建倒序
+    if (noteSection === 'schedule') items.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
+    else items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+    if (!items.length) {
+      return `<div class="empty">
+        <span style="display:block">${icon(NOTE_SECS.find((s) => s.id === noteSection).icon)}</span>
+        <span class="et">这里空空的</span>
+        <span class="ed">${noteSection === 'schedule' ? '点击上方「新建日程」安排你的日子' : '在上方输入框写下第一条吧'}</span>
+      </div>`;
+    }
+
+    return `<div class="note-list">${items.map((n) => noteCardHTML(n)).join('')}</div>`;
+  }
+
+  function noteCardHTML(n) {
+    if (noteSection === 'todo') {
+      return `<div class="note-card ${n.done ? 'done' : ''}">
+        <button class="check ${n.done ? 'on' : ''}" data-action="note-toggle" data-sec="todo" data-id="${n.id}">${icon('check')}</button>
+        <div class="note-body">
+          <div class="note-text">${esc(n.content)}</div>
+          <div class="note-meta">
+            ${n.category ? `<span class="chip small">${esc(n.category)}</span>` : ''}
+            <span class="note-date">${fmtRelative(n.createdAt)}</span>
+          </div>
+        </div>
+        <div class="note-actions">
+          <button class="icon-glass mini" data-action="note-edit" data-sec="todo" data-id="${n.id}">${icon('pen')}</button>
+          <button class="icon-glass mini" data-action="note-del" data-sec="todo" data-id="${n.id}">${icon('trash')}</button>
+        </div>
+      </div>`;
+    }
+    if (noteSection === 'schedule') {
+      return `<div class="note-card ${n.done ? 'done' : ''}">
+        <button class="check ${n.done ? 'on' : ''}" data-action="note-toggle" data-sec="schedule" data-id="${n.id}">${icon('check')}</button>
+        <div class="note-body">
+          <div class="note-text">${esc(n.title || n.note || '未命名日程')}</div>
+          <div class="note-meta">
+            <span class="chip small">${esc(n.date || '')}${n.time ? ' ' + esc(n.time) : ''}</span>
+            ${n.category ? `<span class="chip small">${esc(n.category)}</span>` : ''}
+          </div>
+        </div>
+        <div class="note-actions">
+          <button class="icon-glass mini" data-action="note-edit" data-sec="schedule" data-id="${n.id}">${icon('pen')}</button>
+          <button class="icon-glass mini" data-action="note-del" data-sec="schedule" data-id="${n.id}">${icon('trash')}</button>
+        </div>
+      </div>`;
+    }
+    // inspiration
+    return `<div class="note-card">
+      <div class="note-body">
+        <div class="note-text">${esc(n.content)}</div>
+        <div class="note-meta">
+          ${n.category ? `<span class="chip small">${esc(n.category)}</span>` : ''}
+          <span class="note-date">${fmtRelative(n.createdAt)}</span>
+        </div>
+      </div>
+      <div class="note-actions">
+        <button class="icon-glass mini" data-action="note-edit" data-sec="inspiration" data-id="${n.id}">${icon('pen')}</button>
+        <button class="icon-glass mini" data-action="note-del" data-sec="inspiration" data-id="${n.id}">${icon('trash')}</button>
+      </div>
+    </div>`;
+  }
+
+  function addNote(content) {
+    if (!content.trim()) return;
+    const item = { id: VidaStore.uid('n'), content: content.trim(), category: noteFilter || '', createdAt: nowISO() };
+    mutate(() => state.notes[noteSection].unshift(item));
+    renderNotes();
+  }
+  function addTodo(content) {
+    if (!content.trim()) return;
+    const item = { id: VidaStore.uid('t'), content: content.trim(), category: noteFilter || '', done: false, createdAt: nowISO(), completedAt: null };
+    mutate(() => state.notes.todo.unshift(item));
+    renderNotes();
+  }
+
+  /* ========================================================================
+     7. 空间 / 合集 / 文章
+     ===================================================================== */
+  function renderSpace() {
+    const cols = state.collections;
+    const arts = state.articles.slice().sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt));
+    $('#view-space').innerHTML = `
+      <div class="content-inner">
+        <div class="page-toolbar">
+          <span class="section-label">合集 · ${cols.length}</span>
+          <div class="grow"></div>
+          <button class="glass-btn" data-action="new-collection">${icon('folder')} 新建合集</button>
+          <button class="glass-btn btn-primary" data-action="new-article">${icon('pen')} 写文章</button>
+        </div>
+        ${cols.length ? `<div class="card-grid">${cols.map(colCard).join('')}</div>` : ''}
+        <div class="section-label" style="margin-top:6px">文章 · ${arts.length}</div>
+        <div class="card-grid">
+          ${arts.length ? arts.map((a) => postCardHTML(a)).join('') : emptyHTML('file', '还没有文章', '点击「写文章」开始你的长文空间')}
+        </div>
+      </div>`;
+    hydrateImages($('#view-space'));
+  }
+
+  function colCard(c) {
+    const count = state.articles.filter((a) => a.collectionId === c.id).length;
+    return `<div class="collection-card" data-action="open-collection" data-id="${c.id}">
+      <div class="collection-cover">${c.cover ? imgTag(c.cover, '') : icon('folder')}</div>
+      <div class="collection-info">
+        <div class="collection-name">${esc(c.name)}</div>
+        <div class="collection-desc">${esc(c.desc || '')} · ${count} 篇</div>
+      </div>
+      <button class="icon-glass mini" data-action="col-edit" data-id="${c.id}" style="width:32px;height:32px">${icon('pen')}</button>
+      <button class="icon-glass mini" data-action="col-del" data-id="${c.id}" style="width:32px;height:32px">${icon('trash')}</button>
+    </div>`;
+  }
+
+  function postCardHTML(a) {
+    const c = state.collections.find((x) => x.id === a.collectionId);
+    return `<div class="post-card" data-action="open-article" data-id="${a.id}">
+      <div class="post-title">${esc(a.title)}</div>
+      ${a.content ? `<div class="post-excerpt">${esc(stripMd(a.content))}</div>` : ''}
+      ${a.images && a.images.length ? `<div class="thumb-strip">${a.images.slice(0, 4).map((f) => imgTag(f)).join('')}</div>` : ''}
+      <div class="post-meta">
+        <span class="date">${fmtDateTime(a.updatedAt || a.createdAt)}</span>
+        ${c ? `<span class="tag">${esc(c.name)}</span>` : ''}
+        ${(a.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
+        <span class="grow"></span>
+        ${isFav('article', a.id) ? `<span style="color:var(--accent-deep)">${icon('heartFilled')}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function renderCollection() {
+    const c = state.collections.find((x) => x.id === viewParams.collectionId);
+    if (!c) { goBack(); return; }
+    const arts = state.articles.filter((a) => a.collectionId === c.id).sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt));
+    $('#view-collection').innerHTML = `
+      <div class="content-inner">
+        <div class="hero" style="padding:24px">
+          <div class="hero-top">
+            <div class="collection-cover" style="width:56px;height:56px">${c.cover ? imgTag(c.cover, '') : icon('folder')}</div>
+            <div class="hero-greet">
+              <span class="name">${esc(c.name)}</span>
+              <span class="hi">${esc(c.desc || '')}</span>
+            </div>
+          </div>
+        </div>
+        <div class="page-toolbar">
+          <span class="section-label">${arts.length} 篇文章</span>
+          <div class="grow"></div>
+          <button class="glass-btn btn-primary" data-action="col-new-article">${icon('pen')} 写文章</button>
+        </div>
+        <div class="card-grid">${arts.length ? arts.map((a) => postCardHTML(a)).join('') : emptyHTML('file', '合集还是空的', '为这个合集写下第一篇文章')}</div>
+      </div>`;
+    hydrateImages($('#view-collection'));
+  }
+
+  function renderArticle() {
+    const a = state.articles.find((x) => x.id === viewParams.articleId);
+    if (!a) { goBack(); return; }
+    $('#view-article').innerHTML = `
+      <div class="content-inner">
+        <article class="post-card glass-strong" style="padding:26px 24px;border-radius:var(--r-xl)">
+          <h1 class="post-title" style="font-size:24px">${esc(a.title)}</h1>
+          <div class="post-meta">
+            <span class="date">${fmtDateTime(a.updatedAt || a.createdAt)}</span>
+            ${(a.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
+            <span class="grow"></span>
+            <button class="icon-glass" data-action="art-fav" data-id="${a.id}" style="width:36px;height:36px">${icon(isFav('article', a.id) ? 'heartFilled' : 'heart')}</button>
+            <button class="icon-glass" data-action="art-edit" data-id="${a.id}" style="width:36px;height:36px">${icon('pen')}</button>
+            <button class="icon-glass" data-action="art-del" data-id="${a.id}" style="width:36px;height:36px">${icon('trash')}</button>
+          </div>
+          <div class="md-preview active" style="display:block;max-width:none;padding:6px 0 0">${mdToHtml(a.content)}</div>
+          ${a.images && a.images.length ? `<div class="thumb-strip">${a.images.map((f) => imgTag(f)).join('')}</div>` : ''}
+        </article>
+      </div>`;
+    hydrateImages($('#view-article'));
+  }
+
+  /* ========================================================================
+     8. 动态 / 信箱 / 收藏夹
+     ===================================================================== */
+  function renderMoments() {
+    const list = state.moments.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    $('#view-moments').innerHTML = `
+      <div class="content-inner">
+        <div class="page-toolbar">
+          <span class="section-label">动态 · ${list.length}</span>
+          <div class="grow"></div>
+          <button class="glass-btn btn-primary" data-action="new-moment">${icon('plus')} 发布动态</button>
+        </div>
+        <div class="card-grid">
+          ${list.length ? list.map(momentHTML).join('') : emptyHTML('message', '还没有动态', '记录此刻的心情或一件小事')}
+        </div>
+      </div>`;
+    hydrateImages($('#view-moments'));
+  }
+
+  function momentHTML(m) {
+    const imgs = m.images || [];
+    return `<div class="moment-card">
+      <div class="moment-head">
+        <div class="moment-avatar">${state.profile.avatar ? imgTag(state.profile.avatar) : icon('user')}</div>
+        <div>
+          <div class="moment-author">${esc(state.profile.name || 'VidaOS')}</div>
+          <div class="moment-time">${fmtRelative(m.createdAt)}</div>
+        </div>
+        <div class="grow"></div>
+        <button class="icon-glass mini" data-action="moment-fav" data-id="${m.id}" style="width:32px;height:32px">${icon(isFav('moment', m.id) ? 'heartFilled' : 'heart')}</button>
+        <button class="icon-glass mini" data-action="moment-del" data-id="${m.id}" style="width:32px;height:32px">${icon('trash')}</button>
+      </div>
+      <div class="moment-text">${esc(m.content)}</div>
+      ${imgs.length ? `<div class="moment-images count-${Math.min(imgs.length, 4)}">${imgs.map((f) => imgTag(f)).join('')}</div>` : ''}
+    </div>`;
+  }
+
+  function renderMailbox() {
+    const list = state.letters.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    $('#view-mailbox').innerHTML = `
+      <div class="content-inner">
+        <div class="page-toolbar">
+          <span class="section-label">信箱 · ${list.length}</span>
+          <div class="grow"></div>
+          <button class="glass-btn btn-primary" data-action="new-letter">${icon('pen')} 写信</button>
+        </div>
+        <div class="card-grid">
+          ${list.length ? list.map(letterHTML).join('') : emptyHTML('mail', '信箱空空', '把重要的信件与照片存进来')}
+        </div>
+      </div>`;
+    hydrateImages($('#view-mailbox'));
+  }
+
+  function letterHTML(l) {
+    const imgs = l.images || [];
+    return `<div class="letter-card ${l.unread ? 'unread' : ''}" data-action="letter-open" data-id="${l.id}">
+      <div class="seal">${icon('mail')}</div>
+      <div class="letter-title">${esc(l.title || '（无标题）')}</div>
+      <div class="letter-body">${esc(l.content || '')}</div>
+      <div class="post-meta">
+        <span class="date">${fmtDateTime(l.createdAt)}</span>
+        ${imgs.length ? `<span class="date">${imgs.length} 张照片</span>` : ''}
+        <span class="grow"></span>
+        <button class="icon-glass mini" data-action="letter-fav" data-id="${l.id}" style="width:30px;height:30px">${icon(isFav('letter', l.id) ? 'heartFilled' : 'heart')}</button>
+        <button class="icon-glass mini" data-action="letter-del" data-id="${l.id}" style="width:30px;height:30px">${icon('trash')}</button>
+      </div>
+    </div>`;
+  }
+
+  function renderFavorites() {
+    const items = state.favorites.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    $('#view-favorites').innerHTML = `
+      <div class="content-inner">
+        <div class="page-toolbar"><span class="section-label">收藏夹 · ${items.length}</span><div class="grow"></div></div>
+        <div class="card-grid">
+          ${items.length ? items.map(favHTML).join('') : emptyHTML('bookmark', '还没有收藏', '在空间 / 动态 / 信箱里点亮心形')}
+        </div>
+      </div>`;
+    hydrateImages($('#view-favorites'));
+  }
+
+  function favHTML(f) {
+    const wrap = (inner) => `<div class="post-card">${inner}</div>`;
+    if (f.refType === 'article') {
+      const a = state.articles.find((x) => x.id === f.refId);
+      if (!a) return '';
+      return wrap(`<div class="post-title">${icon('file')} ${esc(a.title)}</div>
+        ${a.content ? `<div class="post-excerpt">${esc(stripMd(a.content))}</div>` : ''}
+        <div class="post-meta"><span class="date">文章 · ${fmtRelative(a.createdAt)}</span><span class="grow"></span>
+        <button class="glass-btn" data-action="fav-open" data-type="article" data-id="${a.id}">打开</button>
+        <button class="icon-glass mini" data-action="fav-remove" data-id="${f.id}" style="width:32px;height:32px">${icon('trash')}</button></div>`);
+    }
+    if (f.refType === 'moment') {
+      const m = state.moments.find((x) => x.id === f.refId);
+      if (!m) return '';
+      return wrap(`<div class="moment-text">${esc(m.content)}</div>
+        <div class="post-meta"><span class="date">动态 · ${fmtRelative(m.createdAt)}</span><span class="grow"></span>
+        <button class="icon-glass mini" data-action="fav-remove" data-id="${f.id}" style="width:32px;height:32px">${icon('trash')}</button></div>`);
+    }
+    if (f.refType === 'letter') {
+      const l = state.letters.find((x) => x.id === f.refId);
+      if (!l) return '';
+      return wrap(`<div class="post-title">${icon('mail')} ${esc(l.title || '（无标题）')}</div>
+        <div class="post-excerpt">${esc(l.content || '')}</div>
+        <div class="post-meta"><span class="date">信箱 · ${fmtRelative(l.createdAt)}</span><span class="grow"></span>
+        <button class="glass-btn" data-action="fav-open" data-type="letter" data-id="${l.id}">打开</button>
+        <button class="icon-glass mini" data-action="fav-remove" data-id="${f.id}" style="width:32px;height:32px">${icon('trash')}</button></div>`);
+    }
+    return '';
+  }
+
+  function isFav(type, id) { return state.favorites.some((f) => f.refType === type && f.refId === id); }
+  function toggleFav(type, id) {
+    mutate(() => {
+      const i = state.favorites.findIndex((f) => f.refType === type && f.refId === id);
+      if (i >= 0) state.favorites.splice(i, 1);
+      else state.favorites.unshift({ id: VidaStore.uid('f'), refType: type, refId: id, createdAt: nowISO() });
     });
+    render();
+    toast(isFav(type, id) ? '已收藏' : '已取消收藏');
+  }
 
-    // Update side menu
-    document.querySelectorAll('.side-menu-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.view === viewName);
-    });
-
-    // Update header title
-    const titles = {
-        home: 'VidaOS',
-        timeline: '时间线',
-        tags: '标签',
-        gallery: '图集',
-        settings: '设置',
+  /* ========================================================================
+     9. 数据页（导入导出）
+     ===================================================================== */
+  function renderData() {
+    const counts = {
+      articles: state.articles.length, moments: state.moments.length,
+      letters: state.letters.length, notes: state.notes.inspiration.length + state.notes.schedule.length + state.notes.todo.length,
     };
-    document.getElementById('headerTitle').textContent = titles[viewName] || 'VidaOS';
+    $('#view-data').innerHTML = `
+      <div class="content-inner">
+        <div class="data-hero">
+          <div class="data-stat glass"><div class="num">${counts.articles}</div><div class="lbl">文章</div></div>
+          <div class="data-stat glass"><div class="num">${counts.moments}</div><div class="lbl">动态</div></div>
+          <div class="data-stat glass"><div class="num">${counts.letters}</div><div class="lbl">信件</div></div>
+          <div class="data-stat glass"><div class="num">${counts.notes}</div><div class="lbl">便签</div></div>
+        </div>
 
-    AppState.currentView = viewName;
+        <div class="data-group">
+          <div class="data-group-title">备份与导出</div>
+          <div class="settings-list">
+            <button class="settings-item" data-action="export-open">
+              <span class="si-icon">${icon('download')}</span>
+              <span class="si-body"><span class="si-title">导出备份</span><span class="si-desc">JSON / TXT / Markdown / PDF，可选范围</span></span>
+              <span class="si-chev">${icon('chevronRight')}</span>
+            </button>
+            <button class="settings-item" data-action="import-open">
+              <span class="si-icon">${icon('upload')}</span>
+              <span class="si-body"><span class="si-title">导入备份</span><span class="si-desc">从 JSON / Markdown / TXT 恢复</span></span>
+              <span class="si-chev">${icon('chevronRight')}</span>
+            </button>
+          </div>
+        </div>
 
-    // Refresh view data
-    if (viewName === 'home') {
-        UI.renderPostsList('postsList', PostManager.getRecent());
-        document.querySelector('.section-title').textContent = '最近记录';
-        UI.updateStats();
-    } else if (viewName === 'timeline') {
-        UI.renderTimeline();
-    } else if (viewName === 'tags') {
-        UI.renderTags();
-    } else if (viewName === 'gallery') {
-        UI.renderGallery();
+        <div class="data-group">
+          <div class="data-group-title">危险操作</div>
+          <div class="settings-list">
+            <button class="settings-item danger" data-action="clear">
+              <span class="si-icon">${icon('trash')}</span>
+              <span class="si-body"><span class="si-title">清空所有数据</span><span class="si-desc">不可恢复，建议先导出备份</span></span>
+              <span class="si-chev">${icon('chevronRight')}</span>
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  /* ========================================================================
+     10. 设置页
+     ===================================================================== */
+  function renderSettings() {
+    const p = state.profile;
+    $('#view-settings').innerHTML = `
+      <div class="content-inner">
+        <div class="settings-item glass-strong">
+          <div class="avatar-preview">${p.avatar ? imgTag(p.avatar) : icon('user')}</div>
+          <div class="si-body">
+            <div class="si-title" style="font-size:17px">${esc(p.name || 'VidaOS')}</div>
+            <div class="si-desc" style="white-space:normal">${esc(p.signature || '还没有个性签名')}</div>
+          </div>
+          <button class="glass-btn btn-primary" data-action="profile-edit">${icon('pen')} 编辑</button>
+        </div>
+
+        <div class="data-group" style="margin-top:16px">
+          <div class="data-group-title">关于</div>
+          <div class="settings-list">
+            <button class="settings-item" id="pwaInstallBtn" data-action="pwa-install" style="display:none">
+              <span class="si-icon">${icon('download')}</span>
+              <span class="si-body"><span class="si-title">安装为应用（PWA）</span><span class="si-desc">添加到主屏幕，离线可用</span></span>
+              <span class="si-chev">${icon('chevronRight')}</span>
+            </button>
+            <div class="settings-item">
+              <span class="si-icon">${icon('info')}</span>
+              <span class="si-body"><span class="si-title">VidaOS</span><span class="si-desc">v2.0 · 纯本地离线运行</span></span>
+            </div>
+            <div class="settings-item">
+              <span class="si-icon">${icon('droplet')}</span>
+              <span class="si-body"><span class="si-title">设计致谢</span><span class="si-desc">参考 Sui-IB / InternalBeyond-Mobile 的布局概念</span></span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    hydrateImages($('#view-settings'));
+    if (deferredInstall && $('#pwaInstallBtn')) $('#pwaInstallBtn').style.display = 'flex';
+  }
+
+  /* ========================================================================
+     11. 编辑器
+     ===================================================================== */
+  const ed = { mode: 'article', id: null, images: [], collectionId: null, tags: [], cover: null, meta: {} };
+  const MD_TOOLS = [
+    { act: 'bold', icon: 'bold', label: '加粗' },
+    { act: 'italic', icon: 'italic', label: '斜体' },
+    { sep: true },
+    { act: 'h1', icon: null, text: 'H1', label: '一级标题' },
+    { act: 'h2', icon: null, text: 'H2', label: '二级标题' },
+    { act: 'h3', icon: null, text: 'H3', label: '三级标题' },
+    { sep: true },
+    { act: 'list', icon: 'list', label: '无序列表' },
+    { act: 'ol', icon: 'listOrdered', label: '有序列表' },
+    { act: 'quote', icon: 'quote', label: '引用' },
+    { act: 'code', icon: 'code', label: '代码' },
+    { sep: true },
+    { act: 'link', icon: 'link', label: '链接' },
+    { act: 'image', icon: 'image', label: '图片' },
+    { act: 'hr', icon: null, text: '—', label: '分割线' },
+  ];
+
+  function buildMdToolbar() {
+    $('#mdToolbar').innerHTML = MD_TOOLS.map((t) => {
+      if (t.sep) return `<span class="md-tool sep"></span>`;
+      return `<button class="md-tool" data-md="${t.act}" title="${t.label}">${t.icon ? icon(t.icon) : esc(t.text)}</button>`;
+    }).join('');
+  }
+
+  function openEditor(mode, data) {
+    ed.mode = mode;
+    ed.id = data ? data.id : null;
+    ed.images = (data && data.images) ? data.images.slice() : [];
+    ed.collectionId = (data && data.collectionId) || null;
+    ed.tags = (data && data.tags) ? data.tags.slice() : [];
+    ed.cover = (data && data.cover) || null;
+
+    $('#edTitle').value = (data && data.title) ? data.title : '';
+    $('#edText').value = (data && data.content) ? data.content : '';
+    $('#edTitle').style.display = (mode === 'article' || mode === 'letter') ? '' : 'none';
+    $('#edTitle').placeholder = mode === 'letter' ? '信的主题…' : '标题…';
+    $('#edText').placeholder = mode === 'moment' ? '此刻想说点什么…' : mode === 'letter' ? '写下这封信…' : '开始书写…';
+    $('#edText').rows = 1;
+
+    // markdown 工具栏仅文章模式显示
+    $('#mdToolbar').style.display = mode === 'article' ? 'flex' : 'none';
+    // 元数据条（合集/标签）仅文章模式
+    const metaEl = $('#edMeta');
+    if (mode === 'article') {
+      const cols = state.collections;
+      metaEl.classList.add('show');
+      metaEl.innerHTML = `
+        <select id="edCollection">
+          <option value="">无合集</option>
+          ${cols.map((c) => `<option value="${c.id}" ${ed.collectionId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+        </select>
+        <input id="edTags" placeholder="标签，空格分隔" value="${esc(ed.tags.join(' '))}">`;
+    } else {
+      metaEl.classList.remove('show');
+      metaEl.innerHTML = '';
     }
-}
 
-// ==========================================
-// Event Handlers Setup
-// ==========================================
-function setupEventHandlers() {
-    // Menu toggle
-    const menuBtn = document.getElementById('menuBtn');
-    const sideMenu = document.getElementById('sideMenu');
-    const sideMenuOverlay = document.getElementById('sideMenuOverlay');
+    // 图片按钮文案
+    $('#edImageBtn').innerHTML = `${icon('image')} 图片`;
+    // 预览按钮仅文章
+    $('#edModeBtn').style.display = mode === 'article' ? '' : 'none';
 
-    function openSideMenu() {
-        sideMenu.classList.add('active');
-        sideMenuOverlay.classList.add('active');
-    }
+    renderEditorImages();
+    updateEdWc();
+    setPreviewMode(false);
+    $('#edPreview').classList.remove('active');
+    $('#edText').style.display = '';
 
-    function closeSideMenu() {
-        sideMenu.classList.remove('active');
-        sideMenuOverlay.classList.remove('active');
-    }
+    $('#editor').classList.add('open');
+    setTimeout(() => { if (mode === 'article' || mode === 'letter') $('#edTitle').focus(); else $('#edText').focus(); }, 340);
+  }
 
-    menuBtn.addEventListener('click', openSideMenu);
-    sideMenuOverlay.addEventListener('click', closeSideMenu);
+  function closeEditor() {
+    $('#editor').classList.remove('open');
+    ed.id = null; ed.images = [];
+  }
 
-    // Side menu navigation
-    document.querySelectorAll('.side-menu-item').forEach(item => {
-        item.addEventListener('click', () => {
-            switchView(item.dataset.view);
-            closeSideMenu();
+  function renderEditorImages() {
+    $('#edImages').innerHTML = ed.images.map((f, i) => `
+      <span class="ei">${imgTag(f)}<button class="rm" data-action="ed-img-rm" data-i="${i}">${icon('x')}</button></span>`).join('');
+    hydrateImages($('#edImages'));
+  }
+
+  function updateEdWc() {
+    const len = $('#edText').value.length;
+    $('#edWc').textContent = len + ' 字';
+  }
+
+  function setPreviewMode(on) {
+    const ta = $('#edText'), pv = $('#edPreview');
+    if (on) { pv.innerHTML = mdToHtml(ta.value); ta.style.display = 'none'; pv.classList.add('active'); $('#edModeBtn').textContent = '编辑'; }
+    else { ta.style.display = ''; pv.classList.remove('active'); $('#edModeBtn').textContent = '预览'; }
+  }
+
+  async function saveEditor() {
+    const title = $('#edTitle').value.trim();
+    const content = $('#edText').value;
+
+    if (ed.mode === 'article') {
+      const collectionId = $('#edCollection') ? $('#edCollection').value : null;
+      const tags = $('#edTags') ? $('#edTags').value.trim().split(/\s+/).filter(Boolean) : [];
+      if (!title && !content.trim() && !ed.images.length) { toast('写点什么再保存吧'); return; }
+      const now = nowISO();
+      if (ed.id) {
+        mutate(() => {
+          const a = state.articles.find((x) => x.id === ed.id);
+          if (a) { a.title = title; a.content = content; a.images = ed.images.slice(); a.collectionId = collectionId; a.tags = tags; a.cover = a.cover || (ed.images[0] || null); a.updatedAt = now; }
         });
+      } else {
+        const a = { id: VidaStore.uid('a'), title, content, images: ed.images.slice(), collectionId, tags, cover: ed.images[0] || null, createdAt: now, updatedAt: now };
+        mutate(() => state.articles.unshift(a));
+      }
+      toast('已保存');
+      closeEditor();
+      if (currentView === 'space' || currentView === 'collection' || currentView === 'article') render();
+      else push('space');
+      return;
+    }
+
+    if (ed.mode === 'moment') {
+      if (!content.trim() && !ed.images.length) { toast('写点什么吧'); return; }
+      if (ed.id) {
+        mutate(() => { const m = state.moments.find((x) => x.id === ed.id); if (m) { m.content = content; m.images = ed.images.slice(); } });
+      } else {
+        mutate(() => state.moments.unshift({ id: VidaStore.uid('m'), content, images: ed.images.slice(), createdAt: nowISO() }));
+      }
+      toast('已发布');
+      closeEditor();
+      push('moments');
+      return;
+    }
+
+    if (ed.mode === 'letter') {
+      if (!title && !content.trim() && !ed.images.length) { toast('写点什么吧'); return; }
+      if (ed.id) {
+        mutate(() => { const l = state.letters.find((x) => x.id === ed.id); if (l) { l.title = title; l.content = content; l.images = ed.images.slice(); } });
+      } else {
+        mutate(() => state.letters.unshift({ id: VidaStore.uid('l'), title, content, images: ed.images.slice(), createdAt: nowISO(), unread: true }));
+      }
+      toast('信件已存好');
+      closeEditor();
+      push('mailbox');
+      return;
+    }
+  }
+
+  /* Markdown 插入辅助 */
+  function ta() { return $('#edText'); }
+  function wrapSel(before, after, placeholder) {
+    const t = ta(), s = t.selectionStart, e = t.selectionEnd;
+    const sel = t.value.slice(s, e) || placeholder;
+    t.setRangeText(before + sel + after, s, e, 'end');
+    const ns = s + before.length;
+    t.focus(); t.setSelectionRange(ns, ns + sel.length);
+    updateEdWc();
+  }
+  function linePrefix(prefix) {
+    const t = ta(), s = t.selectionStart;
+    const lineStart = t.value.lastIndexOf('\n', s - 1) + 1;
+    t.setRangeText(prefix, lineStart, lineStart, 'end');
+    t.focus(); updateEdWc();
+  }
+
+  function applyMdTool(act) {
+    switch (act) {
+      case 'bold': wrapSel('**', '**', '加粗文字'); break;
+      case 'italic': wrapSel('*', '*', '斜体文字'); break;
+      case 'h1': linePrefix('# '); break;
+      case 'h2': linePrefix('## '); break;
+      case 'h3': linePrefix('### '); break;
+      case 'list': linePrefix('- '); break;
+      case 'ol': linePrefix('1. '); break;
+      case 'quote': linePrefix('> '); break;
+      case 'code': wrapSel('`', '`', '代码'); break;
+      case 'link': wrapSel('[', '](https://)', '链接文字'); break;
+      case 'image': wrapSel('![', '](https://)', '图片描述'); break;
+      case 'hr': linePrefix('---\n'); break;
+    }
+  }
+
+  /* ========================================================================
+     12. 模态弹窗 / Toast
+     ===================================================================== */
+  let pendingConfirm = null;
+
+  function openModal(html) {
+    $('#modalLayer').innerHTML = `<div class="modal">${html}</div>`;
+    $('#modalLayer').classList.add('open');
+  }
+  function closeModal() { $('#modalLayer').classList.remove('open'); $('#modalLayer').innerHTML = ''; pendingConfirm = null; }
+
+  function confirmDialog(title, message, onOk, danger) {
+    openModal(`
+      <div class="modal-head"><div class="modal-title">${esc(title)}</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field" style="color:var(--text-2);line-height:1.6;font-size:14px;margin:0">${esc(message)}</div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn ${danger ? 'btn-danger' : 'btn-primary'}" data-action="modal-ok">确定</button>
+      </div>`);
+    pendingConfirm = onOk;
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  /* ========================================================================
+     13. 弹窗构建器
+     ===================================================================== */
+  function collectionDialog(existing) {
+    openModal(`
+      <div class="modal-head"><div class="modal-title">${existing ? '编辑合集' : '新建合集'}</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field"><label>合集名称</label><input id="colName" value="${esc(existing ? existing.name : '')}" placeholder="例如：旅行日记"></div>
+      <div class="field"><label>简介（可选）</label><input id="colDesc" value="${esc(existing ? existing.desc : '')}" placeholder="一句话描述这个合集"></div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="col-save">保存</button>
+      </div>`);
+    pendingConfirm = () => {
+      const name = $('#colName').value.trim();
+      if (!name) { toast('请输入合集名称'); return false; }
+      if (existing) {
+        mutate(() => { const c = state.collections.find((x) => x.id === existing.id); if (c) { c.name = name; c.desc = $('#colDesc').value.trim(); } });
+      } else {
+        mutate(() => state.collections.push({ id: VidaStore.uid('c'), name, desc: $('#colDesc').value.trim(), cover: null, createdAt: nowISO() }));
+      }
+      toast('已保存');
+      render();
+      return true;
+    };
+  }
+
+  function scheduleDialog(existing, presetDate) {
+    openModal(`
+      <div class="modal-head"><div class="modal-title">${existing ? '编辑日程' : '新建日程'}</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field"><label>事项</label><input id="scTitle" value="${esc(existing ? (existing.title || '') : '')}" placeholder="要做什么？"></div>
+      <div class="field"><label>备注（可选）</label><input id="scNote" value="${esc(existing ? (existing.note || '') : '')}" placeholder="补充说明"></div>
+      <div class="field"><label>日期</label><input id="scDate" type="date" value="${existing ? existing.date : (presetDate || todayStr())}"></div>
+      <div class="field"><label>时间（可选）</label><input id="scTime" type="time" value="${esc(existing ? (existing.time || '') : '')}"></div>
+      <div class="field"><label>分类（可选）</label><input id="scCat" list="scCats" value="${esc(existing ? (existing.category || '') : '')}" placeholder="输入或选择">
+        <datalist id="scCats">${(state.categories.schedule || []).map((c) => `<option value="${esc(c)}">`).join('')}</datalist></div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="sc-save">保存</button>
+      </div>`);
+    pendingConfirm = () => {
+      const title = $('#scTitle').value.trim();
+      const date = $('#scDate').value;
+      if (!title && !$('#scNote').value.trim()) { toast('请输入事项'); return false; }
+      if (!date) { toast('请选择日期'); return false; }
+      const cat = $('#scCat').value.trim();
+      if (cat && !(state.categories.schedule || []).includes(cat)) {
+        mutate(() => state.categories.schedule.push(cat));
+      }
+      const data = { title, note: $('#scNote').value.trim(), date, time: $('#scTime').value, category: cat };
+      if (existing) {
+        mutate(() => { const s = state.notes.schedule.find((x) => x.id === existing.id); if (s) Object.assign(s, data); });
+      } else {
+        mutate(() => state.notes.schedule.push(Object.assign({ id: VidaStore.uid('s'), done: false, createdAt: nowISO() }, data)));
+      }
+      calState.sel = date;
+      toast('已保存');
+      render();
+      return true;
+    };
+  }
+
+  function noteEditDialog(n) {
+    openModal(`
+      <div class="modal-head"><div class="modal-title">编辑</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field"><label>内容</label><textarea id="neText" style="min-height:110px">${esc(n.content)}</textarea></div>
+      <div class="field"><label>分类（可选）</label><input id="neCat" value="${esc(n.category || '')}" placeholder="输入或选择"></div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="ne-save">保存</button>
+      </div>`);
+    pendingConfirm = () => {
+      const cat = $('#neCat').value.trim();
+      mutate(() => {
+        const it = state.notes[noteSection].find((x) => x.id === n.id);
+        if (it) { it.content = $('#neText').value; it.category = cat; }
+        if (cat && !(state.categories[noteSection] || []).includes(cat)) state.categories[noteSection].push(cat);
+      });
+      toast('已保存');
+      renderNotes();
+      return true;
+    };
+  }
+
+  function catsManageDialog() {
+    const cats = state.categories[noteSection] || [];
+    openModal(`
+      <div class="modal-head"><div class="modal-title">管理分类</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="note-compose"><input id="newCat" placeholder="新分类名称"><button class="glass-btn btn-primary" data-action="cat-add">${icon('plus')}</button></div>
+      <div class="chip-row" style="margin-top:10px">
+        ${cats.length ? cats.map((c) => `<span class="chip">${esc(c)} <button style="margin-left:6px" data-action="cat-del" data-cat="${esc(c)}">${icon('x')}</button></span>`).join('') : '<span class="ed" style="color:var(--text-3)">还没有分类</span>'}
+      </div>
+      <div class="modal-foot"><button class="glass-btn" data-action="modal-close">完成</button></div>`);
+  }
+
+  function profileDialog() {
+    const p = state.profile;
+    openModal(`
+      <div class="modal-head"><div class="modal-title">个人主页</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field">
+        <label>头像</label>
+        <div class="avatar-editor">
+          <div class="avatar-preview" id="avPreview">${p.avatar ? imgTag(p.avatar) : icon('user')}</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="glass-btn" data-action="avatar-upload">${icon('image')} 更换头像</button>
+            ${p.avatar ? `<button class="glass-btn" data-action="avatar-remove">移除</button>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>昵称</label><input id="pfName" value="${esc(p.name)}" placeholder="你的名字"></div>
+      <div class="field"><label>个性签名</label><textarea id="pfSig" placeholder="一句话介绍自己">${esc(p.signature)}</textarea></div>
+      <div class="field"><label>背景</label>
+        <div class="bg-thumbs" id="bgThumbs"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="pf-save">保存</button>
+      </div>`);
+    renderBgThumbs();
+    hydrateImages($('#modalLayer'));
+  }
+
+  const BG_PRESETS = {
+    aurora: { name: '晨曦', css: 'linear-gradient(165deg, #f5f9fd 0%, #eaf0f7 40%, #dce7f3 78%, #cdddee 100%)' },
+    mist: { name: '雾蓝', css: 'linear-gradient(160deg, #eef4fa 0%, #dde8f3 55%, #c4d5e8 100%)' },
+    glacier: { name: '冰川', css: 'linear-gradient(155deg, #eaf3fa 0%, #d5e5f2 50%, #b7cfe6 100%)' },
+    moon: { name: '月白', css: 'linear-gradient(160deg, #f0f4f9 0%, #dfe8f1 55%, #cbd8e6 100%)' },
+  };
+
+  function renderBgThumbs() {
+    const cur = state.profile.background;
+    $('#bgThumbs').innerHTML = Object.keys(BG_PRESETS).map((k) => `
+      <div class="bg-thumb ${cur === k ? 'active' : ''}" data-action="bg-preset" data-key="${k}" style="background:${BG_PRESETS[k].css}" title="${BG_PRESETS[k].name}"></div>`).join('')
+      + `<div class="bg-thumb upload" data-action="bg-upload">${icon('image')}</div>`;
+  }
+
+  function applyBackground() {
+    const bg = state.profile.background;
+    const el = $('.bg');
+    if (!el) return;
+    if (bg && BG_PRESETS[bg]) {
+      el.style.background = BG_PRESETS[bg].css;
+      el.style.backgroundImage = 'none';
+    } else if (bg) {
+      fileURL(bg).then((url) => { el.style.backgroundImage = `url(${url})`; el.style.backgroundSize = 'cover'; el.style.backgroundPosition = 'center'; });
+    }
+  }
+
+  /* ========================================================================
+     14. 导出 / 导入
+     ===================================================================== */
+  const SCOPES = [
+    { id: 'profile', label: '个人主页', count: () => 1 },
+    { id: 'space', label: '空间（合集 + 文章）', count: () => state.collections.length + state.articles.length },
+    { id: 'moments', label: '动态', count: () => state.moments.length },
+    { id: 'letters', label: '信箱', count: () => state.letters.length },
+    { id: 'favorites', label: '收藏夹', count: () => state.favorites.length },
+    { id: 'notes', label: '便签（灵感/日程/待办）', count: () => state.notes.inspiration.length + state.notes.schedule.length + state.notes.todo.length },
+  ];
+
+  function exportDialog() {
+    const sel = { set: new Set(['profile', 'space', 'moments', 'letters', 'favorites', 'notes']) };
+    const fmt = { value: 'json' };
+    const body = `
+      <div class="modal-head"><div class="modal-title">导出备份</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="data-group-title">选择要备份的内容</div>
+      <div class="scope-list" id="scopeList">
+        ${SCOPES.map((s) => `
+          <label class="scope-item">
+            <span class="check on" data-action="scope" data-id="${s.id}">${icon('check')}</span>
+            <span class="sc-name">${s.label}</span>
+            <span class="sc-count">${s.count()}</span>
+          </label>`).join('')}
+      </div>
+      <div class="data-group-title" style="margin-top:16px">导出格式</div>
+      <div class="chip-row" style="margin-bottom:0">
+        ${['json', 'txt', 'md', 'pdf'].map((f) => `<button class="chip ${fmt.value === f ? 'active' : ''}" data-action="fmt" data-fmt="${f}">${f.toUpperCase()}</button>`).join('')}
+      </div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="export-do">导出</button>
+      </div>`;
+    openModal(body);
+    // 通过闭包维护状态
+    window.__exportSel = sel; window.__exportFmt = fmt;
+    // 重新标注选中状态
+    refreshScopeUI();
+  }
+  function refreshScopeUI() {
+    const sel = window.__exportSel; if (!sel) return;
+    $$('#scopeList .check').forEach((el) => {
+      const id = el.getAttribute('data-id');
+      el.classList.toggle('on', sel.set.has(id));
+      el.innerHTML = icon('check');
     });
+  }
 
-    // Bottom navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            switchView(item.dataset.view);
-        });
-    });
+  function scopedState(selSet) {
+    const out = { version: state.version, exportedAt: nowISO(), scopes: Array.from(selSet) };
+    if (selSet.has('profile')) out.profile = state.profile;
+    if (selSet.has('space')) { out.collections = state.collections; out.articles = state.articles; }
+    if (selSet.has('moments')) out.moments = state.moments;
+    if (selSet.has('letters')) out.letters = state.letters;
+    if (selSet.has('favorites')) out.favorites = state.favorites;
+    if (selSet.has('notes')) { out.notes = state.notes; out.categories = state.categories; }
+    return out;
+  }
 
-    // Quick action buttons
-    document.getElementById('newPostBtn').addEventListener('click', () => openEditModal('create'));
-    document.getElementById('newPhotoBtn').addEventListener('click', () => openEditModal('photo'));
-    document.getElementById('newRantBtn').addEventListener('click', () => openEditModal('rant'));
-    document.getElementById('importBtn').addEventListener('click', openImportModal);
-    document.getElementById('viewAllPosts').addEventListener('click', () => {
-        UI.renderPostsList('postsList', PostManager.getAll());
-        document.querySelector('.section-title').textContent = '全部记录';
-    });
-
-    // Modal close buttons
-    document.getElementById('modalClose').addEventListener('click', closeEditModal);
-    document.getElementById('cancelBtn').addEventListener('click', closeEditModal);
-    document.getElementById('detailClose').addEventListener('click', closeDetailModal);
-    document.getElementById('importClose').addEventListener('click', closeImportModal);
-
-    // Edit modal save
-    document.getElementById('saveBtn').addEventListener('click', () => {
-        const title = document.getElementById('postTitle').value;
-        const content = document.getElementById('postContent').value;
-        const type = document.querySelector('input[name="postType"]:checked').value;
-
-        if (!content.trim() && AppState.tempImages.length === 0) {
-            showToast('请输入内容或添加图片', 'error');
-            return;
+  function collectFileIds(data) {
+    const ids = new Set();
+    const scan = (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      if (Array.isArray(obj)) { obj.forEach(scan); return; }
+      for (const k in obj) {
+        const v = obj[k];
+        if (k === 'avatar' || k === 'background' || k === 'cover' || k === 'fileId' || k === 'images' || k === 'imageIds') {
+          if (typeof v === 'string' && v.length > 8 && !v.startsWith('http')) ids.add(v);
+          if (Array.isArray(v)) v.forEach((x) => { if (typeof x === 'string') ids.add(x); });
         }
+        if (k === 'images' && Array.isArray(v)) { v.forEach((x) => ids.add(x)); }
+        scan(v);
+      }
+    };
+    scan(data);
+    return Array.from(ids);
+  }
 
-        if (AppState.editingPostId) {
-            PostManager.update(AppState.editingPostId, {
-                title,
-                content,
-                type,
-                images: [...AppState.tempImages],
-                tags: [...AppState.tempTags],
-            });
-            showToast('更新成功');
+  async function exportJSON(selSet) {
+    const data = scopedState(selSet);
+    const fileIds = collectFileIds(data);
+    const files = {};
+    for (const id of fileIds) {
+      const blob = await VidaStore.getFile(id);
+      if (blob) files[id] = await VidaStore.blobToDataURL(blob);
+    }
+    data.files = files;
+    downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'vidaos-backup.json');
+  }
+
+  async function exportTXT(selSet) {
+    const d = scopedState(selSet);
+    let out = `VidaOS 备份 · ${nowISO()}\n${'='.repeat(40)}\n\n`;
+    if (d.profile) out += `【个人主页】\n${d.profile.name || ''}\n${d.profile.signature || ''}\n\n`;
+    if (d.articles) d.articles.forEach((a) => { out += `《${a.title || '无标题'}》\n${a.content || ''}\n\n${'-'.repeat(20)}\n\n`; });
+    if (d.moments) d.moments.forEach((m) => { out += `【动态】${fmtDateTime(m.createdAt)}\n${m.content}\n\n${'-'.repeat(20)}\n\n`; });
+    if (d.letters) d.letters.forEach((l) => { out += `【信件】${l.title || '无标题'}\n${l.content || ''}\n\n${'-'.repeat(20)}\n\n`; });
+    if (d.notes) {
+      out += `【灵感】\n`; d.notes.inspiration.forEach((n) => { out += `· ${n.content}\n`; });
+      out += `\n【日程】\n`; d.notes.schedule.forEach((n) => { out += `· ${n.date} ${n.time || ''} ${n.title || n.note || ''}\n`; });
+      out += `\n【待办】\n`; d.notes.todo.forEach((n) => { out += `${n.done ? '[x]' : '[ ]'} ${n.content}\n`; });
+    }
+    downloadBlob(new Blob([out], { type: 'text/plain;charset=utf-8' }), 'vidaos-export.txt');
+  }
+
+  async function exportMD(selSet) {
+    const d = scopedState(selSet);
+    let out = `# VidaOS 备份\n\n> 导出于 ${fmtDateTime(nowISO())}\n\n`;
+    if (d.articles) d.articles.forEach((a) => {
+      out += `---\n\n## ${a.title || '无标题'}\n\n`;
+      if ((a.tags || []).length) out += `标签：${a.tags.join('、')}\n\n`;
+      out += `${a.content || ''}\n\n`;
+      if (a.images && a.images.length) out += a.images.map((f) => `![图片](${f})`).join('\n') + '\n\n';
+    });
+    if (d.letters) d.letters.forEach((l) => { out += `---\n\n## 信 · ${l.title || '无标题'}\n\n${l.content || ''}\n\n`; });
+    if (d.moments) d.moments.forEach((m) => { out += `---\n\n### 动态 · ${fmtDateTime(m.createdAt)}\n\n${m.content}\n\n`; });
+    downloadBlob(new Blob([out], { type: 'text/markdown;charset=utf-8' }), 'vidaos-export.md');
+  }
+
+  async function exportPDF(selSet) {
+    const d = scopedState(selSet);
+    const secs = [];
+    if (d.profile) secs.push(`<section class="cover"><h1>${esc(d.profile.name || 'VidaOS')}</h1><p class="sig">${esc(d.profile.signature || '')}</p><p class="meta">导出于 ${esc(fmtDateTime(nowISO()))}</p></section>`);
+    if (d.articles) d.articles.forEach((a) => {
+      secs.push(`<section><h2>${esc(a.title || '无标题')}</h2><div class="body">${mdToHtml(a.content)}</div>
+        ${(a.images || []).map((f) => `<img class="pic" data-fid="${esc(f)}">`).join('')}</section>`);
+    });
+    if (d.moments) d.moments.forEach((m) => secs.push(`<section><h3>动态 · ${esc(fmtDateTime(m.createdAt))}</h3><div class="body">${esc(m.content)}</div></section>`));
+    if (d.letters) d.letters.forEach((l) => secs.push(`<section><h2>信 · ${esc(l.title || '无标题')}</h2><div class="body">${esc(l.content || '')}</div></section>`));
+    if (d.notes) {
+      let n = `<section><h2>便签</h2>`;
+      n += `<h3>灵感</h3>` + d.notes.inspiration.map((x) => `<p class="body">· ${esc(x.content)}</p>`).join('');
+      n += `<h3>待办</h3>` + d.notes.todo.map((x) => `<p class="body">${x.done ? '☑' : '☐'} ${esc(x.content)}</p>`).join('');
+      n += `</section>`;
+      secs.push(n);
+    }
+
+    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>VidaOS</title>
+      <style>
+        *{box-sizing:border-box} body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#33455f;line-height:1.8;margin:0;padding:0;font-size:14px}
+        section{page-break-after:always;padding:40px 48px}
+        section:last-child{page-break-after:auto}
+        .cover{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+        h1{font-size:42px;font-weight:200;letter-spacing:2px;margin:0 0 12px}
+        h2{font-size:22px;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #dbe4ef}
+        h3{font-size:16px;margin:18px 0 8px;color:#577ca8}
+        .sig{color:#6b80a0;font-size:15px}.meta{color:#97a8bf;font-size:12px;margin-top:30px}
+        .body{white-space:pre-wrap;word-break:break-word}
+        img.pic{max-width:100%;border-radius:12px;margin:10px 0}
+        blockquote{margin:10px 0;padding:8px 16px;background:#f0f4f9;border-left:3px solid #6e93b8}
+        code{font-family:monospace;background:#f0f4f9;padding:2px 6px;border-radius:5px}
+        pre{background:#f0f4f9;padding:14px;border-radius:10px;overflow:hidden}
+      </style></head><body>${secs.join('')}</body></html>`;
+
+    const frame = $('#printFrame');
+    frame.srcdoc = html;
+    frame.onload = async () => {
+      // 填充图片
+      const doc = frame.contentDocument;
+      const imgs = doc.querySelectorAll('img[data-fid]');
+      for (const img of imgs) {
+        const url = await fileURL(img.getAttribute('data-fid'));
+        img.src = url || '';
+      }
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+      catch (e) { toast('打印失败'); }
+    };
+  }
+
+  function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('已导出：' + filename);
+  }
+
+  async function importOpen() {
+    const mode = { value: 'merge' };
+    openModal(`
+      <div class="modal-head"><div class="modal-title">导入备份</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field" style="color:var(--text-2);line-height:1.7;font-size:14px;margin:0">选择导入方式：</div>
+      <div class="scope-list" style="margin-top:12px">
+        <label class="scope-item"><span class="check on" data-action="imode" data-m="merge">${icon('check')}</span><span class="sc-name">合并导入（追加到现有数据）</span></label>
+        <label class="scope-item"><span class="check" data-action="imode" data-m="replace">${icon('check')}</span><span class="sc-name">覆盖导入（清空后恢复）</span></label>
+      </div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="import-pick">选择文件</button>
+      </div>`);
+    window.__importMode = mode;
+    $$('.scope-item .check').forEach((el) => el.classList.remove('on'));
+    $$('.scope-item .check').forEach((el) => { if (el.getAttribute('data-m') === 'merge') el.classList.add('on'); });
+  }
+
+  function doImport(file) {
+    const mode = (window.__importMode && window.__importMode.value) || 'merge';
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const text = reader.result;
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (ext === 'json') {
+          await importJSON(text, mode);
+        } else if (ext === 'md' || ext === 'markdown') {
+          importMarkdown(text);
         } else {
-            PostManager.create(title, content, type, [...AppState.tempImages], [...AppState.tempTags]);
-            showToast('发布成功');
+          importTXT(text);
         }
+      } catch (e) { toast('导入失败：文件格式无法识别'); console.error(e); }
+    };
+    reader.readAsText(file);
+  }
 
-        closeEditModal();
-        switchView('home');
-    });
-
-    // Detail modal actions
-    document.getElementById('editPostBtn').addEventListener('click', () => {
-        const modal = document.getElementById('detailModal');
-        const postId = modal.dataset.currentPostId;
-        if (postId) {
-            closeDetailModal();
-            openEditModal('edit', postId);
-        }
-    });
-
-    document.getElementById('deletePostBtn').addEventListener('click', () => {
-        const modal = document.getElementById('detailModal');
-        const postId = modal.dataset.currentPostId;
-        if (postId) {
-            openConfirmModal('删除文章', '确定要删除这篇文章吗？此操作不可恢复。', () => {
-                PostManager.delete(postId);
-                closeDetailModal();
-                switchView('home');
-                showToast('已删除');
-            });
-        }
-    });
-
-    // Confirm modal
-    document.getElementById('confirmCancel').addEventListener('click', closeConfirmModal);
-    document.getElementById('confirmOk').addEventListener('click', () => {
-        if (AppState.confirmCallback) {
-            AppState.confirmCallback();
-        }
-        closeConfirmModal();
-    });
-
-    // Editor toolbar
-    document.querySelectorAll('.toolbar-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const mode = btn.dataset.mode;
-            document.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            const textarea = document.getElementById('postContent');
-            const preview = document.getElementById('markdownPreview');
-
-            if (mode === 'preview') {
-                textarea.style.display = 'none';
-                preview.classList.add('active');
-                const rawContent = textarea.value;
-                // Simple markdown-like rendering
-                preview.innerHTML = marked.parse(rawContent || '*无预览内容*');
-            } else {
-                textarea.style.display = 'block';
-                preview.classList.remove('active');
-            }
-        });
-    });
-
-    // Image upload
-    const imageUploadArea = document.getElementById('imageUploadArea');
-    const imageInput = document.getElementById('imageInput');
-
-    imageUploadArea.addEventListener('click', () => imageInput.click());
-
-    imageUploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        imageUploadArea.classList.add('drag-over');
-    });
-
-    imageUploadArea.addEventListener('dragleave', () => {
-        imageUploadArea.classList.remove('drag-over');
-    });
-
-    imageUploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        imageUploadArea.classList.remove('drag-over');
-        handleImageFiles(e.dataTransfer.files);
-    });
-
-    imageInput.addEventListener('change', (e) => {
-        handleImageFiles(e.target.files);
-        imageInput.value = '';
-    });
-
-    function handleImageFiles(files) {
-        Array.from(files).forEach(file => {
-            if (!file.type.startsWith('image/')) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                AppState.tempImages.push(e.target.result);
-                addImagePreview(e.target.result);
-            };
-            reader.readAsDataURL(file);
-        });
+  async function importJSON(text, mode) {
+    const data = JSON.parse(text);
+    if (mode === 'replace') {
+      await VidaStore.clearAll();
+      // 重建状态
+      state = VidaStore.defaultState();
     }
-
-    // Tag input
-    const tagInput = document.getElementById('tagInput');
-    tagInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            const value = tagInput.value.trim();
-            if (value && !AppState.tempTags.includes(value)) {
-                AppState.tempTags.push(value);
-                addTagChip(value);
-            }
-            tagInput.value = '';
-        }
-    });
-
-    tagInput.addEventListener('blur', () => {
-        const value = tagInput.value.trim();
-        if (value && !AppState.tempTags.includes(value)) {
-            AppState.tempTags.push(value);
-            addTagChip(value);
-        }
-        tagInput.value = '';
-    });
-
-    // Settings - Export buttons
-    document.getElementById('exportJSONBtn').addEventListener('click', () => DataIO.exportJSON());
-    document.getElementById('exportTXTBtn').addEventListener('click', () => DataIO.exportTXT());
-    document.getElementById('exportMDBtn').addEventListener('click', () => DataIO.exportMarkdown());
-    document.getElementById('exportPDFBtn').addEventListener('click', () => DataIO.exportPDF());
-
-    // Settings - Import
-    document.getElementById('importDataBtn').addEventListener('click', openImportModal);
-
-    // Import drop zone
-    const importDropZone = document.getElementById('importDropZone');
-    const importFileInput = document.getElementById('importFileInput');
-
-    importDropZone.addEventListener('click', () => importFileInput.click());
-
-    importDropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        importDropZone.classList.add('drag-over');
-    });
-
-    importDropZone.addEventListener('dragleave', () => {
-        importDropZone.classList.remove('drag-over');
-    });
-
-    importDropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        importDropZone.classList.remove('drag-over');
-        handleImportFiles(e.dataTransfer.files);
-    });
-
-    importFileInput.addEventListener('change', (e) => {
-        handleImportFiles(e.target.files);
-        importFileInput.value = '';
-    });
-
-    function handleImportFiles(files) {
-        Array.from(files).forEach(file => {
-            DataIO.importData(file)
-                .then(result => {
-                    showToast(`成功导入 ${result.count} 条${result.type}记录`);
-                    closeImportModal();
-                    switchView('home');
-                })
-                .catch(err => {
-                    showToast('导入失败: ' + err.message, 'error');
-                });
-        });
+    // 合并
+    if (data.profile) state.profile = Object.assign(state.profile, data.profile);
+    if (data.collections) state.collections = state.collections.concat(data.collections);
+    if (data.articles) state.articles = state.articles.concat(data.articles);
+    if (data.moments) state.moments = state.moments.concat(data.moments);
+    if (data.letters) state.letters = state.letters.concat(data.letters);
+    if (data.favorites) state.favorites = state.favorites.concat(data.favorites);
+    if (data.notes) state.notes = Object.assign({ inspiration: [], schedule: [], todo: [] }, state.notes, data.notes);
+    if (data.categories) state.categories = Object.assign({ inspiration: [], schedule: [], todo: [] }, state.categories, data.categories);
+    if (data.tracks) state.tracks = state.tracks.concat(data.tracks);
+    // 文件
+    if (data.files) {
+      for (const id in data.files) {
+        const blob = VidaStore.dataURLToBlob(data.files[id]);
+        await VidaStore.putFile(id, blob);
+      }
     }
+    ensureBuiltinTrack();
+    await persist();
+    applyBackground();
+    toast('导入成功');
+    render();
+  }
 
-    // Settings - Clear data
-    document.getElementById('clearDataBtn').addEventListener('click', () => {
-        openConfirmModal('清空数据', '确定要清空所有数据吗？此操作不可恢复，建议先导出备份。', () => {
-            Storage.clear();
-            switchView('home');
-            showToast('所有数据已清空');
-        });
+  function importMarkdown(text) {
+    const titleMatch = text.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+    const content = text.replace(/^#\s+.+$/m, '').trim();
+    if (!content) { toast('没有可导入的内容'); return; }
+    mutate(() => state.articles.unshift({ id: VidaStore.uid('a'), title, content, images: [], collectionId: null, tags: [], cover: null, createdAt: nowISO(), updatedAt: nowISO() }));
+    toast('已导入为 1 篇文章');
+    render();
+  }
+
+  function importTXT(text) {
+    if (!text.trim()) { toast('没有可导入的内容'); return; }
+    mutate(() => state.articles.unshift({ id: VidaStore.uid('a'), title: '', content: text.trim(), images: [], collectionId: null, tags: [], cover: null, createdAt: nowISO(), updatedAt: nowISO() }));
+    toast('已导入为 1 篇文章');
+    render();
+  }
+
+  /* ========================================================================
+     15. 图片 / 音频文件处理
+     ===================================================================== */
+  async function storeImageFiles(fileList) {
+    const ids = [];
+    for (const f of fileList) {
+      // 压缩过大图片（>2MB 缩到最长边 1600）
+      let blob = f;
+      if (f.size > 2 * 1024 * 1024) {
+        try { blob = await compressImage(f, 1600, 0.82); } catch (e) { blob = f; }
+      }
+      const id = VidaStore.uid('img');
+      await VidaStore.putFile(id, blob);
+      ids.push(id);
+    }
+    return ids;
+  }
+
+  function compressImage(file, maxSide, quality) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob((b) => { URL.revokeObjectURL(url); b ? resolve(b) : reject(new Error('compress fail')); }, file.type || 'image/jpeg', quality);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('load fail')); };
+      img.src = url;
     });
+  }
 
-    // Close modals on overlay click
-    document.querySelectorAll('.modal-overlay').forEach(overlay => {
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                overlay.classList.remove('active');
-            }
-        });
+  /* ========================================================================
+     16. 全局点击委托
+     ===================================================================== */
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const act = el.getAttribute('data-action');
+
+    switch (act) {
+      // 导航
+      case 'tab': switchTab(el.getAttribute('data-tab')); break;
+      case 'back': goBack(); break;
+      case 'func': push(el.getAttribute('data-func')); break;
+
+      // 日历
+      case 'cal-prev': { calState.m--; if (calState.m < 0) { calState.m = 11; calState.y--; } renderDesk(); break; }
+      case 'cal-next': { calState.m++; if (calState.m > 11) { calState.m = 0; calState.y++; } renderDesk(); break; }
+      case 'cal-today': { const d = new Date(); calState.y = d.getFullYear(); calState.m = d.getMonth(); calState.sel = todayStr(); renderDesk(); break; }
+      case 'cal-day': { calState.sel = el.getAttribute('data-date'); renderDesk(); break; }
+      case 'cal-add': scheduleDialog(null, calState.sel); break;
+      case 'cal-event': scheduleDialog(state.notes.schedule.find((x) => x.id === el.getAttribute('data-id'))); break;
+      case 'cal-toggle': {
+        mutate(() => { const s = state.notes.schedule.find((x) => x.id === el.getAttribute('data-id')); if (s) s.done = !s.done; });
+        renderDesk(); break;
+      }
+
+      // 播放器
+      case 'player-play': togglePlay(); break;
+      case 'player-next': playNext(); break;
+      case 'player-prev': playPrev(); break;
+      case 'player-add': $('#audioInput').click(); break;
+      case 'player-edit': editTrackDialog(currentTrack()); break;
+      case 'player-del': confirmDialog('删除音乐', '确定删除这首音乐吗？', () => { mutate(() => { state.tracks = state.tracks.filter((t) => t.id !== player.currentId); }); if (player.playing) stopCurrent(); renderDesk(); return true; }); break;
+
+      // 便签
+      case 'segment': { noteSection = el.getAttribute('data-sec'); noteFilter = ''; renderNotes(); break; }
+      case 'chip': { noteFilter = el.getAttribute('data-cat'); renderNotes(); break; }
+      case 'chip-add': promptCat(); break;
+      case 'cats-manage': catsManageDialog(); break;
+      case 'note-add': {
+        const sec = el.getAttribute('data-sec');
+        const input = $('#noteCompose'); if (!input) break;
+        const v = input.value; input.value = '';
+        if (sec === 'todo') addTodo(v); else addNote(v);
+        break;
+      }
+      case 'sched-new': scheduleDialog(null); break;
+      case 'note-toggle': {
+        const sec = el.getAttribute('data-sec');
+        mutate(() => { const n = state.notes[sec].find((x) => x.id === el.getAttribute('data-id')); if (n) { n.done = !n.done; n.completedAt = n.done ? nowISO() : null; } });
+        if (sec === 'schedule' && currentView === 'desk') renderDesk(); else renderNotes();
+        break;
+      }
+      case 'note-edit': noteEditDialog(state.notes[el.getAttribute('data-sec')].find((x) => x.id === el.getAttribute('data-id'))); break;
+      case 'note-del': {
+        const sec = el.getAttribute('data-sec'), id = el.getAttribute('data-id');
+        confirmDialog('删除便签', '确定删除这条便签吗？', () => { mutate(() => { state.notes[sec] = state.notes[sec].filter((x) => x.id !== id); }); renderNotes(); return true; });
+        break;
+      }
+
+      // 空间 / 合集 / 文章
+      case 'new-article': openEditor('article'); break;
+      case 'new-collection': collectionDialog(null); break;
+      case 'open-collection': push('collection', { collectionId: el.getAttribute('data-id') }); break;
+      case 'open-article': push('article', { articleId: el.getAttribute('data-id') }); break;
+      case 'col-edit': { e.stopPropagation(); collectionDialog(state.collections.find((x) => x.id === el.getAttribute('data-id'))); break; }
+      case 'col-del': {
+        e.stopPropagation();
+        const id = el.getAttribute('data-id');
+        confirmDialog('删除合集', '合集删除后其中的文章不会被删除，仅解除归属。', () => { mutate(() => { state.collections = state.collections.filter((x) => x.id !== id); state.articles.forEach((a) => { if (a.collectionId === id) a.collectionId = null; }); }); renderSpace(); return true; });
+        break;
+      }
+      case 'col-new-article': { openEditor('article'); break; }
+      case 'art-edit': openEditor('article', state.articles.find((x) => x.id === el.getAttribute('data-id'))); break;
+      case 'art-del': {
+        const id = el.getAttribute('data-id');
+        confirmDialog('删除文章', '确定删除这篇文章吗？', () => { deleteArticle(id); return true; });
+        break;
+      }
+      case 'art-fav': toggleFav('article', el.getAttribute('data-id')); break;
+
+      // 动态
+      case 'new-moment': openEditor('moment'); break;
+      case 'moment-fav': toggleFav('moment', el.getAttribute('data-id')); break;
+      case 'moment-del': {
+        const id = el.getAttribute('data-id');
+        confirmDialog('删除动态', '确定删除这条动态吗？', () => { const m = state.moments.find((x) => x.id === id); mutate(() => { state.moments = state.moments.filter((x) => x.id !== id); state.favorites = state.favorites.filter((f) => !(f.refType === 'moment' && f.refId === id)); }); if (m) VidaStore.delFiles(m.images || []); renderMoments(); return true; });
+        break;
+      }
+
+      // 信箱
+      case 'new-letter': openEditor('letter'); break;
+      case 'letter-open': {
+        const l = state.letters.find((x) => x.id === el.getAttribute('data-id'));
+        if (l) { openLetterDialog(l); }
+        break;
+      }
+      case 'letter-fav': toggleFav('letter', el.getAttribute('data-id')); break;
+      case 'letter-del': {
+        const id = el.getAttribute('data-id');
+        confirmDialog('删除信件', '确定删除这封信吗？', () => { const l = state.letters.find((x) => x.id === id); mutate(() => { state.letters = state.letters.filter((x) => x.id !== id); state.favorites = state.favorites.filter((f) => !(f.refType === 'letter' && f.refId === id)); }); if (l) VidaStore.delFiles(l.images || []); renderMailbox(); return true; });
+        break;
+      }
+
+      // 收藏夹
+      case 'fav-open': {
+        const type = el.getAttribute('data-type'), id = el.getAttribute('data-id');
+        if (type === 'article') push('article', { articleId: id });
+        else if (type === 'letter') { const l = state.letters.find((x) => x.id === id); if (l) openLetterDialog(l); }
+        break;
+      }
+      case 'fav-remove': {
+        const id = el.getAttribute('data-id');
+        mutate(() => { state.favorites = state.favorites.filter((f) => f.id !== id); });
+        renderFavorites(); break;
+      }
+
+      // 数据
+      case 'export-open': exportDialog(); break;
+      case 'import-open': importOpen(); break;
+      case 'clear': confirmDialog('清空所有数据', '此操作不可恢复，确定清空全部内容吗？', async () => { await VidaStore.clearAll(); state = VidaStore.defaultState(); ensureBuiltinTrack(); await persist(); render(); toast('已清空'); return true; }); break;
+      case 'scope': {
+        e.preventDefault();
+        const id = el.getAttribute('data-id');
+        const sel = window.__exportSel; if (!sel) break;
+        if (sel.set.has(id)) sel.set.delete(id); else sel.set.add(id);
+        refreshScopeUI(); break;
+      }
+      case 'fmt': {
+        window.__exportFmt.value = el.getAttribute('data-fmt');
+        $$('#modalLayer .chip').forEach((c) => c.classList.remove('active'));
+        el.classList.add('active');
+        break;
+      }
+      case 'export-do': {
+        const sel = window.__exportSel; const fmt = window.__exportFmt;
+        const set = sel ? sel.set : new Set();
+        if (!set.size) { toast('请至少选择一项'); break; }
+        closeModal();
+        if (fmt.value === 'json') exportJSON(set);
+        else if (fmt.value === 'txt') exportTXT(set);
+        else if (fmt.value === 'md') exportMD(set);
+        else if (fmt.value === 'pdf') exportPDF(set);
+        break;
+      }
+      case 'imode': {
+        const m = el.getAttribute('data-m');
+        if (window.__importMode) window.__importMode.value = m;
+        $$('#modalLayer .scope-item .check').forEach((c) => c.classList.remove('on'));
+        el.classList.add('on');
+        break;
+      }
+      case 'import-pick': closeModal(); $('#importInput').click(); break;
+
+      // 设置
+      case 'profile-edit': profileDialog(); break;
+      case 'avatar-upload': pendingImage = 'avatar'; $('#singleImageInput').click(); break;
+      case 'avatar-remove': { mutate(() => { state.profile.avatar = null; }); profileDialog(); break; }
+      case 'bg-upload': pendingImage = 'background'; $('#singleImageInput').click(); break;
+      case 'bg-preset': { mutate(() => { state.profile.background = el.getAttribute('data-key'); }); renderBgThumbs(); applyBackground(); break; }
+      case 'pf-save': {
+        const name = $('#pfName').value.trim();
+        mutate(() => { state.profile.name = name || 'VidaOS'; state.profile.signature = $('#pfSig').value.trim(); });
+        closeModal(); applyBackground(); render(); toast('已保存'); break;
+      }
+      case 'pwa-install': { if (deferredInstall) deferredInstall.prompt(); break; }
+
+      // 分类管理
+      case 'cat-add': {
+        const v = $('#newCat').value.trim();
+        if (!v) break;
+        if (!state.categories[noteSection]) state.categories[noteSection] = [];
+        mutate(() => { if (!state.categories[noteSection].includes(v)) state.categories[noteSection].push(v); });
+        catsManageDialog(); break;
+      }
+      case 'cat-del': {
+        const c = el.getAttribute('data-cat');
+        mutate(() => { state.categories[noteSection] = state.categories[noteSection].filter((x) => x !== c); state.notes[noteSection].forEach((n) => { if (n.category === c) n.category = ''; }); });
+        catsManageDialog(); break;
+      }
+
+      // 收藏/删除合集
+      case 'col-save': { if (pendingConfirm && pendingConfirm()) closeModal(); break; }
+      case 'sc-save': { if (pendingConfirm && pendingConfirm()) closeModal(); break; }
+      case 'ne-save': { if (pendingConfirm && pendingConfirm()) closeModal(); break; }
+
+      // 编辑器图片移除
+      case 'ed-img-rm': {
+        const i = parseInt(el.getAttribute('data-i'), 10);
+        ed.images.splice(i, 1);
+        renderEditorImages(); break;
+      }
+
+      // 通用
+      case 'modal-close': closeModal(); break;
+      case 'modal-ok': { const cb = pendingConfirm; if (cb) { const r = cb(); if (r !== false) closeModal(); } break; }
+      default: break;
+    }
+  });
+
+  /* 拖拽 seek/volume 支持（pointer 事件）*/
+  document.addEventListener('pointerdown', (e) => {
+    const seekEl = e.target.closest('.slider-track[data-action="seek"]');
+    const volEl = e.target.closest('.slider-track[data-action="vol"]');
+    if (!seekEl && !volEl) return;
+    const isSeek = !!seekEl;
+    const move = (ev) => { if (isSeek) seekTo(ev.clientX); else setVolume(ev.clientX); };
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    move(e);
+  });
+
+  /* ========================================================================
+     17. 对话框补充
+     ===================================================================== */
+  function promptCat() {
+    openModal(`
+      <div class="modal-head"><div class="modal-title">新建分类</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="note-compose"><input id="newCat" placeholder="分类名称"></div>
+      <div class="modal-foot"><button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="cat-add">添加</button></div>`);
+  }
+
+  function editTrackDialog(t) {
+    if (!t || t.builtin) { toast('内置音景不可编辑'); return; }
+    openModal(`
+      <div class="modal-head"><div class="modal-title">编辑音乐信息</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field"><label>标题</label><input id="tkTitle" value="${esc(t.title || '')}" placeholder="歌名"></div>
+      <div class="field"><label>艺术家</label><input id="tkArtist" value="${esc(t.artist || '')}" placeholder="艺术家"></div>
+      <div class="modal-foot"><button class="glass-btn" data-action="modal-close">取消</button>
+        <button class="glass-btn btn-primary" data-action="tk-save">保存</button></div>`);
+    pendingConfirm = () => {
+      mutate(() => { t.title = $('#tkTitle').value.trim(); t.artist = $('#tkArtist').value.trim(); });
+      renderDesk(); return true;
+    };
+  }
+
+  function openLetterDialog(l) {
+    if (l.unread) { mutate(() => { l.unread = false; }); }
+    openModal(`
+      <div class="modal-head"><div class="modal-title">${esc(l.title || '（无标题）')}</div>
+        <button class="modal-close" data-action="modal-close">${icon('x')}</button></div>
+      <div class="field" style="color:var(--text-2);line-height:1.8;font-size:14.5px;white-space:pre-wrap;word-break:break-word">${esc(l.content || '')}</div>
+      <div class="thumb-strip">${(l.images || []).map((f) => imgTag(f)).join('')}</div>
+      <div class="post-meta" style="margin-top:14px"><span class="date">${fmtDateTime(l.createdAt)}</span></div>
+      <div class="modal-foot">
+        <button class="glass-btn" data-action="letter-fav-inline" data-id="${l.id}">${icon(isFav('letter', l.id) ? 'heartFilled' : 'heart')} 收藏</button>
+        <button class="glass-btn btn-primary" data-action="modal-close">关闭</button>
+      </div>`);
+    hydrateImages($('#modalLayer'));
+    // 收藏按钮
+    $$('#modalLayer [data-action="letter-fav-inline"]').forEach((b) => b.addEventListener('click', () => { toggleFav('letter', l.id); closeModal(); renderMailbox(); }));
+  }
+
+  function deleteArticle(id) {
+    const a = state.articles.find((x) => x.id === id);
+    mutate(() => {
+      state.articles = state.articles.filter((x) => x.id !== id);
+      state.favorites = state.favorites.filter((f) => !(f.refType === 'article' && f.refId === id));
     });
+    if (a) {
+      const ids = [a.cover, ...(a.images || [])].filter(Boolean);
+      VidaStore.delFiles(ids);
+    }
+    goBack(); toast('已删除');
+  }
 
-    // Keyboard shortcuts
+  /* ========================================================================
+     18. 静态元素事件绑定
+     ===================================================================== */
+  let pendingImage = null; // 'avatar' | 'background'
+  let deferredInstall = null;
+
+  function bindStatic() {
+    $('#topBack').addEventListener('click', goBack);
+
+    // 编辑器
+    $('#edClose').addEventListener('click', () => {
+      const dirty = $('#edText').value.trim() || ed.images.length || $('#edTitle').value.trim();
+      if (dirty) confirmDialog('放弃编辑', '有未保存的内容，确定放弃吗？', () => { closeEditor(); return true; });
+      else closeEditor();
+    });
+    $('#edSave').addEventListener('click', saveEditor);
+    $('#edFavorite').addEventListener('click', () => {
+      if (ed.id) {
+        const type = ed.mode === 'article' ? 'article' : ed.mode === 'moment' ? 'moment' : 'letter';
+        toggleFav(type, ed.id);
+      } else { toast('保存后才能收藏'); }
+    });
+    $('#edModeBtn').addEventListener('click', () => {
+      const on = $('#edPreview').classList.contains('active');
+      setPreviewMode(!on);
+    });
+    $('#edImageBtn').addEventListener('click', () => $('#imageInput').click());
+    $('#edText').addEventListener('input', () => { updateEdWc(); if (ed.mode === 'article' && $('#edPreview').classList.contains('active')) setPreviewMode(true); });
+
+    // 便签输入框回车
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
-        }
+      if (e.key === 'Enter' && e.target && e.target.id === 'noteCompose') {
+        e.preventDefault();
+        const sec = noteSection;
+        const v = e.target.value; e.target.value = '';
+        if (sec === 'todo') addTodo(v); else addNote(v);
+      }
     });
-}
 
-// ==========================================
-// Demo Data
-// ==========================================
-function loadDemoData() {
-    if (AppState.posts.length > 0) return;
+    // 文件输入
+    $('#imageInput').addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length) {
+        const ids = await storeImageFiles(files);
+        ed.images = ed.images.concat(ids);
+        renderEditorImages();
+      }
+      e.target.value = '';
+    });
+    $('#singleImageInput').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) {
+        const ids = await storeImageFiles([f]);
+        if (pendingImage === 'avatar') { mutate(() => { state.profile.avatar = ids[0]; }); profileDialog(); }
+        else if (pendingImage === 'background') { mutate(() => { state.profile.background = ids[0]; }); profileDialog(); applyBackground(); }
+        pendingImage = null;
+      }
+      e.target.value = '';
+    });
+    $('#audioInput').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) {
+        const id = VidaStore.uid('aud');
+        await VidaStore.putFile(id, f);
+        const title = f.name.replace(/\.[^.]+$/, '');
+        mutate(() => state.tracks.push({ id: VidaStore.uid('t'), title, artist: '未知艺术家', fileId: id, createdAt: nowISO() }));
+        toast('已添加音乐');
+        renderDesk();
+      }
+      e.target.value = '';
+    });
+    $('#importInput').addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) doImport(f);
+      e.target.value = '';
+    });
 
-    const demoPosts = [
-        {
-            id: generateId(),
-            title: '欢迎使用 VidaOS',
-            content: '这是你个人生活的私密空间。\n\n在这里，你可以：\n- 记录每天的心情和感悟\n- 上传生活照片\n- 写下随手的吐槽和想法\n- 给内容打上标签，方便整理\n\n所有数据都保存在你的浏览器本地，不会上传到任何服务器。你可以随时导出为 JSON、TXT、Markdown 或 PDF 格式备份。\n\n开始记录你的生活吧！',
-            type: 'diary',
-            images: [],
-            tags: ['欢迎', 'VidaOS'],
-            createdAt: new Date(Date.now() - 86400000).toISOString(),
-            updatedAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-            id: generateId(),
-            title: '今天天气真好',
-            content: '出门散步的时候发现路边的花开得很漂亮，随手拍了几张照片。生活中这些小美好真的让人心情愉悦。\n\n有时候放慢脚步，才能发现身边的美。',
-            type: 'photo',
-            images: [],
-            tags: ['生活', '摄影'],
-            createdAt: new Date(Date.now() - 172800000).toISOString(),
-            updatedAt: new Date(Date.now() - 172800000).toISOString(),
-        },
-        {
-            id: generateId(),
-            title: '',
-            content: '为什么周一的早上总是这么困？咖啡续命中...\n\n#周一综合症 #不想上班',
-            type: 'rant',
-            images: [],
-            tags: ['吐槽', '日常'],
-            createdAt: new Date(Date.now() - 259200000).toISOString(),
-            updatedAt: new Date(Date.now() - 259200000).toISOString(),
-        },
-    ];
+    // PWA 安装
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstall = e;
+      if ($('#pwaInstallBtn')) $('#pwaInstallBtn').style.display = 'flex';
+    });
 
-    AppState.posts = demoPosts;
-    Storage.save();
-}
+    buildMdToolbar();
+    // markdown 工具栏点击（委托）
+    $('#mdToolbar').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-md]');
+      if (b) applyMdTool(b.getAttribute('data-md'));
+    });
+  }
 
-// ==========================================
-// Initialization
-// ==========================================
-function init() {
-    // Load data
-    Storage.load();
+  /* ========================================================================
+     19. 初始化
+     ===================================================================== */
+  const RENDERERS = {
+    desk: renderDesk, notes: renderNotes, data: renderData, settings: renderSettings,
+    space: renderSpace, collection: renderCollection, article: renderArticle,
+    moments: renderMoments, mailbox: renderMailbox, favorites: renderFavorites,
+  };
 
-    // Load demo data if empty
-    loadDemoData();
+  function emptyHTML(ic, title, desc) {
+    return `<div class="empty"><span style="display:block">${icon(ic)}</span><span class="et">${esc(title)}</span><span class="ed">${esc(desc)}</span></div>`;
+  }
 
-    // Setup UI
-    UI.updateStats();
-    UI.updateHeroDateTime();
-    UI.renderPostsList('postsList', PostManager.getRecent());
+  async function boot() {
+    try {
+      if (typeof DOMPurify !== 'undefined' && DOMPurify.addHook) {
+        DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+          if (node.tagName === 'A') { node.setAttribute('target', '_blank'); node.setAttribute('rel', 'noopener noreferrer'); }
+        });
+      }
+      if (typeof marked !== 'undefined') {
+        marked.setOptions({ gfm: true, breaks: true });
+      }
+    } catch (e) { console.warn(e); }
 
-    // Setup events
-    setupEventHandlers();
+    const saved = await VidaStore.getState();
+    state = saved || VidaStore.defaultState();
+    if (!state.categories) state.categories = { inspiration: [], schedule: [], todo: [] };
+    if (!state.notes) state.notes = { inspiration: [], schedule: [], todo: [] };
+    if (!state.settings) state.settings = { lastTab: 'desk' };
+    if (!state.profile) state.profile = VidaStore.defaultState().profile;
+    if (!state.tracks) state.tracks = [];
+    if (!state.collections) state.collections = [];
+    if (!state.articles) state.articles = [];
+    if (!state.moments) state.moments = [];
+    if (!state.letters) state.letters = [];
+    if (!state.favorites) state.favorites = [];
 
-    // Update time every minute
-    setInterval(() => {
-        UI.updateHeroDateTime();
-    }, 60000);
+    ensureBuiltinTrack();
+    applyBackground();
+    bindStatic();
+    currentTab = state.settings.lastTab && TABS.some((t) => t.id === state.settings.lastTab) ? state.settings.lastTab : 'desk';
+    currentView = currentTab;
+    render();
 
-    // Auto-refresh posts list every 30 seconds
-    setInterval(() => {
-        if (AppState.currentView === 'home') {
-            UI.renderPostsList('postsList', PostManager.getRecent());
-            UI.updateStats();
-        }
-    }, 30000);
+    // 时钟
+    setInterval(tick, 1000);
 
-    console.log('VidaOS initialized successfully');
-}
+    // 注册 Service Worker
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  }
 
-// Start
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
-}
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
