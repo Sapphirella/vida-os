@@ -54,7 +54,7 @@
 
 ```bash
 # 进入项目目录
-cd /Users/amarisgo/Documents/VidaOS
+cd /Users/amarisgo/Documents/DeepSeek Harness/VidaOS
 
 # 用浏览器打开
 open index.html
@@ -65,7 +65,7 @@ open index.html
 如果你需要更好的文件访问权限（如某些浏览器的图片上传限制）：
 
 ```bash
-cd /Users/amarisgo/Documents/VidaOS
+cd /Users/amarisgo/Documents/DeepSeek Harness/VidaOS
 
 # Python 3
 python -m http.server 8080

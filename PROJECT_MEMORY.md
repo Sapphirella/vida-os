@@ -13,7 +13,7 @@
 | **当前版本** | v1.0 |
 | **创建日期** | 2026-09-07 |
 | **创建 Agent** | DuMate |
-| **存放路径** | `/Users/amarisgo/Documents/VidaOS` |
+| **存放路径** | `/Users/amarisgo/Documents/DeepSeek Harness/VidaOS` |
 | **Git 仓库** | 已初始化，使用 `master` 分支 |
 
 ---
@@ -294,7 +294,7 @@ VidaOS/
 
 5. **Git 提交**：
    ```bash
-   cd /Users/amarisgo/Documents/VidaOS
+   cd /Users/amarisgo/Documents/DeepSeek Harness/VidaOS
    git add .
    git commit -m "feat: 描述你的修改"
    ```
@@ -337,7 +337,7 @@ VidaOS/
 ## 联系方式与归属
 
 - **项目归属**：用户个人项目
-- **开发路径**：`/Users/amarisgo/Documents/VidaOS`
+- **开发路径**：`/Users/amarisgo/Documents/DeepSeek Harness/VidaOS`
 - **最后更新 Agent**：DuMate
 - **最后更新日期**：2026-09-07
 
