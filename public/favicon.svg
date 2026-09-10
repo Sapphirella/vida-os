@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="60%" r="50%">
+      <stop offset="0%" stop-color="#E8C39E" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#1B1A1F" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#1B1A1F"/>
+  <ellipse cx="32" cy="42" rx="22" ry="22" fill="url(#g)"/>
+  <!-- candle body -->
+  <rect x="28" y="22" width="8" height="22" rx="1.5" fill="#947D75"/>
+  <!-- flame -->
+  <path d="M32 8 C28 14, 28 18, 32 22 C36 18, 36 14, 32 8 Z" fill="#E8C39E"/>
+  <path d="M32 12 C30 16, 30 18, 32 21 C34 18, 34 16, 32 12 Z" fill="#6A080E" opacity="0.7"/>
+</svg>

@@ -1,0 +1,39 @@
+{
+  "name": "vidaos",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "VidaOS - 你的私密生活记录空间（暗夜书房风格）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "zustand": "^4.5.5",
+    "dexie": "^4.0.8",
+    "marked": "^14.1.2",
+    "dompurify": "^3.1.6",
+    "jspdf": "^2.5.2",
+    "html2canvas": "^1.4.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.441.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@types/node": "^22.5.5",
+    "@types/dompurify": "^3.0.5",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}
