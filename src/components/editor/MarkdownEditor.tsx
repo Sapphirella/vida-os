@@ -102,6 +102,17 @@ export function MarkdownEditor({
     [content],
   );
 
+  /** 交换两张配图的位置（用于调整文章内图片顺序） */
+  const moveImage = (from: number, to: number) => {
+    setImageIds((prev) => {
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
   const handleSave = () => {
     if (mode === 'article' && !title.trim()) {
       showToast('请填写标题', 'error');
@@ -332,19 +343,48 @@ export function MarkdownEditor({
         style={{ background: 'rgba(20, 18, 22, 0.6)' }}
       >
         {imageIds.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-[60%]">
-            {imageIds.map((id) => (
+          <div className="flex items-center gap-1.5 overflow-x-auto max-w-[62%] py-1">
+            {imageIds.map((id, i) => (
               <div
                 key={id}
-                className="relative w-10 h-10 rounded overflow-hidden border border-bronze/20 flex-shrink-0 group"
+                className="relative w-14 h-14 rounded overflow-hidden border border-bronze/20 flex-shrink-0 group"
               >
-                <MediaImage fileId={id} className="w-full h-full object-cover" />
+                <MediaImage
+                  fileId={id}
+                  alt={`配图 ${i + 1}`}
+                  className="w-full h-full object-cover"
+                />
+                {/* 序号 */}
+                <span className="absolute top-0 left-0 px-1 font-mono text-[9px] leading-4 text-moon bg-ink/75">
+                  {i + 1}
+                </span>
+                {/* 移除 */}
                 <button
                   onClick={() => setImageIds(imageIds.filter((x) => x !== id))}
-                  className="absolute inset-0 bg-ink/80 opacity-0 group-hover:opacity-100 flex items-center justify-center text-moon text-xs"
+                  aria-label={`移除第 ${i + 1} 张图片`}
+                  className="absolute top-0 right-0 w-4 h-4 flex items-center justify-center bg-ink/80 text-moon text-[11px] leading-none"
                 >
                   ×
                 </button>
+                {/* 调整顺序 */}
+                <div className="absolute bottom-0 inset-x-0 flex bg-ink/75">
+                  <button
+                    onClick={() => moveImage(i, i - 1)}
+                    disabled={i === 0}
+                    aria-label={`第 ${i + 1} 张左移`}
+                    className="flex-1 h-4 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    onClick={() => moveImage(i, i + 1)}
+                    disabled={i === imageIds.length - 1}
+                    aria-label={`第 ${i + 1} 张右移`}
+                    className="flex-1 h-4 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
+                  >
+                    ▶
+                  </button>
+                </div>
               </div>
             ))}
           </div>

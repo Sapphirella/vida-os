@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { renderMarkdown } from '@/lib/markdown';
 import { formatDate } from '@/lib/utils';
 
 export function MomentsPage() {
@@ -33,9 +34,11 @@ export function MomentsPage() {
             {moments.map((m) => (
               <li key={m.id}>
                 <Card className="p-4 sm:p-5 group">
-                  <p className="font-serif text-reading text-paper whitespace-pre-wrap" style={{ lineHeight: 1.95 }}>
-                    {m.content}
-                  </p>
+                  {/* 动态正文支持 Markdown（与文章/信件一致） */}
+                  <div
+                    className="prose-vidaos prose-moment"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
+                  />
                   {m.imageIds.length > 0 && (
                     <div
                       className={`mt-3 grid gap-1.5 ${

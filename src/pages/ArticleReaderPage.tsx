@@ -33,6 +33,9 @@ export function ArticleReaderPage() {
     );
   }
 
+  // 封面已在标题下方单独展示，正文配图列表里不再重复
+  const galleryIds = article.imageIds.filter((id) => id !== article.coverId);
+
   return (
     <article className="px-4 sm:px-6 view-enter">
       <div className="max-w-3xl mx-auto pb-12">
@@ -60,7 +63,25 @@ export function ArticleReaderPage() {
         {/* 封面 */}
         {article.coverId && (
           <div className="rounded-card-lg overflow-hidden mb-8 border border-bronze/15">
-            <MediaImage fileId={article.coverId} className="w-full" />
+            <MediaImage fileId={article.coverId} alt={article.title} className="w-full" />
+          </div>
+        )}
+
+        {/* 配图：上传的图片以 fileId 存在 IndexedDB，此前从未在此渲染 */}
+        {galleryIds.length > 0 && (
+          <div className="mb-8 space-y-4">
+            {galleryIds.map((id, i) => (
+              <figure
+                key={id}
+                className="rounded-card-lg overflow-hidden border border-bronze/15"
+              >
+                <MediaImage
+                  fileId={id}
+                  alt={`${article.title} 配图 ${i + 1}`}
+                  className="w-full"
+                />
+              </figure>
+            ))}
           </div>
         )}
 

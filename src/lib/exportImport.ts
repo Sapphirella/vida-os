@@ -2,7 +2,7 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { AppState } from '@/types';
-import { listFiles } from './db';
+import { listFiles, getFile } from './db';
 import { blobToBase64, plainText, formatDate } from './utils';
 import { renderMarkdown } from './markdown';
 
@@ -227,8 +227,117 @@ export function exportTXT(state: AppState, scope: ExportScope = 'all'): string {
 // PDF 导出
 // ============================================================
 
+/** A4 尺寸（pt）与页边距 */
+const A4_W = 595.28;
+const A4_H = 841.89;
+const PDF_MARGIN = 24;
+/** 渲染容器的 CSS 宽度（与 container.style.width 保持一致） */
+const PDF_RENDER_W = 720;
+
+/** 把一批 fileId 从 IndexedDB 取出并转成 data URL（PDF 里要内嵌图片） */
+async function buildImageDataUrls(ids: Set<string>): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  await Promise.all(
+    Array.from(ids).map(async (id) => {
+      try {
+        const f = await getFile(id);
+        if (f) map.set(id, await blobToBase64(f.blob));
+      } catch {
+        /* 单个文件缺失不影响整体导出 */
+      }
+    }),
+  );
+  return map;
+}
+
+/** 等待容器内所有图片解码完成，否则 html2canvas 会漏画 */
+async function waitForImages(root: HTMLElement): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.all(
+    imgs.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete && img.naturalWidth > 0) return resolve();
+          img.addEventListener('load', () => resolve(), { once: true });
+          img.addEventListener('error', () => resolve(), { once: true });
+          // 兜底：3 秒后不再等待
+          setTimeout(resolve, 3000);
+        }),
+    ),
+  );
+}
+
+/**
+ * 计算「不会切断文字行」的分页位置。
+ * 做法：收集容器内每一行文字、每一张图片的纵向区间，把「每个区间的上边界」
+ * 作为候选切割点；再贪心地为每一页挑选不超过页高的最大候选点。
+ * 这样切点永远落在行与行之间的空隙里，不会把一行字劈成两半。
+ */
+export function computePageRanges(
+  container: HTMLElement,
+  pageH: number,
+  totalH: number,
+): Array<[number, number]> {
+  const cTop = container.getBoundingClientRect().top;
+  const blocks: Array<[number, number]> = [];
+
+  // 每一行文字
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (!node.nodeValue || !node.nodeValue.trim()) continue;
+    range.selectNodeContents(node);
+    const rects = range.getClientRects();
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
+    }
+  }
+  // 图片（同样不可切断）
+  container.querySelectorAll('img').forEach((img) => {
+    const r = img.getBoundingClientRect();
+    if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
+  });
+
+  const cands = Array.from(
+    new Set(blocks.map(([t]) => Math.max(1, Math.floor(t - 1)))),
+  ).sort((a, b) => a - b);
+
+  const ranges: Array<[number, number]> = [];
+  let start = 0;
+  let guard = 0;
+  while (start < totalH - 0.5 && guard++ < 5000) {
+    const limit = start + pageH;
+    if (limit >= totalH) {
+      ranges.push([start, totalH]);
+      break;
+    }
+    let end = 0;
+    for (const c of cands) {
+      if (c > start + 1 && c <= limit) end = c;
+      else if (c > limit) break;
+    }
+    // 找不到候选（例如单张超高内容）时只能硬切，避免死循环
+    if (end <= start) end = limit;
+    ranges.push([start, end]);
+    start = end;
+  }
+  if (ranges.length === 0) ranges.push([0, totalH]);
+  return ranges;
+}
+
 export async function exportPDF(state: AppState, scope: ExportScope = 'articles'): Promise<void> {
   const s = scopedState(state, scope);
+
+  // 先把要内嵌的图片转成 data URL（Blob 存在 IndexedDB，PDF 必须自带图）
+  const dataUrls = await buildImageDataUrls(collectFileIds(s));
+  const imgTag = (id: string, extra = '') =>
+    `<img src="${dataUrls.get(id)}" alt="" style="display:block;max-width:100%;margin:14px auto;border-radius:8px;${extra}" />`;
+  const imagesOf = (ids: Array<string | undefined>) =>
+    Array.from(new Set(ids.filter((x): x is string => !!x && dataUrls.has(x))))
+      .map((id) => imgTag(id))
+      .join('');
 
   // 构造临时 DOM
   const container = document.createElement('div');
@@ -236,7 +345,7 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     position: fixed;
     top: -10000px;
     left: -10000px;
-    width: 720px;
+    width: ${PDF_RENDER_W}px;
     padding: 64px 80px;
     background: #F2EBE0;
     color: #1B1A1F;
@@ -257,10 +366,11 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">文章</h2>`;
     s.articles.forEach((a) => {
       html += `
-        <article style="margin: 32px 0; page-break-inside: avoid;">
+        <article style="margin: 32px 0;">
           <h3 style="font-size: 24px; color: #1B1A1F; margin: 0 0 8px; font-weight: 500;">${escapeHTML(a.title)}</h3>
           <p style="color: #947D75; font-size: 11px; margin: 0 0 16px; letter-spacing: 0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
           <div style="font-size: 14px;">${renderMarkdown(a.content)}</div>
+          ${imagesOf([a.coverId, ...a.imageIds])}
         </article>
       `;
     });
@@ -272,7 +382,8 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
       html += `
         <div style="margin: 24px 0; padding-left: 16px; border-left: 2px solid #6A080E;">
           <p style="color: #947D75; font-size: 11px; margin: 0 0 6px; letter-spacing: 0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
-          <p style="margin: 0; font-size: 14px;">${escapeHTML(m.content)}</p>
+          <div style="font-size: 14px;">${renderMarkdown(m.content)}</div>
+          ${imagesOf(m.imageIds)}
         </div>
       `;
     });
@@ -282,10 +393,11 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">信件</h2>`;
     s.letters.forEach((l) => {
       html += `
-        <article style="margin: 32px 0; page-break-inside: avoid;">
+        <article style="margin: 32px 0;">
           <h3 style="font-size: 22px; color: #1B1A1F; margin: 0 0 8px; font-weight: 500;">${escapeHTML(l.title || '(无题)')}</h3>
           <p style="color: #947D75; font-size: 11px; margin: 0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
           <div style="font-size: 14px;">${renderMarkdown(l.content)}</div>
+          ${imagesOf(l.imageIds)}
         </article>
       `;
     });
@@ -317,37 +429,61 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
   document.body.appendChild(container);
 
   try {
+    // 分页参数：把渲染宽度映射到 A4 的可打印宽度
+    const contentWpt = A4_W - PDF_MARGIN * 2;
+    const contentHpt = A4_H - PDF_MARGIN * 2;
+    const ptPerPx = contentWpt / PDF_RENDER_W;
+    const pageHpx = contentHpt / ptPerPx;
+
+    // 单张图片不得超过一页，否则会被硬切
+    container.querySelectorAll('img').forEach((img) => {
+      img.style.maxHeight = `${Math.floor(pageHpx) - 24}px`;
+      img.style.width = 'auto';
+      img.style.maxWidth = '100%';
+      img.style.objectFit = 'contain';
+    });
+    await waitForImages(container);
+
+    const totalH = container.scrollHeight;
+    const ranges = computePageRanges(container, pageHpx, totalH);
+
     const canvas = await html2canvas(container, {
       backgroundColor: '#F2EBE0',
       scale: 2,
       useCORS: true,
       logging: false,
+      windowHeight: totalH,
+      height: totalH,
     });
+    const pxPerCss = canvas.height / totalH;
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
-    const pdf = new jsPDF({
-      unit: 'pt',
-      format: 'a4',
-      orientation: 'portrait',
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+
+    ranges.forEach(([a, b], idx) => {
+      const sy = Math.max(0, Math.floor(a * pxPerCss));
+      const sh = Math.max(1, Math.min(canvas.height - sy, Math.ceil((b - a) * pxPerCss)));
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = sh;
+      const ctx = slice.getContext('2d');
+      if (!ctx) return;
+      ctx.fillStyle = '#F2EBE0';
+      ctx.fillRect(0, 0, slice.width, slice.height);
+      ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+
+      if (idx > 0) pdf.addPage();
+      // 整页铺米色底，与设计一致
+      pdf.setFillColor(242, 235, 224);
+      pdf.rect(0, 0, A4_W, A4_H, 'F');
+      pdf.addImage(
+        slice.toDataURL('image/jpeg', 0.92),
+        'JPEG',
+        PDF_MARGIN,
+        PDF_MARGIN,
+        contentWpt,
+        sh / pxPerCss * ptPerPx,
+      );
     });
-
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-    }
 
     pdf.save(`vidaos-${scope}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
   } finally {
