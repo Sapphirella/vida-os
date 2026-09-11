@@ -7,29 +7,38 @@
    ============================================================ */
 
 :root {
-  /* 色板 */
+  /* 色板（依据 palette-suggestion 扩展） */
   --ink: #1B1A1F;
+  --charcoal: #2A292E;      /* 上层卡：比 ink 亮一档，做层级 */
   --wood: #341915;
   --wine: #6A080E;
   --wine-light: #8B1A1F;
   --wine-deep: #4A0608;
+  --wine-bright: #8C1117;   /* 危险 / 删除 */
   --bronze: #947D75;
   --bronze-light: #A89289;
   --paper: #BCAEAA;
   --candle: #E8C39E;
   --moon: #F2EBE0;
+  --parchment: #D8C3A8;     /* 引文 / 代码底色 */
+  --amber: #C9A063;         /* 高亮 / 星标 / 选中 */
+  --ash: #8A858C;           /* 禁用 / 元信息 */
+  --olive: #6E7355;         /* 成功 */
+  --sapphire: #5C6B8C;      /* 信息 / 链接 */
+  --line: #4A3F3C;          /* 描边 / 分隔线 */
 
   /* 文字层级 */
   --text-moon: #F2EBE0;
   --text-paper: #BCAEAA;
   --text-bronze: #947D75;
   --text-bronze-deep: #7A675F;
+  --text-ash: #8A858C;
 
-  /* 卡片 */
-  --card-bg: rgba(38, 32, 30, 0.62);
-  --card-bg-elevated: rgba(45, 38, 35, 0.78);
-  --card-border: rgba(148, 125, 117, 0.14);
-  --card-glow: rgba(232, 195, 158, 0.06);
+  /* 卡片：改用中性炭黑打底，避免整体发闷发褐 */
+  --card-bg: rgba(42, 41, 46, 0.72);
+  --card-bg-elevated: rgba(56, 54, 60, 0.82);
+  --card-border: rgba(74, 63, 60, 0.55);
+  --card-glow: rgba(232, 195, 158, 0.1);
 
   /* 间距 */
   --space-page: 24px;
@@ -69,25 +78,25 @@ html, body {
 }
 
 body {
-  /* 烛光环境：底部一抹极淡的暖色光晕 */
+  /* 烛光环境：底部暖色光晕 + 顶部一层极淡的紫灰，让画面不至于整片发褐 */
   background:
     radial-gradient(
       ellipse 80% 50% at 50% 110%,
-      rgba(232, 195, 158, 0.08) 0%,
-      rgba(232, 195, 158, 0.03) 30%,
+      rgba(232, 195, 158, 0.1) 0%,
+      rgba(232, 195, 158, 0.035) 30%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 60% 40% at 20% 0%,
-      rgba(106, 8, 14, 0.06) 0%,
+      rgba(106, 8, 14, 0.08) 0%,
       transparent 50%
     ),
     radial-gradient(
-      ellipse 60% 40% at 80% 0%,
-      rgba(52, 25, 21, 0.10) 0%,
-      transparent 50%
+      ellipse 70% 45% at 80% 0%,
+      rgba(92, 107, 140, 0.07) 0%,
+      transparent 55%
     ),
-    var(--ink);
+    linear-gradient(180deg, #1B1A1F 0%, #241920 100%);
   background-attachment: fixed;
   min-height: 100vh;
   min-height: 100dvh;
@@ -430,6 +439,24 @@ textarea, input, [contenteditable] {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* 动态正文：沿用 Markdown 排版，但比长文更紧凑 */
+.prose-moment {
+  font-size: 1rem;
+  line-height: 1.85;
+}
+.prose-moment > *:first-child { margin-top: 0; }
+.prose-moment > *:last-child { margin-bottom: 0; }
+.prose-moment p { margin: 0 0 0.6em; }
+.prose-moment h1, .prose-moment h2, .prose-moment h3, .prose-moment h4 {
+  margin: 0.9em 0 0.4em;
+  line-height: 1.35;
+}
+.prose-moment h1 { font-size: 1.375rem; }
+.prose-moment h2 { font-size: 1.2rem; }
+.prose-moment h3 { font-size: 1.0625rem; }
+.prose-moment ul, .prose-moment ol { margin: 0.5em 0; }
+.prose-moment blockquote { margin: 0.8em 0; }
 
 /* 链接默认样式 */
 a {

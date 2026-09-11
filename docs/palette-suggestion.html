@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VidaOS · 暗夜书房配色建议</title>
+  <style>
+    :root {
+      --ink: #1B1A1F;   /* 主背景：深夜紫黑 */
+      --wood: #341915;  /* 副背景：暗咖啡 */
+      --wine: #6A080E;  /* 强调：暗酒红 */
+      --bronze: #947D75;/* 次要：古铜 */
+      --paper: #BCAEAA; /* 主文字：旧纸米色 */
+      --candle: #E8C39E;/* 烛光 */
+      --moon: #F2EBE0;  /* 月光白 */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "EB Garamond", "Georgia", serif;
+      background:
+        radial-gradient(120% 40% at 50% 108%, rgba(232,195,158,.10), transparent 60%),
+        linear-gradient(180deg, #1B1A1F 0%, #241920 100%);
+      color: var(--candle);
+      padding: 40px 34px;
+      line-height: 1.7;
+      overflow-y: auto;
+    }
+    h1 {
+      font-size: 26px; letter-spacing: 2px; font-weight: 500;
+      color: var(--moon); margin-bottom: 6px;
+    }
+    .sub {
+      color: var(--bronze); font-size: 14px; letter-spacing: 1px;
+      margin-bottom: 30px;
+    }
+    .group {
+      margin-bottom: 34px;
+    }
+    .group-title {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 13px; letter-spacing: 2px; color: var(--candle);
+      margin-bottom: 14px;
+    }
+    .group-title::after {
+      content: ""; flex: 1; height: 1px;
+      background: linear-gradient(90deg, rgba(232,195,158,.35), transparent);
+    }
+    .swatches {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .swatch {
+      border: 1px solid rgba(232,195,158,.16);
+      border-radius: 16px; overflow: hidden;
+      background: rgba(0,0,0,.18);
+      backdrop-filter: blur(2px);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .swatch:hover { transform: translateY(-3px); }
+    .chip {
+      height: 78px; display: flex; align-items: flex-end; padding: 8px;
+      font-size: 11px; letter-spacing: 1px; font-weight: 600;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .meta { padding: 9px 11px; }
+    .name { font-size: 12px; color: var(--moon); letter-spacing: 1px; }
+    .hex { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--bronze); }
+    .note { font-size: 11px; color: var(--bronze); margin-top: 3px; }
+    .tagged { color: var(--candle); font-size: 10.5px; letter-spacing: 1px; }
+    .on-light { color: #3a2a1a; }
+    .footer {
+      margin-top: 34px; padding-top: 16px; border-top: 1px dashed rgba(232,195,158,.22);
+      font-size: 12px; color: var(--bronze); letter-spacing: 1px;
+    }
+    .chip-note { position: relative; height: 78px; display: flex; align-items: flex-end; padding: 8px; }
+    .chip-note .label { font-size: 10px; letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+  <h1>VidaOS · 暗夜书房配色</h1>
+  <div class="sub">基于你的五色主盘，延续深夜书房气质的扩展色卡</div>
+
+  <!-- 已有主色 -->
+  <section class="group">
+    <div class="group-title">已有主色 · 由你亲自挑选</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip" style="background:#1B1A1F; color:#BCAEAA;">#1B1A1F</div>
+        <div class="meta"><div class="name">ink 深夜紫黑</div><div class="hex">主背景</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#341915; color:#BCAEAA;">#341915</div>
+        <div class="meta"><div class="name">wood 暗咖啡</div><div class="hex">副背景 · 卡片底</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#6A080E; color:#BCAEAA;">#6A080E</div>
+        <div class="meta"><div class="name">wine 暗酒红</div><div class="hex">强调 · 克制使用</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#947D75; color:#17130D;">#947D75</div>
+        <div class="meta"><div class="name">bronze 古铜</div><div class="hex">次要文字 · 辅助</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#BCAEAA; color:#3a2a1a;">#BCAEAA</div>
+        <div class="meta"><div class="name">paper 旧纸米</div><div class="hex">主要文字</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 氛围扩展色 -->
+  <section class="group">
+    <div class="group-title">氛围扩展色 · 已有 + 新增</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip" style="background:#E8C39E; color:#3a2a1a;">#E8C39E <span class="tagged" style="float:right">★已有</span></div>
+        <div class="meta"><div class="name">candle 烛光暖橘</div><div class="hex">装饰高光 · caret</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#F2EBE0; color:#3a2a1a;">#F2EBE0 <span class="tagged" style="float:right">★已有</span></div>
+        <div class="meta"><div class="name">moon 月光白</div><div class="hex">大数字 · 标题</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#D8C3A8; color:#3a2a1a;">#D8C3A8</div>
+        <div class="meta"><div class="name">parchment 旧羊皮</div><div class="hex">新 · 引文/代码块底色</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#C9A063; color:#24180A;">#C9A063</div>
+        <div class="meta"><div class="name">amber 陈年琥珀</div><div class="hex">新 · 高亮/选中/星标</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#8A858C; color:#17130D;">#8A858C</div>
+        <div class="meta"><div class="name">ash 灰雾</div><div class="hex">新 · 禁用/提示/元信息</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 语义色 -->
+  <section class="group">
+    <div class="group-title">语义色 · 状态提示</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip" style="background:#6E7355; color:#EAE7D8;">#6E7355</div>
+        <div class="meta"><div class="name">橄榄 旧绿</div><div class="hex">成功 / 已完成</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#C9A063; color:#24180A;">#C9A063</div>
+        <div class="meta"><div class="name">琥珀 旧铜</div><div class="hex">警告 / 提醒</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#5C6B8C; color:#E6EAF2;">#5C6B8C</div>
+        <div class="meta"><div class="name">墨水蓝 钢笔水</div><div class="hex">信息 / 链接</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#8C1117; color:#F3D9B8;">#8C1117</div>
+        <div class="meta"><div class="name">醒酒红 深一档</div><div class="hex">危险 / 删除</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 边框 / 层级色 -->
+  <section class="group">
+    <div class="group-title">边框 · 描边 · 层级</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip" style="background:#4A3F3C; color:#EED9BF;">#4A3F3C</div>
+        <div class="meta"><div class="name">灰褐 分隔线</div><div class="hex">卡片描边 · 分割线</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#2A292E; color:#BCAEAA;">#2A292E</div>
+        <div class="meta"><div class="name">炭黑 上层卡</div><div class="hex">比 ink 亮一档的层级底</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:rgba(106,8,14,.55); color:#F3D9B8;">wine 40-70%</div>
+        <div class="meta"><div class="name">酒红 低透明</div><div class="hex">极细描边 · 选中态</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:rgba(232,195,158,.14); color:#3a2a1a;">candle 14%</div>
+        <div class="meta"><div class="name">烛光 低透明</div><div class="hex">内侧高光 · 底部光晕</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    说明：金色高亮尽量统用 <strong style="color:#C9A063">amber #C9A063</strong> 一处，避免色彩泛滥；
+    成功用到 <strong style="color:#6E7355">橄榄绿</strong> 时，其余强调仍归酒红，保持克制统一的「书房气息」。
+  </div>
+</body>
+</html>

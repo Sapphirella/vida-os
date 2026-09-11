@@ -15,9 +15,9 @@ export function Toast() {
           )}
           style={{ minWidth: 200, maxWidth: 320 }}
         >
-          {t.kind === 'success' && <CheckCircle2 size={16} className="text-candle" />}
-          {t.kind === 'error' && <XCircle size={16} className="text-wine-light" />}
-          {t.kind === 'info' && <Info size={16} className="text-bronze" />}
+          {t.kind === 'success' && <CheckCircle2 size={16} className="text-olive" />}
+          {t.kind === 'error' && <XCircle size={16} className="text-wine-bright" />}
+          {t.kind === 'info' && <Info size={16} className="text-sapphire" />}
           <span className="text-paper">{t.message}</span>
         </div>
       ))}
