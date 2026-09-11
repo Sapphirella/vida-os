@@ -335,9 +335,13 @@ const PDF_FONT =
   '"EB Garamond", "Lora", Georgia, serif';
 
 /** 页面容器的基础样式（量测与渲染都用它，保证一致） */
+// 注意：量测容器（stage）必须与页面容器的「内容宽度」一致。
+// 页面有 80px 左右内边距（内容宽 560），若量测容器是 720 宽且无内边距，
+// 文字就会按 720 宽量高度、却按 560 宽渲染 —— 每段都会变高，导致分页溢出。
+const PDF_PAD_X = '0 80px';
 const pageCss = (full?: boolean) =>
   `box-sizing:border-box;width:${PDF_PAGE_W}px;` +
-  (full ? `height:${PDF_PAGE_H}px;padding:${PDF_PAD};overflow:hidden;` : '') +
+  (full ? `height:${PDF_PAGE_H}px;padding:${PDF_PAD};overflow:hidden;` : `padding:${PDF_PAD_X};`) +
   `background:${PDF_BG};color:#1B1A1F;font-family:${PDF_FONT};line-height:1.85;`;
 
 /** 把一批 fileId 从 IndexedDB 取出并转成 data URL（PDF 里必须内嵌图片） */
@@ -531,22 +535,22 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
       <section style="margin:0 0 32px;padding:20px 0;border-top:1px solid #947D75;border-bottom:1px solid #947D75;text-align:center;">
         ${avatar ? `<img src="${avatar}" alt="" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin:0 auto 12px;display:block;" />` : ''}
         <p style="font-size:22px;margin:0 0 6px;color:#1B1A1F;">${escapeHTML(s.profile.name || '(未填写昵称)')}</p>
-        ${s.profile.signature ? `<p style="font-size:13px;margin:0;color:#7A675F;font-style:italic;">—— ${escapeHTML(s.profile.signature)}</p>` : ''}
+        ${s.profile.signature ? `<p style="font-size:15px;margin:0;color:#7A675F;font-style:italic;">—— ${escapeHTML(s.profile.signature)}</p>` : ''}
       </section>
     `;
   }
 
   const h2 = (t: string) =>
-    `<h2 style="font-size:16px;letter-spacing:0.2em;text-transform:uppercase;color:#6A080E;margin:32px 0 16px;border-bottom:1px solid #947D75;padding-bottom:8px;">${t}</h2>`;
+    `<h2 style="font-size:16px;letter-spacing:0.2em;text-transform:uppercase;color:#6A080E;margin:32px 0 16px;font-size:18px;border-bottom:1px solid #947D75;padding-bottom:8px;">${t}</h2>`;
 
   if (s.articles.length > 0 && has.has('articles')) {
     html += h2('文章');
     s.articles.forEach((a) => {
       html += `
         <article style="margin:32px 0;">
-          <h3 style="font-size:24px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(a.title)}</h3>
-          <p style="color:#947D75;font-size:11px;margin:0 0 16px;letter-spacing:0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
-          <div style="font-size:14px;">${resolveInline(renderMarkdown(a.content))}</div>
+          <h3 style="font-size:26px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(a.title)}</h3>
+          <p style="color:#947D75;font-size:12px;margin:0 0 16px;letter-spacing:0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
+          <div style="font-size:16px;">${resolveInline(renderMarkdown(a.content))}</div>
           ${imagesOf([a.coverId, ...a.imageIds])}
         </article>
       `;
@@ -558,10 +562,10 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     s.moments.forEach((m) => {
       html += `
         <div style="margin:24px 0;padding-left:16px;border-left:2px solid #6A080E;">
-          <p style="color:#947D75;font-size:11px;margin:0 0 6px;letter-spacing:0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
-          <div style="font-size:14px;">${resolveInline(renderMarkdown(m.content))}</div>
+          <p style="color:#947D75;font-size:12px;margin:0 0 6px;letter-spacing:0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
+          <div style="font-size:16px;">${resolveInline(renderMarkdown(m.content))}</div>
           ${imagesOf(m.imageIds)}
-          ${(m.comments ?? []).map((c) => `<p style="margin:6px 0 0 12px;font-size:12px;color:#7A675F;">— ${escapeHTML(c.content)}</p>`).join('')}
+          ${(m.comments ?? []).map((c) => `<p style="margin:6px 0 0 12px;font-size:12px;color:#7A675F;">— ${escapeHTML(c.content).replace(/\n/g, '<br />')}</p>`).join('')}
         </div>
       `;
     });
@@ -572,9 +576,9 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     s.letters.forEach((l) => {
       html += `
         <article style="margin:32px 0;">
-          <h3 style="font-size:22px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(l.title || '(无题)')}</h3>
-          <p style="color:#947D75;font-size:11px;margin:0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
-          <div style="font-size:14px;">${resolveInline(renderMarkdown(l.content))}</div>
+          <h3 style="font-size:24px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(l.title || '(无题)')}</h3>
+          <p style="color:#947D75;font-size:12px;margin:0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
+          <div style="font-size:16px;">${resolveInline(renderMarkdown(l.content))}</div>
           ${imagesOf(l.imageIds)}
         </article>
       `;
@@ -584,7 +588,8 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   if (s.notes.inspiration.length > 0 && has.has('notes')) {
     html += h2('灵感') + '<ul style="list-style:none;padding:0;">';
     s.notes.inspiration.forEach((n) => {
-      html += `<li style="margin:8px 0;padding-left:16px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:11px;letter-spacing:0.05em;">[${escapeHTML(n.category)}]</span> ${escapeHTML(n.content)}</li>`;
+      // 用 renderMarkdown 而不是 escapeHTML：否则换行会被 HTML 直接压掉
+      html += `<li style="margin:10px 0;padding-left:16px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:12px;letter-spacing:0.05em;">[${escapeHTML(n.category)}]</span> <span style="font-size:16px;">${resolveInline(renderMarkdown(n.content))}</span></li>`;
     });
     html += '</ul>';
   }
@@ -592,14 +597,14 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   if (s.notes.schedule.length > 0 && has.has('notes')) {
     html += h2('日程');
     s.notes.schedule.forEach((n) => {
-      html += `<p style="margin:6px 0;font-size:13px;"><span style="color:#947D75;font-size:11px;">[${n.date}${n.time ? ' ' + n.time : ''}]</span> <strong>${escapeHTML(n.title)}</strong>${n.done ? ' ✓' : ''}</p>`;
+      html += `<div style="margin:8px 0;font-size:16px;"><span style="color:#947D75;font-size:12px;">[${n.date}${n.time ? ' ' + n.time : ''}]</span> <strong>${escapeHTML(n.title)}</strong>${n.done ? ' ✓' : ''}${n.note ? `<div style="color:#7A675F;font-size:14px;margin-top:2px;">${resolveInline(renderMarkdown(n.note))}</div>` : ''}</div>`;
     });
   }
 
   if (s.notes.todo.length > 0 && has.has('notes')) {
     html += h2('待办');
     s.notes.todo.forEach((n) => {
-      html += `<p style="margin:6px 0;font-size:13px;">${n.done ? '☑' : '☐'} ${escapeHTML(n.content)}</p>`;
+      html += `<div style="margin:6px 0;font-size:16px;">${n.done ? '☑' : '☐'} <span style="vertical-align:top;">${escapeHTML(n.content).replace(/\n/g, '<br />')}</span></div>`;
     });
   }
 
@@ -612,7 +617,7 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
           : f.refType === 'moment'
             ? plainText(state.moments.find((x) => x.id === f.refId)?.content ?? '').slice(0, 30)
             : state.letters.find((x) => x.id === f.refId)?.title ?? '(无题)';
-      html += `<p style="margin:6px 0;font-size:13px;">★ ${escapeHTML(label)}</p>`;
+      html += `<p style="margin:6px 0;font-size:15px;">★ ${escapeHTML(label)}</p>`;
     });
   }
 
@@ -622,7 +627,9 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   stage.innerHTML = html;
   document.body.appendChild(stage);
   stage.querySelectorAll('img').forEach((img) => {
-    img.style.maxHeight = `${PDF_INNER_H - 24}px`;
+    // 留出上下外边距（各 14px）的余量，否则 866+28 会超过每页可用高度，
+    // 被当成「超过一整页的单元」而触发降级处理
+    img.style.maxHeight = `${PDF_INNER_H - 96}px`;
     img.style.width = 'auto';
     img.style.maxWidth = '100%';
     img.style.objectFit = 'contain';
@@ -655,11 +662,33 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   /** 收尾当前页：一页只读一次高度，若溢出就把末尾单元退回队列（上限 500 次防死循环） */
   const closePage = () => {
     let n = 0;
-    while (placed.length > 1 && cur.scrollHeight > PDF_PAGE_H && n++ < 500) {
-      const top = placed.pop()!;
-      cur.removeChild(top);
-      const u = unitOfTop.get(top);
-      unitOfTop.delete(top);
+    while (cur.scrollHeight > PDF_PAGE_H && n++ < 500) {
+      const top = placed[placed.length - 1];
+      if (!top) break;
+      // 页面上只剩一个单元还溢出：优先压缩其中的图片，而不是把它推走
+      // （推走会留下一整页空白，正是用户遇到的「图片后面两大页空白」）
+      if (placed.length === 1) {
+        const host = top.nodeType === Node.ELEMENT_NODE ? (top as HTMLElement) : null;
+        const img = host
+          ? host.tagName === 'IMG'
+            ? (host as HTMLImageElement)
+            : host.querySelector('img')
+          : null;
+        if (img) {
+          const over = cur.scrollHeight - PDF_PAGE_H;
+          const h = img.getBoundingClientRect().height;
+          if (h - over > 160) {
+            img.style.maxHeight = `${Math.floor(h - over - 8)}px`;
+            img.style.width = 'auto';
+            continue;
+          }
+        }
+        break; // 压不动了，接受这点溢出
+      }
+      const t = placed.pop()!;
+      cur.removeChild(t);
+      const u = unitOfTop.get(t);
+      unitOfTop.delete(t);
       if (u) queue.unshift(u);
     }
   };
@@ -676,8 +705,31 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
         used = 0;
         placed = [];
       }
-      const rest = splitTextUnit(unit, cur);
-      if (rest) queue.unshift(rest);
+      // 文本节点才做二分切分；其他（例如超高的图片）整体放上去并压到页内，
+      // 绝不丢弃 —— 早先这里直接 return null 会把图片吞掉并留下空白页。
+      const rest = unit.node.nodeType === Node.TEXT_NODE ? splitTextUnit(unit, cur) : null;
+      if (rest) {
+        queue.unshift(rest);
+      } else {
+        const top = appendUnit(cur, unit);
+        placed.push(top);
+        unitOfTop.set(top, unit);
+        let shrink = 0;
+        while (cur.scrollHeight > PDF_PAGE_H && shrink++ < 12) {
+          const host = top.nodeType === Node.ELEMENT_NODE ? (top as HTMLElement) : null;
+          const img = host
+            ? host.tagName === 'IMG'
+              ? (host as HTMLImageElement)
+              : host.querySelector('img')
+            : null;
+          if (!img) break;
+          const over = cur.scrollHeight - PDF_PAGE_H;
+          const h = img.getBoundingClientRect().height;
+          if (h <= 120) break;
+          img.style.maxHeight = `${Math.max(120, Math.floor(h - over - 6))}px`;
+          img.style.width = 'auto';
+        }
+      }
       if (queue.length > 0) {
         cur = newPage();
         pages.push(cur);
