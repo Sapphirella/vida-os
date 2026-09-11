@@ -24,7 +24,17 @@ export function Background() {
     };
   }, [backgroundFileId]);
 
+  const preset = getBackgroundPreset(backgroundPreset);
   const hasCustomImage = Boolean(backgroundFileId && customUrl);
+
+  // 顶栏/底栏跟着背景预设走：背景本身只在卡片缝隙里露出一条，
+  // 栏色变化才是用户真正能一眼看到的反馈。
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bar-bg', preset.bar);
+    return () => {
+      document.documentElement.style.removeProperty('--bar-bg');
+    };
+  }, [preset.bar]);
 
   return (
     <div className="fixed inset-0 pointer-events-none -z-10">
@@ -39,7 +49,7 @@ export function Background() {
           <div className="absolute inset-0" style={{ background: 'rgba(27, 26, 31, 0.62)' }} />
         </>
       ) : (
-        <div className="absolute inset-0" style={{ background: getBackgroundPreset(backgroundPreset).gradient }} />
+        <div className="absolute inset-0" style={{ background: preset.gradient }} />
       )}
 
       {/* 烛光晕染：左下 */}

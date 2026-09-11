@@ -53,7 +53,7 @@ export function ArticleReaderPage() {
               {collection.name}
             </button>
           )}
-          <h1 className="font-serif text-moon text-huge leading-tight tracking-tight">
+          <h1 className="font-serif text-moon text-[1.75rem] sm:text-[2rem] leading-snug tracking-tight">
             {article.title}
           </h1>
           <div className="flex items-center justify-center gap-3 mt-4 text-bronze text-xs font-mono">

@@ -1,5 +1,5 @@
 // 全屏 Markdown 编辑器
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useLayoutEffect } from 'react';
 import {
   X,
   Bold,
@@ -86,6 +86,8 @@ export function MarkdownEditor({
   const [mode_, setMode] = useState<'edit' | 'preview'>('edit');
   const [showCollections, setShowCollections] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** 插入文本后要恢复到的光标位置（渲染完成后再设，避免跳到文首） */
+  const caretRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const collections = useAppStore((s) => s.collections);
   const isFavorited = useAppStore((s) =>
@@ -108,15 +110,23 @@ export function MarkdownEditor({
       const end = ta.selectionEnd;
       const selected = content.slice(start, end) || placeholder;
       const newText = content.slice(0, start) + before + selected + after + content.slice(end);
+      caretRef.current = start + before.length + selected.length;
       setContent(newText);
-      requestAnimationFrame(() => {
-        ta.focus();
-        const pos = start + before.length + selected.length;
-        ta.setSelectionRange(pos, pos);
-      });
     },
     [content],
   );
+
+  // 内容更新后（渲染完成）再恢复光标：受控 textarea 重新赋值会把光标重置到文首，
+  // 所以必须在 DOM 更新之后设 selectionRange，并且 preventScroll 以免整页跳动。
+  useLayoutEffect(() => {
+    const pos = caretRef.current;
+    if (pos === null) return;
+    caretRef.current = null;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(pos, pos);
+  }, [content]);
 
   /** 在当前光标处插入一段文本 */
   const insertText = (text: string) => {
@@ -127,12 +137,8 @@ export function MarkdownEditor({
     }
     const start = ta.selectionStart ?? content.length;
     const end = ta.selectionEnd ?? start;
+    caretRef.current = start + text.length;
     setContent(content.slice(0, start) + text + content.slice(end));
-    requestAnimationFrame(() => {
-      ta.focus();
-      const pos = start + text.length;
-      ta.setSelectionRange(pos, pos);
-    });
   };
 
   /** 交换两张配图的位置（用于调整文章内图片顺序） */
@@ -444,25 +450,7 @@ export function MarkdownEditor({
                   >
                     <CornerUpLeft size={11} strokeWidth={1.8} />
                   </button>
-                  {/* 调整顺序（触屏友好） */}
-                  <div className="absolute bottom-0 left-0 right-5 flex bg-ink/75">
-                    <button
-                      onClick={() => moveImage(i, i - 1)}
-                      disabled={i === 0}
-                      aria-label={`第 ${i + 1} 张左移`}
-                      className="flex-1 h-5 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
-                    >
-                      ◀
-                    </button>
-                    <button
-                      onClick={() => moveImage(i, i + 1)}
-                      disabled={i === imageIds.length - 1}
-                      aria-label={`第 ${i + 1} 张右移`}
-                      className="flex-1 h-5 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
-                    >
-                      ▶
-                    </button>
-                  </div>
+                  {/* 顺序靠拖动调整（缩略图整体可拖） */}
                 </div>
               );
             })}

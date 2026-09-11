@@ -43,7 +43,7 @@ export function LetterReaderPage() {
               </span>
             )}
           </div>
-          <h1 className="font-serif text-moon text-huge leading-tight tracking-tight">
+          <h1 className="font-serif text-moon text-[1.75rem] sm:text-[2rem] leading-snug tracking-tight">
             {letter.title || '(无题)'}
           </h1>
           <p className="font-mono text-[11px] text-bronze mt-3">

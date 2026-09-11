@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/useAppStore';
-import { getSkin } from '@/lib/skins';
 import { useUIStore } from '@/stores/useUIStore';
 import { TopBar } from '@/components/layout/TopBar';
 import { BottomTabBar } from '@/components/layout/BottomTabBar';
@@ -30,18 +29,12 @@ function App() {
   const setTab = useUIStore((s) => s.setTab);
   const setLastTab = useAppStore((s) => s.setLastTab);
   const lastTab = useAppStore((s) => s.settings.lastTab);
-  const skin = useAppStore((s) => s.settings.skin);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
-
-  // 皮肤通过 <html data-skin="…"> 生效（具体颜色在 globals.css 里覆盖）
-  useEffect(() => {
-    document.documentElement.dataset.skin = getSkin(skin).key;
-  }, [skin]);
 
   // 「恢复上次 tab」只能在启动后执行一次。
   // 若不加这个一次性守卫，它会与下面「把 currentTab 写回 lastTab」的 effect 互相打架：

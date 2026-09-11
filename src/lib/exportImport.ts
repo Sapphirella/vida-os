@@ -323,24 +323,22 @@ export function exportTXT(state: AppState, scope: ExportScopes = ['all']): strin
 
 const A4_W = 595.28;
 const A4_H = 841.89;
-const PDF_MARGIN = 24;
-/** 正文栏宽（CSS px） */
-const PDF_CONTENT_W = 620;
-
-const CONTENT_WPT = A4_W - PDF_MARGIN * 2;
-const CONTENT_HPT = A4_H - PDF_MARGIN * 2;
-const PT_PER_PX = CONTENT_WPT / PDF_CONTENT_W;
-/** 每页可容纳的高度（CSS px） */
-const PDF_PAGE_H = Math.floor(CONTENT_HPT / PT_PER_PX);
+/** 页面容器的渲染尺寸（CSS px）—— 沿用上一版观感：720 宽 + 64/80 内边距 */
+const PDF_PAGE_W = 720;
+const PDF_PAGE_H = 1018; // 720 × (297/210)，即整页 A4 等比
+const PDF_PAD = '64px 80px';
+/** 内容区可用高度（去掉上下内边距） */
+const PDF_INNER_H = PDF_PAGE_H - 128;
 
 const PDF_BG = '#F2EBE0';
 const PDF_FONT =
   '"EB Garamond", "Lora", Georgia, serif';
 
 /** 页面容器的基础样式（量测与渲染都用它，保证一致） */
-const pageCss = (h?: number) =>
-  `width:${PDF_CONTENT_W}px;${h ? `height:${h}px;` : ''}background:${PDF_BG};color:#1B1A1F;` +
-  `font-family:${PDF_FONT};line-height:1.85;overflow:hidden;`;
+const pageCss = (full?: boolean) =>
+  `box-sizing:border-box;width:${PDF_PAGE_W}px;` +
+  (full ? `height:${PDF_PAGE_H}px;padding:${PDF_PAD};overflow:hidden;` : '') +
+  `background:${PDF_BG};color:#1B1A1F;font-family:${PDF_FONT};line-height:1.85;`;
 
 /** 把一批 fileId 从 IndexedDB 取出并转成 data URL（PDF 里必须内嵌图片） */
 async function buildImageDataUrls(ids: Set<string>): Promise<Map<string, string>> {
@@ -375,51 +373,101 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 }
 
 /**
- * 把一块「单独一页都放不下」的内容拆成「放得下的部分 + 剩下的部分」。
- * 只对文本类块生效；图片等无文本的块原样返回（调用前已限制图片最大高度）。
+ * 把 nodes 依次放进 target，直到放不下为止。
+ * 返回「没能放进去的节点」（含被拆开的后半截）。
+ *
+ * 注意：这里必须按「节点」拆分，不能把块压成纯文本 —— 早先用 textContent
+ * 切分会把块内的 <img> 和段落结构全部抹掉，导致 PDF 丢图而且排版被压扁。
  */
-function splitBlockToFit(
-  block: HTMLElement,
+function fillNodes(
+  nodes: Node[],
+  target: HTMLElement,
   page: HTMLElement,
   maxH: number,
-): [HTMLElement, HTMLElement | null] {
-  const text = block.textContent ?? '';
-  if (!text.trim()) return [block, null];
+): Node[] {
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    const added = node.cloneNode(true);
+    target.appendChild(added);
+    if (page.scrollHeight <= maxH) continue;
 
-  const probe = block.cloneNode(false) as HTMLElement;
-  page.appendChild(probe);
-  let lo = 1;
-  let hi = text.length;
-  let best = 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    probe.textContent = text.slice(0, mid);
-    if (page.scrollHeight <= maxH) {
-      best = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
+    // 放不下：撤掉，尝试只放一部分
+    target.removeChild(added);
+    const rest = splitInto(node, target, page, maxH);
+    const remaining = nodes.slice(i + 1).map((n) => n.cloneNode(true));
+    if (rest) remaining.unshift(rest);
+    return remaining;
   }
-  page.removeChild(probe);
+  return [];
+}
 
-  // 尽量在空白或句读处断开
-  let cut = best;
-  const soft = Math.max(
-    text.lastIndexOf(' ', cut),
-    text.lastIndexOf('\n', cut),
-    text.lastIndexOf('。', cut),
-    text.lastIndexOf('，', cut),
-  );
-  if (soft > cut * 0.6) cut = soft + 1;
+/**
+ * 尽量把 node 的一部分放进 target，返回剩下的部分（null ＝ 全部放得下）。
+ * - 文本节点：二分找最长可放下的前缀，并尽量在空白/句读处断开
+ * - 元素节点：保留标签与其样式，递归处理子节点（图片、段落结构都不会丢）
+ * - 空元素（如 <img>）：无法拆分，整体留到下一页
+ */
+function splitInto(
+  node: Node,
+  target: HTMLElement,
+  page: HTMLElement,
+  maxH: number,
+): Node | null {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.nodeValue ?? '';
+    if (!text) return null;
+    const holder = document.createTextNode('');
+    target.appendChild(holder);
+    let lo = 1;
+    let hi = text.length;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      holder.nodeValue = text.slice(0, mid);
+      if (page.scrollHeight <= maxH) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    let cut = best;
+    const soft = Math.max(
+      text.lastIndexOf(' ', cut),
+      text.lastIndexOf('\n', cut),
+      text.lastIndexOf('。', cut),
+      text.lastIndexOf('，', cut),
+      text.lastIndexOf('、', cut),
+    );
+    if (soft > cut * 0.6) cut = soft + 1;
+    holder.nodeValue = text.slice(0, cut);
+    const rest = text.slice(cut);
+    if (!rest) return null;
+    return document.createTextNode(rest);
+  }
 
-  const head = block.cloneNode(false) as HTMLElement;
-  head.textContent = text.slice(0, cut);
-  const rest = text.slice(cut);
-  if (!rest.trim()) return [head, null];
-  const tail = block.cloneNode(false) as HTMLElement;
-  tail.textContent = rest;
-  return [head, tail];
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as HTMLElement;
+
+    // 无子节点（<img>/<hr> 等）或整体不可拆 → 整块留到下一页
+    if (el.childNodes.length === 0) return el.cloneNode(true);
+
+    const holder = el.cloneNode(false) as HTMLElement;
+    target.appendChild(holder);
+    if (page.scrollHeight > maxH) {
+      // 连空壳都放不下（超大边距等）→ 整块留到下一页
+      target.removeChild(holder);
+      return el.cloneNode(true);
+    }
+    const restChildren = fillNodes(Array.from(el.childNodes), holder, page, maxH);
+    if (restChildren.length === 0) return null;
+    const restEl = el.cloneNode(false) as HTMLElement;
+    restChildren.forEach((c) => restEl.appendChild(c));
+    return restEl;
+  }
+
+  // 注释等其他节点：整体留到下一页
+  return node.cloneNode(true);
 }
 
 export async function exportPDF(state: AppState, scope: ExportScopes = ['articles']): Promise<void> {
@@ -551,7 +599,7 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   stage.innerHTML = html;
   document.body.appendChild(stage);
   stage.querySelectorAll('img').forEach((img) => {
-    img.style.maxHeight = `${PDF_PAGE_H - 24}px`;
+    img.style.maxHeight = `${PDF_INNER_H - 24}px`;
     img.style.width = 'auto';
     img.style.maxWidth = '100%';
     img.style.objectFit = 'contain';
@@ -561,35 +609,49 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   const blocks = Array.from(stage.children) as HTMLElement[];
   const pages: HTMLElement[] = [];
   let cur = document.createElement('div');
-  cur.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(PDF_PAGE_H)}`;
+  cur.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(true)}`;
   pages.push(cur);
   document.body.appendChild(cur);
 
   const realPage = () => {
     const el = document.createElement('div');
-    el.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(PDF_PAGE_H)}`;
+    el.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(true)}`;
     document.body.appendChild(el);
     return el;
   };
 
-  const queue: HTMLElement[] = blocks.map((b) => b.cloneNode(true) as HTMLElement);
+  const queue: Node[] = blocks.map((b) => b.cloneNode(true));
   let guard = 0;
   while (queue.length > 0 && guard++ < 20000) {
     const block = queue.shift()!;
     cur.appendChild(block);
     if (cur.scrollHeight <= PDF_PAGE_H) continue;
+
     // 放不下
     cur.removeChild(block);
-    if (cur.childElementCount > 0) {
+    const hadContent = cur.childElementCount > 0;
+    if (hadContent) {
+      // 当前页已有内容 → 换页重试
       cur = realPage();
       pages.push(cur);
       queue.unshift(block);
       continue;
     }
-    // 空页都放不下 → 拆开
-    const [head, tail] = splitBlockToFit(block, cur, PDF_PAGE_H);
-    cur.appendChild(head);
-    if (tail) queue.unshift(tail);
+
+    // 空页也放不下 → 按节点拆分
+    const rest = splitInto(block, cur, cur, PDF_PAGE_H);
+    if (rest) {
+      if (cur.childElementCount === 0) {
+        // 拆不动（例如单张超高图片）：直接放上去，接受溢出，保证能前进
+        cur.appendChild(block);
+        if (queue.length > 0) {
+          cur = realPage();
+          pages.push(cur);
+        }
+        continue;
+      }
+      queue.unshift(rest);
+    }
     if (queue.length > 0) {
       cur = realPage();
       pages.push(cur);
@@ -604,22 +666,16 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
         scale: 2,
         useCORS: true,
         logging: false,
-        width: PDF_CONTENT_W,
+        width: PDF_PAGE_W,
         height: PDF_PAGE_H,
-        windowWidth: PDF_CONTENT_W,
+        windowWidth: PDF_PAGE_W,
         windowHeight: PDF_PAGE_H,
       });
       if (i > 0) pdf.addPage();
       pdf.setFillColor(242, 235, 224);
       pdf.rect(0, 0, A4_W, A4_H, 'F');
-      pdf.addImage(
-        canvas.toDataURL('image/jpeg', 0.92),
-        'JPEG',
-        PDF_MARGIN,
-        PDF_MARGIN,
-        CONTENT_WPT,
-        CONTENT_HPT,
-      );
+      // 页容器已含 64/80 内边距，直接铺满整页，观感与上一版一致
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, A4_W, A4_H);
     }
     pdf.save(`vidaos-${scopeSlug(scope)}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
   } finally {
