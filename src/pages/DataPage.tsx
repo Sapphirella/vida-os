@@ -1,5 +1,16 @@
-import { useRef, useState } from 'react';
-import { Upload, FileJson, FileText, FileCode, FileType, AlertTriangle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Upload,
+  FileJson,
+  FileText,
+  FileCode,
+  FileType,
+  AlertTriangle,
+  FolderOpen,
+  Save,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -17,6 +28,18 @@ import {
   ALL_SCOPE_KEYS,
   type ExportScopeKey,
 } from '@/lib/exportImport';
+import {
+  supportsFolderPicker,
+  pickDataFolder,
+  getSavedFolder,
+  listSnapshots,
+  saveSnapshot,
+  restoreSnapshot,
+  deleteSnapshot,
+  humanBytes,
+  MAX_SNAPSHOTS,
+  type SnapshotInfo,
+} from '@/lib/snapshot';
 
 /** 可勾选的导出范围（支持多选） */
 const SCOPES: { key: ExportScopeKey; label: string; en: string; desc: string }[] = [
@@ -41,6 +64,81 @@ export function DataPage() {
     setScopes((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
     );
+
+  // ── 本地文件夹快照备份 ──
+  const folderSupported = supportsFolderPicker();
+  const [folderName, setFolderName] = useState<string | null>(null);
+  const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
+  const [snapBusy, setSnapBusy] = useState(false);
+
+  const refreshSnapshots = async () => {
+    if (!folderSupported) return;
+    try {
+      const folder = await getSavedFolder();
+      setFolderName(folder?.name ?? null);
+      setSnapshots(folder ? await listSnapshots(folder) : []);
+    } catch {
+      setSnapshots([]);
+    }
+  };
+
+  useEffect(() => {
+    refreshSnapshots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const doPickFolder = async () => {
+    try {
+      const name = await pickDataFolder();
+      setFolderName(name);
+      await refreshSnapshots();
+      showToast(`已选择文件夹：${name}`, 'success');
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') showToast(`选择失败：${e.message}`, 'error');
+    }
+  };
+
+  const doSaveSnapshot = async () => {
+    if (snapBusy) return;
+    setSnapBusy(true);
+    try {
+      const { info, removed } = await saveSnapshot(state);
+      await refreshSnapshots();
+      showToast(
+        removed.length
+          ? `快照已保存（${humanBytes(info.bytes)}），已自动清理最旧的 ${removed.length} 份`
+          : `快照已保存（${humanBytes(info.bytes)}）`,
+        'success',
+      );
+    } catch (e: any) {
+      showToast(`保存失败：${e.message}`, 'error');
+    } finally {
+      setSnapBusy(false);
+    }
+  };
+
+  const doRestore = async (name: string) => {
+    if (!confirm(`用这份快照覆盖当前全部数据？\n\n${name}\n\n当前数据将被替换（建议先手动导出一份 JSON 再恢复）。`)) return;
+    try {
+      const restored = await restoreSnapshot(name);
+      importState(restored, 'overwrite');
+      showToast('已从快照恢复', 'success');
+      await refreshSnapshots();
+    } catch (e: any) {
+      showToast(`恢复失败：${e.message}`, 'error');
+    }
+  };
+
+  const doDeleteSnapshot = async (name: string) => {
+    if (!confirm(`删除这份快照？\n\n${name}`)) return;
+    try {
+      await deleteSnapshot(name);
+      await refreshSnapshots();
+      showToast('快照已删除', 'success');
+    } catch (e: any) {
+      showToast(`删除失败：${e.message}`, 'error');
+    }
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const doExportJSON = async () => {
@@ -278,6 +376,97 @@ export function DataPage() {
           >
             <Upload size={14} strokeWidth={1.5} /> 选择文件（JSON / Markdown / TXT）
           </button>
+        </Card>
+
+        {/* 本地文件夹备份 */}
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <FolderOpen size={15} strokeWidth={1.5} className="text-amber" />
+            <h3 className="font-serif text-moon text-lg">本地文件夹备份</h3>
+          </div>
+          <p className="text-bronze text-xs mb-4 leading-relaxed">
+            选一个本地文件夹，点「保存快照」就把当前全部数据写进去。
+            最多保留 <span className="text-amber">{MAX_SNAPSHOTS}</span> 份，超出会自动删除最早的一份；
+            <span className="text-bronze-light">手动导出的文件不占用快照额度</span>。
+            快照里的文字会被 gzip 压缩、图片按原样存放（不做 base64，省约 33% 体积）。
+          </p>
+
+          {!folderSupported ? (
+            <p className="text-wine-light text-xs leading-relaxed">
+              当前浏览器不支持选择本地文件夹（Safari / Firefox 暂不支持该接口）。
+              请改用 <span className="text-candle">Chrome 或 Edge</span> 打开本页；在那之前可以用上面的「JSON 导出」做备份。
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <button onClick={doPickFolder} className="btn-ghost">
+                  <FolderOpen size={13} strokeWidth={1.5} />
+                  {folderName ? '更换文件夹' : '选择文件夹'}
+                </button>
+                <button
+                  onClick={doSaveSnapshot}
+                  disabled={!folderName || snapBusy}
+                  className="btn-primary disabled:opacity-40"
+                >
+                  <Save size={13} strokeWidth={1.6} />
+                  {snapBusy ? '保存中…' : '保存快照'}
+                </button>
+                {folderName && (
+                  <span className="font-mono text-[10px] text-bronze-deep ml-auto">
+                    📁 {folderName} · 已用 {snapshots.length} / {MAX_SNAPSHOTS}
+                  </span>
+                )}
+              </div>
+
+              {!folderName && (
+                <p className="text-bronze-deep text-xs">
+                  还没有选择文件夹。选一次之后会被记住，以后直接点「保存快照」即可。
+                </p>
+              )}
+
+              {folderName && snapshots.length > 0 && (
+                <ul className="space-y-2">
+                  {snapshots.map((s) => (
+                    <li
+                      key={s.name}
+                      className="flex items-center gap-2 px-3 py-2 rounded-card border border-line/40"
+                      style={{ background: 'rgba(42,41,46,0.5)' }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-[11px] text-paper truncate-1">
+                          {s.name.replace('vidaos-snapshot-', '')}
+                        </p>
+                        <p className="font-mono text-[10px] text-bronze-deep mt-0.5">
+                          {new Date(s.createdAt).toLocaleString('zh-CN')} · {humanBytes(s.bytes)} · 文章 {s.counts.articles} · 动态 {s.counts.moments} · 信件 {s.counts.letters} · 便签 {s.counts.notes}
+                          {s.fileCount ? ` · 媒体 ${s.fileCount}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => doRestore(s.name)}
+                        aria-label="用这份快照恢复"
+                        title="用这份快照恢复"
+                        className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle"
+                      >
+                        <RotateCcw size={13} strokeWidth={1.6} />
+                      </button>
+                      <button
+                        onClick={() => doDeleteSnapshot(s.name)}
+                        aria-label="删除这份快照"
+                        title="删除这份快照"
+                        className="w-7 h-7 flex items-center justify-center text-bronze hover:text-wine-bright"
+                      >
+                        <Trash2 size={13} strokeWidth={1.6} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {folderName && snapshots.length === 0 && (
+                <p className="text-bronze-deep text-xs">还没有快照，点「保存快照」开始备份。</p>
+              )}
+            </>
+          )}
         </Card>
 
         {/* 危险区 */}

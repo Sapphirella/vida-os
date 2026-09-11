@@ -127,7 +127,7 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
   };
 }
 
-function collectFileIds(state: AppState): Set<string> {
+export function collectFileIds(state: AppState): Set<string> {
   const ids = new Set<string>();
   state.articles.forEach((a) => {
     a.imageIds.forEach((id) => ids.add(id));

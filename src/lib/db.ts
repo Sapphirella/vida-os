@@ -6,12 +6,20 @@ import { DEFAULT_BACKGROUND_PRESET } from './backgrounds';
 class VidaDB extends Dexie {
   state!: Table<{ id: string; data: AppState }, string>;
   files!: Table<MediaFile, string>;
+  /** 杂项（如本地备份文件夹句柄）；只放可结构化克隆的值 */
+  meta!: Table<{ id: string; value: unknown }, string>;
 
   constructor() {
     super('vidaos');
     this.version(1).stores({
       state: 'id',
       files: 'id, createdAt',
+    });
+    // v2 仅新增 meta 表，已有 state/files 数据自动保留
+    this.version(2).stores({
+      state: 'id',
+      files: 'id, createdAt',
+      meta: 'id',
     });
   }
 }
