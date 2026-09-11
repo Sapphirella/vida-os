@@ -191,7 +191,7 @@ VidaOS/
 │   │   ├── home/                # Clock / Feature / Calendar / DaySchedule / Music
 │   │   ├── notes/               # Segmented / CategoryChips / Inspiration / Schedule / Todo / ScheduleEditor
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
-│   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
+│   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage / ErrorBoundary
 │   └── pages/                   # 路由页面
 │       ├── DeskPage.tsx
 │       ├── NotesPage.tsx
@@ -437,6 +437,14 @@ git commit -m "feat: ..."
 ---
 
 ## 变更日志（Changelog）
+
+### [v3.0-errorboundary] - 2026-09-11 —— 新增错误边界，杜绝白屏
+- 新增 `src/components/common/ErrorBoundary.tsx`（class 组件），提供**两层**保护：
+  - **最外层（`variant="fullscreen"`，挂在 `main.tsx` 的 `HashRouter` 之外）**：兜住 App / 路由自身的错误，整屏显示恢复界面；
+  - **页面级（`variant="inline"`，挂在 `App.tsx` 的 `<Routes>` 外层，`resetKey={location.pathname}`）**：单个页面崩溃时**顶栏与底部 Tab 仍然可用**，可以切到别的页面继续用，切换路由后自动复位。
+- 恢复界面提供四个操作：**重试**（仅复位边界状态）、**回到桌面**（`#/desk`）、**重新加载页面**、**复制错误详情**（含 message / stack / componentStack；剪贴板不可用时退化为输出到控制台）；并有可折叠的「技术详情」。
+- `componentDidCatch` 会同时 `console.error` 一份，便于排查。
+- **实测（无头浏览器）**：临时让 `NotesPage` 渲染期抛错 → 点「便签」显示错误页、顶栏与底部 Tab 仍在、错误信息与堆栈齐全；**再点「桌面」成功恢复**；再回便签又正常显示错误页（不会永久卡死）。另临时让外壳组件 `Background` 抛错 → 最外层整屏兜底生效、页面非空白。
 
 ### [v3.0-critical] - 2026-09-11 —— 修复两个致命缺陷（白屏 + 数据不落库）
 - **点击任意 Tab 白屏**：`App.tsx` 两个 effect 互相 ping-pong（`currentTab ↔ settings.lastTab`）触发 React `Maximum update depth exceeded` 并卸载整棵树。改为「恢复上次 tab 只执行一次」+「写回 lastTab 单向且等 hydrated」，已用无头浏览器模拟点击验证四个 tab 全部正常、0 错误；

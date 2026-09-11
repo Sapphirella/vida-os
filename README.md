@@ -210,7 +210,7 @@ VidaOS/
 │   │   ├── home/                # 桌面页：Clock / Feature / Calendar / DaySchedule / Music
 │   │   ├── notes/               # Segmented / CategoryChips / Inspiration / Schedule / Todo
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
-│   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
+│   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage / ErrorBoundary
 │   └── pages/                   # 11 个路由页面
 │       ├── DeskPage.tsx
 │       ├── NotesPage.tsx
