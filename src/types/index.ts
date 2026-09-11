@@ -108,6 +108,8 @@ export interface Categories {
 
 export interface Settings {
   lastTab: 'desk' | 'notes' | 'data' | 'settings';
+  /** 皮肤 key（见 src/lib/skins.ts）；缺省＝暗夜书房 */
+  skin?: string;
 }
 
 export interface AppState {

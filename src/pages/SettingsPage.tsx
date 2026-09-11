@@ -6,14 +6,18 @@ import { useUIStore } from '@/stores/useUIStore';
 import { MediaImage } from '@/components/common/MediaImage';
 import { putFile, deleteFile } from '@/lib/db';
 import { uid, compressImage } from '@/lib/utils';
-import { PRESET_BACKGROUNDS, DEFAULT_BACKGROUND_PRESET } from '@/lib/backgrounds';
+import { PRESET_BACKGROUNDS, DEFAULT_BACKGROUND_PRESET, getBackgroundPreset } from '@/lib/backgrounds';
+import { SKINS, DEFAULT_SKIN, getSkin } from '@/lib/skins';
 
 export function SettingsPage() {
   const profile = useAppStore((s) => s.profile);
   const updateProfile = useAppStore((s) => s.updateProfile);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  const skin = useAppStore((s) => s.settings.skin);
   const showToast = useUIStore((s) => s.showToast);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const activePreset = getBackgroundPreset(profile.backgroundPreset);
   const [name, setName] = useState(profile.name);
   const [signature, setSignature] = useState(profile.signature);
 
@@ -138,7 +142,40 @@ export function SettingsPage() {
         {/* 背景 */}
         <Card className="p-5 sm:p-6">
           <h3 className="font-serif text-moon text-lg mb-1">背景</h3>
-          <p className="font-sans text-bronze text-xs mb-4">桌面与个人主页的背景</p>
+          <p className="font-sans text-bronze text-xs mb-3">
+            页面底层的背景。当前：
+            <span className="text-amber">
+              {profile.backgroundFileId ? '自定义图片' : `「${activePreset.name}」`}
+            </span>
+          </p>
+          {/* 大预览：让「换背景」这件事一眼可见（卡片会遮住大部分真实背景） */}
+          <div
+            className="h-24 rounded-card overflow-hidden border border-line/60 mb-3 relative"
+            style={{
+              background: profile.backgroundFileId
+                ? 'rgba(42,41,46,0.7)'
+                : activePreset.gradient,
+            }}
+          >
+            <div
+              className="absolute inset-x-0 bottom-0 h-1/2"
+              style={{
+                background:
+                  'radial-gradient(ellipse 80% 90% at 50% 120%, rgba(232,195,158,0.28), transparent 70%)',
+              }}
+            />
+            <span className="absolute top-2 left-3 font-mono text-[10px] tracking-[0.2em] uppercase text-moon/85">
+              preview
+            </span>
+            <span
+              className="absolute bottom-2 left-3 font-serif text-sm"
+              style={{ color: profile.backgroundFileId ? '#F2EBE0' : '#3A2A1A' }}
+            >
+              {profile.backgroundFileId
+                ? '自定义图片（已设置）'
+                : `预览：${activePreset.name}`}
+            </span>
+          </div>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
             {PRESET_BACKGROUNDS.map((bg) => {
               const active = profile.backgroundPreset === bg.key && !profile.backgroundFileId;
@@ -179,6 +216,61 @@ export function SettingsPage() {
             )}
             <input ref={bgInputRef} type="file" accept="image/*" hidden onChange={handleBackground} />
           </div>
+        </Card>
+
+        {/* 皮肤 */}
+        <Card className="p-5 sm:p-6">
+          <h3 className="font-serif text-moon text-lg mb-1">皮肤</h3>
+          <p className="font-sans text-bronze text-xs mb-4 leading-relaxed">
+            换掉全局卡片的配色。当前：
+            <span className="text-amber">「{getSkin(skin).name}」</span>
+            。想让整页也亮起来，可以把上面的「背景」一起换成「旧纸」。
+          </p>
+          <div className="space-y-2">
+            {SKINS.map((sk) => {
+              const active = getSkin(skin).key === sk.key;
+              return (
+                <button
+                  key={sk.key}
+                  onClick={() => {
+                    updateSettings({ skin: sk.key });
+                    showToast(`已切换到「${sk.name}」`, 'success');
+                  }}
+                  aria-pressed={active}
+                  className={`w-full flex items-center gap-3 p-3 rounded-card border text-left transition-all ${
+                    active ? 'border-amber scale-[0.99]' : 'border-line/40 hover:border-bronze/40'
+                  }`}
+                  style={{ background: 'rgba(42,41,46,0.45)' }}
+                >
+                  {/* 名字 + 说明 */}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-serif text-moon text-base">
+                      {active ? '✓ ' : ''}
+                      {sk.name}
+                      <span className="font-mono text-[9px] text-bronze-deep ml-2 tracking-widest">
+                        {sk.key}
+                      </span>
+                    </p>
+                    <p className="font-sans text-bronze text-[11px] mt-0.5 leading-relaxed">
+                      {sk.desc}
+                    </p>
+                  </div>
+                  {/* 卡片配色预览 */}
+                  <div
+                    className="w-14 h-10 rounded-card flex items-center justify-center flex-shrink-0 border border-line/50"
+                    style={{ background: sk.cardBg }}
+                  >
+                    <span className="font-serif text-[13px]" style={{ color: sk.textColor }}>
+                      Aa
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="font-mono text-[10px] text-bronze-deep mt-3">
+            默认皮肤为 {DEFAULT_SKIN}；想删掉某个皮肤，直接说皮肤名字即可。
+          </p>
         </Card>
 
         {/* 关于 */}

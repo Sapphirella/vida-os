@@ -458,6 +458,22 @@ textarea, input, [contenteditable] {
 .prose-moment ul, .prose-moment ol { margin: 0.5em 0; }
 .prose-moment blockquote { margin: 0.8em 0; }
 
+/* 正文里内嵌的本地图片（fileRef:） */
+.prose-vidaos img.vd-inline-img {
+  margin: 1.2em auto;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+}
+.vd-missing-img {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: var(--bronze);
+  background: rgba(140, 17, 23, 0.12);
+  border: 1px dashed rgba(140, 17, 23, 0.4);
+}
+
 /* 查找命中高亮（动态页的查找/替换） */
 mark.vd-mark {
   background: rgba(201, 160, 99, 0.45);
@@ -494,3 +510,74 @@ input, textarea, select {
   border: none;
   outline: none;
 }
+
+/* ============================================================
+   皮肤（配色方案）
+   通过 <html data-skin="..."> 生效，见 src/lib/skins.ts
+   浅色皮肤需要把卡片内的 Tailwind 固定色工具类覆盖成深色文字，
+   因此这里用后代选择器 + :is() 提高优先级。
+   ============================================================ */
+
+/* ── 烛光纸页：卡片 #E8C39E ── */
+:root[data-skin='candle-paper'] {
+  --card-bg: #E8C39E;
+  --card-bg-elevated: #F1D5B8;
+  --card-border: rgba(74, 63, 60, 0.32);
+  --card-glow: rgba(255, 255, 255, 0.55);
+  --text-paper: #2A2118;
+  --text-moon: #1B1A1F;
+  --text-bronze: #6B5443;
+  --text-bronze-deep: #8A7460;
+}
+
+/* ── 旧羊皮：卡片 #D8C3A8 ── */
+:root[data-skin='parchment'] {
+  --card-bg: #D8C3A8;
+  --card-bg-elevated: #E4D2BB;
+  --card-border: rgba(74, 63, 60, 0.32);
+  --card-glow: rgba(255, 255, 255, 0.5);
+  --text-paper: #2A2118;
+  --text-moon: #1B1A1F;
+  --text-bronze: #6B5443;
+  --text-bronze-deep: #8A7460;
+}
+
+/* 卡片内文字转深色（浅色皮肤共用） */
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-paper { color: #2A2118; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-paper-dim { color: #5A4A3C; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-moon { color: #1B1A1F; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-bronze { color: #6B5443; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-bronze-deep { color: #8A7460; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-bronze-light { color: #6B5443; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-candle { color: #6A080E; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-amber { color: #8C5A12; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-wine-light { color: #6A080E; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .text-ash { color: #7A675F; }
+
+/* 卡片内 Markdown 正文 */
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos { color: #2A2118; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos h1,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos h2,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos h3,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos h4,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos strong { color: #1B1A1F; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos a,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos em { color: #6A080E; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos code {
+  color: #4A0608;
+  background: rgba(106, 8, 14, 0.1);
+}
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) .glass-card .prose-vidaos blockquote { color: #6B5443; }
+
+/* 顶栏 / 底栏：浅色皮肤下一并提亮，否则整屏还是发暗 */
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) header,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) nav {
+  background: rgba(232, 195, 158, 0.95) !important;
+  border-color: rgba(74, 63, 60, 0.28) !important;
+}
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) header .text-moon,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) nav .text-candle { color: #1B1A1F !important; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) header .text-bronze-deep,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) nav .text-bronze,
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) nav .text-paper { color: #6B5443 !important; }
+:root:is([data-skin='candle-paper'], [data-skin='parchment']) nav .text-bronze:hover { color: #2A2118 !important; }
