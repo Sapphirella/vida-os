@@ -8,6 +8,7 @@ import { Background } from '@/components/layout/Background';
 import { EditorOverlay } from '@/components/editor/EditorOverlay';
 import { Toast } from '@/components/common/Toast';
 import { Modal } from '@/components/common/Modal';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 import { DeskPage } from '@/pages/DeskPage';
 import { NotesPage } from '@/pages/NotesPage';
@@ -78,20 +79,24 @@ function App() {
       <TopBar />
 
       <main className="flex-1 pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(72px+env(safe-area-inset-bottom))]">
-        <Routes>
-          <Route path="/" element={<DeskPage />} />
-          <Route path="/desk" element={<DeskPage />} />
-          <Route path="/notes" element={<NotesPage />} />
-          <Route path="/data" element={<DataPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/space" element={<SpacePage />} />
-          <Route path="/space/collection/:id" element={<CollectionPage />} />
-          <Route path="/space/article/:id" element={<ArticleReaderPage />} />
-          <Route path="/moments" element={<MomentsPage />} />
-          <Route path="/mailbox" element={<MailboxPage />} />
-          <Route path="/mailbox/letter/:id" element={<LetterReaderPage />} />
-          <Route path="/favorites" element={<FavoritesPage />} />
-        </Routes>
+        {/* 页面级边界：单个页面崩溃时顶栏与底部 Tab 仍然可用，可以切走；
+            resetKey 传路由，切换 tab 后自动复位 */}
+        <ErrorBoundary variant="inline" resetKey={location.pathname}>
+          <Routes>
+            <Route path="/" element={<DeskPage />} />
+            <Route path="/desk" element={<DeskPage />} />
+            <Route path="/notes" element={<NotesPage />} />
+            <Route path="/data" element={<DataPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/space" element={<SpacePage />} />
+            <Route path="/space/collection/:id" element={<CollectionPage />} />
+            <Route path="/space/article/:id" element={<ArticleReaderPage />} />
+            <Route path="/moments" element={<MomentsPage />} />
+            <Route path="/mailbox" element={<MailboxPage />} />
+            <Route path="/mailbox/letter/:id" element={<LetterReaderPage />} />
+            <Route path="/favorites" element={<FavoritesPage />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
 
       <BottomTabBar />
