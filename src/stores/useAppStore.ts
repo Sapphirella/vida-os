@@ -55,6 +55,8 @@ interface Actions {
   addMoment: (moment: Omit<Moment, 'id' | 'createdAt'>) => string;
   updateMoment: (id: string, patch: Partial<Moment>) => void;
   deleteMoment: (id: string) => void;
+  addMomentComment: (momentId: string, content: string, author?: string) => string;
+  deleteMomentComment: (momentId: string, commentId: string) => void;
 
   // 信件
   addLetter: (letter: Omit<Letter, 'id' | 'createdAt' | 'unread'>) => string;
@@ -227,6 +229,32 @@ export const useAppStore = create<Store>((set, get) => ({
     set((s) => ({
       moments: s.moments.filter((m) => m.id !== id),
       favorites: s.favorites.filter((f) => !(f.refType === 'moment' && f.refId === id)),
+    }));
+    persist(get());
+  },
+  // 动态评论
+  addMomentComment: (momentId, content, author) => {
+    const id = uid('cmt_');
+    set((s) => ({
+      moments: s.moments.map((m) =>
+        m.id === momentId
+          ? {
+              ...m,
+              comments: [...(m.comments ?? []), { id, content, createdAt: now(), author }],
+            }
+          : m,
+      ),
+    }));
+    persist(get());
+    return id;
+  },
+  deleteMomentComment: (momentId, commentId) => {
+    set((s) => ({
+      moments: s.moments.map((m) =>
+        m.id === momentId
+          ? { ...m, comments: (m.comments ?? []).filter((c) => c.id !== commentId) }
+          : m,
+      ),
     }));
     persist(get());
   },

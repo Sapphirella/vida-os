@@ -28,11 +28,22 @@ export interface Article {
   updatedAt: number;
 }
 
+/** 动态下的一条评论（本应用为单人使用，作者默认就是自己） */
+export interface MomentComment {
+  id: string;
+  content: string;
+  createdAt: number;
+  /** 可选署名；留空则显示个人资料里的昵称 */
+  author?: string;
+}
+
 export interface Moment {
   id: string;
   content: string;
   imageIds: string[];
   createdAt: number;
+  /** 旧数据可能没有这个字段，读取时请用 ?? [] 兜底 */
+  comments?: MomentComment[];
 }
 
 export interface Letter {

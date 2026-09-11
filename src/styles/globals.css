@@ -458,6 +458,19 @@ textarea, input, [contenteditable] {
 .prose-moment ul, .prose-moment ol { margin: 0.5em 0; }
 .prose-moment blockquote { margin: 0.8em 0; }
 
+/* 查找命中高亮（动态页的查找/替换） */
+mark.vd-mark {
+  background: rgba(201, 160, 99, 0.45);
+  color: var(--moon);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+mark.vd-mark-active {
+  background: var(--amber);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--candle);
+}
+
 /* 链接默认样式 */
 a {
   color: inherit;
