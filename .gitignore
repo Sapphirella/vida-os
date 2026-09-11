@@ -2,6 +2,7 @@ node_modules
 dist
 dist-ssr
 *.local
+*.tsbuildinfo
 
 # 编辑器
 .vscode/*
