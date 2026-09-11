@@ -373,101 +373,124 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 }
 
 /**
- * 把 nodes 依次放进 target，直到放不下为止。
- * 返回「没能放进去的节点」（含被拆开的后半截）。
- *
- * 注意：这里必须按「节点」拆分，不能把块压成纯文本 —— 早先用 textContent
- * 切分会把块内的 <img> 和段落结构全部抹掉，导致 PDF 丢图而且排版被压扁。
+/**
+ * 量一个节点的占位高度（含上下外边距）。
+ * 这个函数会触发布局，必须在「不修改 DOM」的时机批量调用；否则每加一个节点
+ * 就量一次会造成成千上万次强制同步重排 —— 长文导出时页面会直接失去响应。
  */
-function fillNodes(
-  nodes: Node[],
-  target: HTMLElement,
-  page: HTMLElement,
-  maxH: number,
-): Node[] {
-  for (let i = 0; i < nodes.length; i += 1) {
-    const node = nodes[i];
-    const added = node.cloneNode(true);
-    target.appendChild(added);
-    if (page.scrollHeight <= maxH) continue;
-
-    // 放不下：撤掉，尝试只放一部分
-    target.removeChild(added);
-    const rest = splitInto(node, target, page, maxH);
-    const remaining = nodes.slice(i + 1).map((n) => n.cloneNode(true));
-    if (rest) remaining.unshift(rest);
-    return remaining;
+function nodeHeight(node: Node): number {
+  if (node.nodeType === Node.TEXT_NODE) {
+    if (!node.nodeValue || !node.nodeValue.trim()) return 0;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const rects = range.getClientRects();
+    if (rects.length === 0) return 0;
+    return rects[rects.length - 1].bottom - rects[0].top;
   }
-  return [];
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return rect.height + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+  }
+  return 0;
+}
+
+/** 一个排版单元：节点 + 高度 + 从外层块到它父级的空壳（用于重建嵌套结构） */
+interface PdfUnit {
+  node: Node;
+  h: number;
+  shells: HTMLElement[];
 }
 
 /**
- * 尽量把 node 的一部分放进 target，返回剩下的部分（null ＝ 全部放得下）。
- * - 文本节点：二分找最长可放下的前缀，并尽量在空白/句读处断开
- * - 元素节点：保留标签与其样式，递归处理子节点（图片、段落结构都不会丢）
- * - 空元素（如 <img>）：无法拆分，整体留到下一页
+ * 把内容摊平成「能整体挪动的单元」。
+ * 高度超过一整页的元素继续下钻到子节点，直到每块都放得进一页 ——
+ * 之后装箱只靠算术累加，不需要反复测量。
+ * 下钻用 cloneNode(false) 保留标签与样式做「空壳」，重建时结构不会丢
+ * （早先用 textContent 切分会把 <img> 和段落结构抹掉，导致 PDF 丢图、排版被压扁）。
  */
-function splitInto(
-  node: Node,
-  target: HTMLElement,
-  page: HTMLElement,
-  maxH: number,
-): Node | null {
-  if (node.nodeType === Node.TEXT_NODE) {
-    const text = node.nodeValue ?? '';
-    if (!text) return null;
-    const holder = document.createTextNode('');
-    target.appendChild(holder);
-    let lo = 1;
-    let hi = text.length;
-    let best = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      holder.nodeValue = text.slice(0, mid);
-      if (page.scrollHeight <= maxH) {
-        best = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
+function flattenUnits(node: Node, shells: HTMLElement[], max: number, out: PdfUnit[]): void {
+  const h = nodeHeight(node);
+  const isEl = node.nodeType === Node.ELEMENT_NODE;
+  const hasKids = isEl && (node as HTMLElement).childNodes.length > 0;
+  if (h <= max || !hasKids) {
+    out.push({ node, h, shells });
+    return;
+  }
+  const shell = (node as HTMLElement).cloneNode(false) as HTMLElement;
+  const nextShells = [...shells, shell];
+  Array.from((node as HTMLElement).childNodes).forEach((child) =>
+    flattenUnits(child, nextShells, max, out),
+  );
+}
+
+/** 按空壳链把单元放回页面，返回挂在页面上的顶层节点 */
+function appendUnit(page: HTMLElement, unit: PdfUnit): Node {
+  const clones = unit.shells.map((sh) => sh.cloneNode(false) as HTMLElement);
+  const leaf = unit.node.cloneNode(true);
+  if (clones.length === 0) {
+    page.appendChild(leaf);
+    return leaf;
+  }
+  page.appendChild(clones[0]);
+  for (let i = 1; i < clones.length; i += 1) clones[i - 1].appendChild(clones[i]);
+  clones[clones.length - 1].appendChild(leaf);
+  return clones[0];
+}
+
+/**
+ * 文本节点比一整页还长时的兜底：二分找出放得下的最长前缀，
+ * 并尽量在空白/句读处断开。只在「该单元单独占一页仍放不下」时才会走到，
+ * 此时页面上没有别的内容，二分次数有限，不会卡。
+ */
+function splitTextUnit(unit: PdfUnit, page: HTMLElement): PdfUnit | null {
+  const text = unit.node.nodeValue ?? '';
+  if (!text.trim()) return null;
+
+  const clones = unit.shells.map((sh) => sh.cloneNode(false) as HTMLElement);
+  let host: HTMLElement = page;
+  clones.forEach((c, i) => {
+    (i === 0 ? page : clones[i - 1]).appendChild(c);
+    host = c;
+  });
+  const holder = document.createTextNode('');
+  host.appendChild(holder);
+
+  let lo = 1;
+  let hi = text.length;
+  let best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    holder.nodeValue = text.slice(0, mid);
+    if (page.scrollHeight <= PDF_PAGE_H) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
     }
-    let cut = best;
-    const soft = Math.max(
-      text.lastIndexOf(' ', cut),
-      text.lastIndexOf('\n', cut),
-      text.lastIndexOf('。', cut),
-      text.lastIndexOf('，', cut),
-      text.lastIndexOf('、', cut),
-    );
-    if (soft > cut * 0.6) cut = soft + 1;
-    holder.nodeValue = text.slice(0, cut);
-    const rest = text.slice(cut);
-    if (!rest) return null;
-    return document.createTextNode(rest);
   }
 
-  if (node.nodeType === Node.ELEMENT_NODE) {
-    const el = node as HTMLElement;
+  let cut = best;
+  const soft = Math.max(
+    text.lastIndexOf(' ', cut),
+    text.lastIndexOf('\n', cut),
+    text.lastIndexOf('。', cut),
+    text.lastIndexOf('，', cut),
+    text.lastIndexOf('、', cut),
+  );
+  if (soft > cut * 0.6) cut = soft + 1;
 
-    // 无子节点（<img>/<hr> 等）或整体不可拆 → 整块留到下一页
-    if (el.childNodes.length === 0) return el.cloneNode(true);
-
-    const holder = el.cloneNode(false) as HTMLElement;
-    target.appendChild(holder);
-    if (page.scrollHeight > maxH) {
-      // 连空壳都放不下（超大边距等）→ 整块留到下一页
-      target.removeChild(holder);
-      return el.cloneNode(true);
-    }
-    const restChildren = fillNodes(Array.from(el.childNodes), holder, page, maxH);
-    if (restChildren.length === 0) return null;
-    const restEl = el.cloneNode(false) as HTMLElement;
-    restChildren.forEach((c) => restEl.appendChild(c));
-    return restEl;
+  if (cut <= 0) {
+    // 一个字都放不下 → 原样留给下一页（保证一定前进，不会死循环）
+    page.removeChild(clones[0] ?? holder);
+    return unit;
   }
-
-  // 注释等其他节点：整体留到下一页
-  return node.cloneNode(true);
+  holder.nodeValue = text.slice(0, cut);
+  const rest = text.slice(cut);
+  if (!rest) return null;
+  const restNode = document.createTextNode(rest);
+  return { node: restNode, h: nodeHeight(restNode), shells: unit.shells };
 }
 
 export async function exportPDF(state: AppState, scope: ExportScopes = ['articles']): Promise<void> {
@@ -606,57 +629,79 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   });
   await waitForImages(stage);
 
-  const blocks = Array.from(stage.children) as HTMLElement[];
-  const pages: HTMLElement[] = [];
-  let cur = document.createElement('div');
-  cur.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(true)}`;
-  pages.push(cur);
-  document.body.appendChild(cur);
+  // ── 摊平 + 算术装箱 ──
+  // 关键：先把所有块的高度一次性量完（此时不修改 DOM，只触发一次布局），
+  // 之后按高度累加装箱。早先「加一个节点量一次」的写法在长文下会触发几千次
+  // 强制同步重排，直接让页面失去响应（用户点导出后网页无响应）。
+  const units: PdfUnit[] = [];
+  Array.from(stage.childNodes).forEach((n) => flattenUnits(n, [], PDF_INNER_H, units));
 
-  const realPage = () => {
+  const newPage = () => {
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(true)}`;
     document.body.appendChild(el);
     return el;
   };
 
-  const queue: Node[] = blocks.map((b) => b.cloneNode(true));
+  const pages: HTMLElement[] = [];
+  const queue: PdfUnit[] = [...units];
+  const unitOfTop = new Map<Node, PdfUnit>();
+  let cur = newPage();
+  pages.push(cur);
+  let used = 0;
+  let placed: Node[] = [];
   let guard = 0;
-  while (queue.length > 0 && guard++ < 20000) {
-    const block = queue.shift()!;
-    cur.appendChild(block);
-    if (cur.scrollHeight <= PDF_PAGE_H) continue;
 
-    // 放不下
-    cur.removeChild(block);
-    const hadContent = cur.childElementCount > 0;
-    if (hadContent) {
-      // 当前页已有内容 → 换页重试
-      cur = realPage();
-      pages.push(cur);
-      queue.unshift(block);
+  /** 收尾当前页：一页只读一次高度，若溢出就把末尾单元退回队列（上限 500 次防死循环） */
+  const closePage = () => {
+    let n = 0;
+    while (placed.length > 1 && cur.scrollHeight > PDF_PAGE_H && n++ < 500) {
+      const top = placed.pop()!;
+      cur.removeChild(top);
+      const u = unitOfTop.get(top);
+      unitOfTop.delete(top);
+      if (u) queue.unshift(u);
+    }
+  };
+
+  while (queue.length > 0 && guard++ < 20000) {
+    const unit = queue.shift()!;
+
+    // 单元比一整页还高（只可能是超长文本节点）→ 在空页上单独切分
+    if (unit.h > PDF_INNER_H) {
+      if (used > 0) {
+        closePage();
+        cur = newPage();
+        pages.push(cur);
+        used = 0;
+        placed = [];
+      }
+      const rest = splitTextUnit(unit, cur);
+      if (rest) queue.unshift(rest);
+      if (queue.length > 0) {
+        cur = newPage();
+        pages.push(cur);
+        used = 0;
+        placed = [];
+      }
       continue;
     }
 
-    // 空页也放不下 → 按节点拆分
-    const rest = splitInto(block, cur, cur, PDF_PAGE_H);
-    if (rest) {
-      if (cur.childElementCount === 0) {
-        // 拆不动（例如单张超高图片）：直接放上去，接受溢出，保证能前进
-        cur.appendChild(block);
-        if (queue.length > 0) {
-          cur = realPage();
-          pages.push(cur);
-        }
-        continue;
-      }
-      queue.unshift(rest);
-    }
-    if (queue.length > 0) {
-      cur = realPage();
+    // 算术判断放不下 → 换页（不测高度）
+    if (used > 0 && used + unit.h > PDF_INNER_H) {
+      closePage();
+      cur = newPage();
       pages.push(cur);
+      used = 0;
+      placed = [];
     }
+
+    const top = appendUnit(cur, unit);
+    unitOfTop.set(top, unit);
+    placed.push(top);
+    used += unit.h;
   }
+  closePage();
 
   try {
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
@@ -675,7 +720,7 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
       pdf.setFillColor(242, 235, 224);
       pdf.rect(0, 0, A4_W, A4_H, 'F');
       // 页容器已含 64/80 内边距，直接铺满整页，观感与上一版一致
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, A4_W, A4_H);
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.86), 'JPEG', 0, 0, A4_W, A4_H);
     }
     pdf.save(`vidaos-${scopeSlug(scope)}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
   } finally {
