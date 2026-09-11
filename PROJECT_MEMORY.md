@@ -265,6 +265,19 @@ VidaOS/
 
 ### P0 — 功能声称与实现不符
 
+0. **点击任意底部 Tab 导致整页白屏** ✅ **已修复（2026-09-11，无头浏览器实测确认）**
+   - **现象**：点「便签 / 数据 / 设置 / 桌面」任意一个，页面直接空白。
+   - **根因**：`App.tsx` 中两个 effect 互相打架 —— 一个把当前 tab 同步成 `settings.lastTab`，另一个把 `currentTab` 写回 `settings.lastTab`。点击后 `currentTab` 变了而 `lastTab` 仍是旧值，于是形成 ping-pong：`currentTab → lastTab → currentTab …` 无限循环，React 抛 `Maximum update depth exceeded` 并**卸载整棵组件树**（所以是白屏而不是报错页）。
+   - **定位方式**：无头 Chrome 内用 iframe 探针真实模拟点击，抓到堆栈 `at setTab (useUIStore) ← at App.tsx ← commitHookEffectListMount`。
+   - **修复**：把「启动时恢复上次 tab」改为**只执行一次**（`useRef` 守卫），并让「写回 lastTab」保持单向、且等 `hydrated` 之后再写。
+   - **补充**：这是 v3.0 起就存在的缺陷，与本次其它改动无关；此前未被发现是因为点 tab 必然白屏，而直接输入 URL / 刷新反而正常。
+
+0b. **数据持久化从未生效** ✅ **已修复（2026-09-11，实测确认）**
+   - **现象**：写入的内容刷新后全部消失（数据实际从未落库）。
+   - **根因**：`persist(get())` 把**整个 zustand store** 交给了 IndexedDB，而 store 里混着 `hydrate` / `addArticle` 等 **action 函数**，结构化克隆抛 `DataCloneError: ... could not be cloned`；该错误被 `saveState` 的 try/catch 吞掉，只在 console 留一行 `[VidaOS] saveState failed`。
+   - **修复**：新增 `snapshot(store): AppState`，显式只挑 11 个纯数据字段，`persist` 改为写快照。同时把 `hydrated` 从「`s.version === 3 && s.articles !== undefined`」（**该条件恒为 true**，因为 `defaultState()` 就满足它 —— 所以加载动画从未显示、启动时会先闪一帧空数据）改为 store 内显式的运行时布尔标记，并在 `hydrate()` / `resetAll()` / `importState()` 中正确维护。
+   - **实测**：IndexedDB `vidaos/state/root` 记录存在，`settings.lastTab="notes"`，记录内**不含任何函数**；重载后自动恢复到上次的 tab。
+
 1. **月历与日程未联动** ✅ **已修复（2026-09-11）**：原先 `CalendarCard.tsx` 与 `DayScheduleCard.tsx` 各自持有独立 `selected` 本地 state，点击日期只更新日历自己的标签，右侧日程卡永远停在今天。修复方式：把选中日期提升到 `useUIStore.selectedDate`（新增 `setSelectedDate`），两卡共同读写，实现真正的点日期联动。
 2. **首页日程卡「新增」写错类型** ✅ **已修复（2026-09-11）**：原先以 `mode: 'inspiration'` 打开编辑器并派发**无人监听**的 `CustomEvent('open-schedule-editor')`，结果从首页新增日程会创建一条**灵感**便签。修复方式：把便签页原有的日程表单提取为共用组件 `src/components/notes/ScheduleEditor.tsx`，首页卡片改为内联展开该表单并直接调用 `addSchedule()`，同时删除了那个 CustomEvent。
 3. **背景设置完全无效** ✅ **已修复（2026-09-11）**：原先 `Background.tsx` 是硬编码的 `bg-ink` + 烛光渐变层，**从不读取** `profile.backgroundPreset` / `backgroundFileId`。修复方式：预设色卡提取到共用模块 `src/lib/backgrounds.ts`（`PRESET_BACKGROUNDS` / `getBackgroundPreset` / `DEFAULT_BACKGROUND_PRESET`，设置页与背景层共用），`Background.tsx` 改为读取 profile：自定义图经 `fileURL()` 取 objectURL 并以 `background-image` 铺满（外加 62% 暗色蒙版保可读性），否则渲染预设渐变。**已在无头 Chrome 中实测**：渲染出的背景 style 为 `linear-gradient(135deg, rgb(27,26,31) 0%, rgb(52,25,21) 100%)`（即「夜半」预设）。
@@ -384,7 +397,11 @@ devDeps 还含 @types/*、autoprefixer、postcss 等常规工具。
 - `npm run build && npm run preview` 测试生产构建（PWA Service Worker 会注册）。
 
 ### ⚠️ 如何查看应用（不要双击 index.html）
-根目录的 `index.html` **不是**可以双击打开的独立页面，它是 Vite 的入口模板（引用的是 `src/main.tsx` 源码）。用 `file://` 打开必然白屏：
+根目录的 `index.html` **不是**可以双击打开的独立页面，它是 Vite 的入口模板（引用的是 `src/main.tsx` 源码）。用 `file://` 打开必然白屏。
+
+**最简单：双击根目录的 `打开VidaOS.command`** —— 它会自动启动服务并打开浏览器（关掉终端窗口即停止服务）。
+
+手动方式：
 
 ```bash
 npm run dev          # → http://localhost:5173   （开发模式，改代码即时热更新）
@@ -392,7 +409,7 @@ npm run dev          # → http://localhost:5173   （开发模式，改代码�
 npm run build && npm run preview   # → http://localhost:4173   （生产构建 + PWA/SW）
 ```
 
-想不装 Node 直接看，也必须经由 HTTP 服务（例如 `npm run build` 后 `npx serve dist`）。
+想不装 Node 直接看，也必须经由 HTTP 服务（例如 `npm run build` 后 `npx serve dist`）。手机预览：与电脑同一 Wi-Fi，访问终端里打印的 `Network:` 地址（形如 `http://192.168.x.x:5173`）。
 
 ### 常见修改场景
 - **改首页布局**：编辑 `src/components/home/*` 和 `src/pages/DeskPage.tsx`；
@@ -420,6 +437,11 @@ git commit -m "feat: ..."
 ---
 
 ## 变更日志（Changelog）
+
+### [v3.0-critical] - 2026-09-11 —— 修复两个致命缺陷（白屏 + 数据不落库）
+- **点击任意 Tab 白屏**：`App.tsx` 两个 effect 互相 ping-pong（`currentTab ↔ settings.lastTab`）触发 React `Maximum update depth exceeded` 并卸载整棵树。改为「恢复上次 tab 只执行一次」+「写回 lastTab 单向且等 hydrated」，已用无头浏览器模拟点击验证四个 tab 全部正常、0 错误；
+- **数据持久化从未生效**：`persist(get())` 把含 action 函数的整个 store 写进 IndexedDB → `DataCloneError` 被静默吞掉。新增 `snapshot()` 只写纯数据；`hydrated` 改为真实标记（原先的判断恒为 true）。实测 IndexedDB 记录正常且不含函数、重载能恢复上次 tab；
+- **新增 `打开VidaOS.command`**：双击即启动开发服务器并打开浏览器，关窗自动停止服务（已测冷启动/已运行两条分支与 trap 清理）。
 
 ### [v3.0-p0+cleanup] - 2026-09-11 —— 修复全部 P0 缺陷 + 死代码清理
 - **修正文档错误**：本文档决策 #3 曾声称 HashRouter「支持 file:// 直接打开」——**实测证伪**，已改写并新增「如何查看应用」章节（根 `index.html` 是 Vite 入口模板，必须经 HTTP 服务查看）；

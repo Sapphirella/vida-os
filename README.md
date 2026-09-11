@@ -106,6 +106,12 @@ V3.0 的视觉灵感来自一个私人书房里最安静的时刻——老打字
 
 ## ✦ 开始使用
 
+### 最省事的方式：双击 `打开VidaOS.command`
+
+直接双击项目根目录下的 **`打开VidaOS.command`** 即可 —— 它会自动检查依赖、启动服务并打开浏览器。保持那个终端窗口开着就能一直用，关掉窗口服务就停了。
+
+> ⚠️ 不要双击 `index.html`。它是 Vite 的入口模板（引用的是 `src/main.tsx` 源码），用 `file://` 打开必然白屏，必须经由 HTTP 服务访问。
+
 ### 前置要求
 - Node.js ≥ 18
 - 现代浏览器（Chrome 90+ / Safari 14+ / Edge 90+）
@@ -124,6 +130,8 @@ npm run dev
 ```
 
 打开 http://localhost:5173 即可看到。开发模式下 Service Worker 默认不注册。
+
+手机预览：与电脑连同一 Wi-Fi，访问终端里打印的 `Network:` 地址（形如 `http://192.168.x.x:5173`）。
 
 ### 3. 构建生产版本
 
@@ -228,6 +236,7 @@ VidaOS/
 │   ├── preview-v3-space.png
 │   ├── preview-v3-settings.png
 │   └── preview-v3-mobile.png
+├── 打开VidaOS.command             # 双击即启动服务并打开浏览器
 ├── README.md                    # 本文件
 └── PROJECT_MEMORY.md            # 项目记忆与交接文档
 ```
