@@ -129,12 +129,23 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
 
 export function collectFileIds(state: AppState): Set<string> {
   const ids = new Set<string>();
+  // 正文里的 ![x](fileRef:<id>) 也算引用，否则内嵌图片不会被导出/备份
+  const scanText = (text: string) => {
+    for (const m of text.matchAll(/fileRef:([A-Za-z0-9_-]+)/g)) ids.add(m[1]);
+  };
   state.articles.forEach((a) => {
     a.imageIds.forEach((id) => ids.add(id));
     if (a.coverId) ids.add(a.coverId);
+    scanText(a.content);
   });
-  state.moments.forEach((m) => m.imageIds.forEach((id) => ids.add(id)));
-  state.letters.forEach((l) => l.imageIds.forEach((id) => ids.add(id)));
+  state.moments.forEach((m) => {
+    m.imageIds.forEach((id) => ids.add(id));
+    scanText(m.content);
+  });
+  state.letters.forEach((l) => {
+    l.imageIds.forEach((id) => ids.add(id));
+    scanText(l.content);
+  });
   if (state.profile.avatarId) ids.add(state.profile.avatarId);
   if (state.profile.backgroundFileId) ids.add(state.profile.backgroundFileId);
   return ids;
@@ -151,6 +162,14 @@ export function exportMarkdown(state: AppState, scope: ExportScopes = ['articles
   lines.push(`# VidaOS 导出`);
   lines.push(`> 导出时间：${formatDate(new Date(), 'YYYY-MM-DD HH:mm')}`);
   lines.push('');
+
+  // 选了「个人资料」范围时输出昵称/签名
+  if (has.has('profile')) {
+    lines.push(`## 个人资料`);
+    lines.push(`- 昵称：${state.profile.name || '(未填写)'}`);
+    if (state.profile.signature) lines.push(`- 签名：${state.profile.signature}`);
+    lines.push('');
+  }
 
   if (has.has('articles')) {
     if (s.collections.length > 0) {
@@ -252,10 +271,18 @@ export function exportMarkdown(state: AppState, scope: ExportScopes = ['articles
 
 export function exportTXT(state: AppState, scope: ExportScopes = ['all']): string {
   const s = scopedState(state, scope);
+  const has = normalizeScopes(scope);
   const lines: string[] = [];
   lines.push(`VidaOS 导出`);
   lines.push(`导出时间：${formatDate(new Date(), 'YYYY-MM-DD HH:mm')}`);
   lines.push('');
+
+  if (has.has('profile')) {
+    lines.push(`【个人资料】`);
+    lines.push(`昵称：${state.profile.name || '(未填写)'}`);
+    if (state.profile.signature) lines.push(`签名：${state.profile.signature}`);
+    lines.push('');
+  }
 
   s.articles.forEach((a) => {
     lines.push(`【文章】${a.title}`);
@@ -288,16 +315,34 @@ export function exportTXT(state: AppState, scope: ExportScopes = ['all']): strin
 
 // ============================================================
 // PDF 导出
+//
+// 采用「逐页渲染」而不是「渲成一张长图再按像素切」：
+// 先把内容按页装进固定尺寸的页面容器（每页自己量高度），再对每一页单独
+// html2canvas —— 量到的就是渲染出来的，从根上避免把一行字切到两页里。
 // ============================================================
 
-/** A4 尺寸（pt）与页边距 */
 const A4_W = 595.28;
 const A4_H = 841.89;
 const PDF_MARGIN = 24;
-/** 渲染容器的 CSS 宽度（与 container.style.width 保持一致） */
-const PDF_RENDER_W = 720;
+/** 正文栏宽（CSS px） */
+const PDF_CONTENT_W = 620;
 
-/** 把一批 fileId 从 IndexedDB 取出并转成 data URL（PDF 里要内嵌图片） */
+const CONTENT_WPT = A4_W - PDF_MARGIN * 2;
+const CONTENT_HPT = A4_H - PDF_MARGIN * 2;
+const PT_PER_PX = CONTENT_WPT / PDF_CONTENT_W;
+/** 每页可容纳的高度（CSS px） */
+const PDF_PAGE_H = Math.floor(CONTENT_HPT / PT_PER_PX);
+
+const PDF_BG = '#F2EBE0';
+const PDF_FONT =
+  '"EB Garamond", "Lora", Georgia, serif';
+
+/** 页面容器的基础样式（量测与渲染都用它，保证一致） */
+const pageCss = (h?: number) =>
+  `width:${PDF_CONTENT_W}px;${h ? `height:${h}px;` : ''}background:${PDF_BG};color:#1B1A1F;` +
+  `font-family:${PDF_FONT};line-height:1.85;overflow:hidden;`;
+
+/** 把一批 fileId 从 IndexedDB 取出并转成 data URL（PDF 里必须内嵌图片） */
 async function buildImageDataUrls(ids: Set<string>): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   await Promise.all(
@@ -313,7 +358,7 @@ async function buildImageDataUrls(ids: Set<string>): Promise<Map<string, string>
   return map;
 }
 
-/** 等待容器内所有图片解码完成，否则 html2canvas 会漏画 */
+/** 等待容器内所有图片解码完成，否则量高度/渲染都会漏 */
 async function waitForImages(root: HTMLElement): Promise<void> {
   const imgs = Array.from(root.querySelectorAll('img'));
   await Promise.all(
@@ -323,7 +368,6 @@ async function waitForImages(root: HTMLElement): Promise<void> {
           if (img.complete && img.naturalWidth > 0) return resolve();
           img.addEventListener('load', () => resolve(), { once: true });
           img.addEventListener('error', () => resolve(), { once: true });
-          // 兜底：3 秒后不再等待
           setTimeout(resolve, 3000);
         }),
     ),
@@ -331,63 +375,51 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 }
 
 /**
- * 计算「不会切断文字行」的分页位置。
- * 做法：收集容器内每一行文字、每一张图片的纵向区间，把「每个区间的上边界」
- * 作为候选切割点；再贪心地为每一页挑选不超过页高的最大候选点。
- * 这样切点永远落在行与行之间的空隙里，不会把一行字劈成两半。
+ * 把一块「单独一页都放不下」的内容拆成「放得下的部分 + 剩下的部分」。
+ * 只对文本类块生效；图片等无文本的块原样返回（调用前已限制图片最大高度）。
  */
-export function computePageRanges(
-  container: HTMLElement,
-  pageH: number,
-  totalH: number,
-): Array<[number, number]> {
-  const cTop = container.getBoundingClientRect().top;
-  const blocks: Array<[number, number]> = [];
+function splitBlockToFit(
+  block: HTMLElement,
+  page: HTMLElement,
+  maxH: number,
+): [HTMLElement, HTMLElement | null] {
+  const text = block.textContent ?? '';
+  if (!text.trim()) return [block, null];
 
-  // 每一行文字
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  const range = document.createRange();
-  let node: Node | null;
-  while ((node = walker.nextNode())) {
-    if (!node.nodeValue || !node.nodeValue.trim()) continue;
-    range.selectNodeContents(node);
-    const rects = range.getClientRects();
-    for (let i = 0; i < rects.length; i++) {
-      const r = rects[i];
-      if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
+  const probe = block.cloneNode(false) as HTMLElement;
+  page.appendChild(probe);
+  let lo = 1;
+  let hi = text.length;
+  let best = 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    probe.textContent = text.slice(0, mid);
+    if (page.scrollHeight <= maxH) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
     }
   }
-  // 图片（同样不可切断）
-  container.querySelectorAll('img').forEach((img) => {
-    const r = img.getBoundingClientRect();
-    if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
-  });
+  page.removeChild(probe);
 
-  const cands = Array.from(
-    new Set(blocks.map(([t]) => Math.max(1, Math.floor(t - 1)))),
-  ).sort((a, b) => a - b);
+  // 尽量在空白或句读处断开
+  let cut = best;
+  const soft = Math.max(
+    text.lastIndexOf(' ', cut),
+    text.lastIndexOf('\n', cut),
+    text.lastIndexOf('。', cut),
+    text.lastIndexOf('，', cut),
+  );
+  if (soft > cut * 0.6) cut = soft + 1;
 
-  const ranges: Array<[number, number]> = [];
-  let start = 0;
-  let guard = 0;
-  while (start < totalH - 0.5 && guard++ < 5000) {
-    const limit = start + pageH;
-    if (limit >= totalH) {
-      ranges.push([start, totalH]);
-      break;
-    }
-    let end = 0;
-    for (const c of cands) {
-      if (c > start + 1 && c <= limit) end = c;
-      else if (c > limit) break;
-    }
-    // 找不到候选（例如单张超高内容）时只能硬切，避免死循环
-    if (end <= start) end = limit;
-    ranges.push([start, end]);
-    start = end;
-  }
-  if (ranges.length === 0) ranges.push([0, totalH]);
-  return ranges;
+  const head = block.cloneNode(false) as HTMLElement;
+  head.textContent = text.slice(0, cut);
+  const rest = text.slice(cut);
+  if (!rest.trim()) return [head, null];
+  const tail = block.cloneNode(false) as HTMLElement;
+  tail.textContent = rest;
+  return [head, tail];
 }
 
 export async function exportPDF(state: AppState, scope: ExportScopes = ['articles']): Promise<void> {
@@ -396,44 +428,54 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
 
   // 先把要内嵌的图片转成 data URL（Blob 存在 IndexedDB，PDF 必须自带图）
   const dataUrls = await buildImageDataUrls(collectFileIds(s));
-  const imgTag = (id: string, extra = '') =>
-    `<img src="${dataUrls.get(id)}" alt="" style="display:block;max-width:100%;margin:14px auto;border-radius:8px;${extra}" />`;
+  const imgTag = (id: string) =>
+    `<img src="${dataUrls.get(id)}" alt="" style="display:block;max-width:100%;margin:14px auto;border-radius:8px;" />`;
   const imagesOf = (ids: Array<string | undefined>) =>
     Array.from(new Set(ids.filter((x): x is string => !!x && dataUrls.has(x))))
       .map((id) => imgTag(id))
       .join('');
-
-  // 构造临时 DOM
-  const container = document.createElement('div');
-  container.style.cssText = `
-    position: fixed;
-    top: -10000px;
-    left: -10000px;
-    width: ${PDF_RENDER_W}px;
-    padding: 64px 80px;
-    background: #F2EBE0;
-    color: #1B1A1F;
-    font-family: "EB Garamond", "Lora", Georgia, serif;
-    line-height: 1.85;
-  `;
+  /** 正文里的 fileRef:<id> 换成 data URL */
+  const resolveInline = (html: string) =>
+    html.replace(
+      /<img[^>]*src="fileRef:([A-Za-z0-9_-]+)"[^>]*>/g,
+      (_m, id: string) =>
+        dataUrls.has(id)
+          ? imgTag(id)
+          : '<p style="color:#947D75;font-size:12px;text-align:center;">（图片已丢失）</p>',
+    );
 
   let html = `
-    <h1 style="font-family: 'EB Garamond', serif; font-size: 36px; text-align: center; margin: 0 0 8px; color: #1B1A1F; letter-spacing: -0.01em;">
+    <h1 style="font-family:${PDF_FONT};font-size:36px;text-align:center;margin:0 0 8px;color:#1B1A1F;letter-spacing:-0.01em;">
       VidaOS
     </h1>
-    <p style="text-align: center; color: #947D75; font-size: 12px; letter-spacing: 0.1em; margin: 0 0 48px; text-transform: uppercase;">
+    <p style="text-align:center;color:#947D75;font-size:12px;letter-spacing:0.1em;margin:0 0 32px;text-transform:uppercase;">
       ${formatDate(new Date(), 'YYYY · MM · DD')}
     </p>
   `;
 
+  // 个人资料（选了「个人资料」范围时输出）
+  if (has.has('profile')) {
+    const avatar = s.profile.avatarId ? dataUrls.get(s.profile.avatarId) : undefined;
+    html += `
+      <section style="margin:0 0 32px;padding:20px 0;border-top:1px solid #947D75;border-bottom:1px solid #947D75;text-align:center;">
+        ${avatar ? `<img src="${avatar}" alt="" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin:0 auto 12px;display:block;" />` : ''}
+        <p style="font-size:22px;margin:0 0 6px;color:#1B1A1F;">${escapeHTML(s.profile.name || '(未填写昵称)')}</p>
+        ${s.profile.signature ? `<p style="font-size:13px;margin:0;color:#7A675F;font-style:italic;">—— ${escapeHTML(s.profile.signature)}</p>` : ''}
+      </section>
+    `;
+  }
+
+  const h2 = (t: string) =>
+    `<h2 style="font-size:16px;letter-spacing:0.2em;text-transform:uppercase;color:#6A080E;margin:32px 0 16px;border-bottom:1px solid #947D75;padding-bottom:8px;">${t}</h2>`;
+
   if (s.articles.length > 0 && has.has('articles')) {
-    html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">文章</h2>`;
+    html += h2('文章');
     s.articles.forEach((a) => {
       html += `
-        <article style="margin: 32px 0;">
-          <h3 style="font-size: 24px; color: #1B1A1F; margin: 0 0 8px; font-weight: 500;">${escapeHTML(a.title)}</h3>
-          <p style="color: #947D75; font-size: 11px; margin: 0 0 16px; letter-spacing: 0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
-          <div style="font-size: 14px;">${renderMarkdown(a.content)}</div>
+        <article style="margin:32px 0;">
+          <h3 style="font-size:24px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(a.title)}</h3>
+          <p style="color:#947D75;font-size:11px;margin:0 0 16px;letter-spacing:0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
+          <div style="font-size:14px;">${resolveInline(renderMarkdown(a.content))}</div>
           ${imagesOf([a.coverId, ...a.imageIds])}
         </article>
       `;
@@ -441,26 +483,27 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   }
 
   if (s.moments.length > 0 && has.has('moments')) {
-    html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">动态</h2>`;
+    html += h2('动态');
     s.moments.forEach((m) => {
       html += `
-        <div style="margin: 24px 0; padding-left: 16px; border-left: 2px solid #6A080E;">
-          <p style="color: #947D75; font-size: 11px; margin: 0 0 6px; letter-spacing: 0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
-          <div style="font-size: 14px;">${renderMarkdown(m.content)}</div>
+        <div style="margin:24px 0;padding-left:16px;border-left:2px solid #6A080E;">
+          <p style="color:#947D75;font-size:11px;margin:0 0 6px;letter-spacing:0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
+          <div style="font-size:14px;">${resolveInline(renderMarkdown(m.content))}</div>
           ${imagesOf(m.imageIds)}
+          ${(m.comments ?? []).map((c) => `<p style="margin:6px 0 0 12px;font-size:12px;color:#7A675F;">— ${escapeHTML(c.content)}</p>`).join('')}
         </div>
       `;
     });
   }
 
   if (s.letters.length > 0 && has.has('letters')) {
-    html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">信件</h2>`;
+    html += h2('信件');
     s.letters.forEach((l) => {
       html += `
-        <article style="margin: 32px 0;">
-          <h3 style="font-size: 22px; color: #1B1A1F; margin: 0 0 8px; font-weight: 500;">${escapeHTML(l.title || '(无题)')}</h3>
-          <p style="color: #947D75; font-size: 11px; margin: 0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
-          <div style="font-size: 14px;">${renderMarkdown(l.content)}</div>
+        <article style="margin:32px 0;">
+          <h3 style="font-size:22px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(l.title || '(无题)')}</h3>
+          <p style="color:#947D75;font-size:11px;margin:0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
+          <div style="font-size:14px;">${resolveInline(renderMarkdown(l.content))}</div>
           ${imagesOf(l.imageIds)}
         </article>
       `;
@@ -468,90 +511,120 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   }
 
   if (s.notes.inspiration.length > 0 && has.has('notes')) {
-    html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">灵感</h2><ul style="list-style: none; padding: 0;">`;
+    html += h2('灵感') + '<ul style="list-style:none;padding:0;">';
     s.notes.inspiration.forEach((n) => {
-      html += `<li style="margin: 8px 0; padding-left: 16px; border-left: 1px solid #947D75;"><span style="color: #947D75; font-size: 11px; letter-spacing: 0.05em;">[${escapeHTML(n.category)}]</span> ${escapeHTML(n.content)}</li>`;
+      html += `<li style="margin:8px 0;padding-left:16px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:11px;letter-spacing:0.05em;">[${escapeHTML(n.category)}]</span> ${escapeHTML(n.content)}</li>`;
     });
-    html += `</ul>`;
+    html += '</ul>';
   }
 
   if (s.notes.schedule.length > 0 && has.has('notes')) {
-    html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">日程</h2>`;
+    html += h2('日程');
     s.notes.schedule.forEach((n) => {
-      html += `<p style="margin: 6px 0; font-size: 13px;"><span style="color: #947D75; font-size: 11px;">[${n.date}${n.time ? ' ' + n.time : ''}]</span> <strong>${escapeHTML(n.title)}</strong>${n.done ? ' ✓' : ''}</p>`;
+      html += `<p style="margin:6px 0;font-size:13px;"><span style="color:#947D75;font-size:11px;">[${n.date}${n.time ? ' ' + n.time : ''}]</span> <strong>${escapeHTML(n.title)}</strong>${n.done ? ' ✓' : ''}</p>`;
     });
   }
 
   if (s.notes.todo.length > 0 && has.has('notes')) {
-    html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">待办</h2>`;
+    html += h2('待办');
     s.notes.todo.forEach((n) => {
-      html += `<p style="margin: 6px 0; font-size: 13px;">${n.done ? '☑' : '☐'} ${escapeHTML(n.content)}</p>`;
+      html += `<p style="margin:6px 0;font-size:13px;">${n.done ? '☑' : '☐'} ${escapeHTML(n.content)}</p>`;
     });
   }
 
-  container.innerHTML = html;
-  document.body.appendChild(container);
+  if (has.has('favorites') && s.favorites.length > 0) {
+    html += h2('收藏');
+    s.favorites.forEach((f) => {
+      const label =
+        f.refType === 'article'
+          ? state.articles.find((x) => x.id === f.refId)?.title ?? '(已删除)'
+          : f.refType === 'moment'
+            ? plainText(state.moments.find((x) => x.id === f.refId)?.content ?? '').slice(0, 30)
+            : state.letters.find((x) => x.id === f.refId)?.title ?? '(无题)';
+      html += `<p style="margin:6px 0;font-size:13px;">★ ${escapeHTML(label)}</p>`;
+    });
+  }
+
+  // ── 分页：把内容装进固定尺寸的页面容器（在容器里量，量到的就是渲染的）──
+  const stage = document.createElement('div');
+  stage.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss()}`;
+  stage.innerHTML = html;
+  document.body.appendChild(stage);
+  stage.querySelectorAll('img').forEach((img) => {
+    img.style.maxHeight = `${PDF_PAGE_H - 24}px`;
+    img.style.width = 'auto';
+    img.style.maxWidth = '100%';
+    img.style.objectFit = 'contain';
+  });
+  await waitForImages(stage);
+
+  const blocks = Array.from(stage.children) as HTMLElement[];
+  const pages: HTMLElement[] = [];
+  let cur = document.createElement('div');
+  cur.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(PDF_PAGE_H)}`;
+  pages.push(cur);
+  document.body.appendChild(cur);
+
+  const realPage = () => {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(PDF_PAGE_H)}`;
+    document.body.appendChild(el);
+    return el;
+  };
+
+  const queue: HTMLElement[] = blocks.map((b) => b.cloneNode(true) as HTMLElement);
+  let guard = 0;
+  while (queue.length > 0 && guard++ < 20000) {
+    const block = queue.shift()!;
+    cur.appendChild(block);
+    if (cur.scrollHeight <= PDF_PAGE_H) continue;
+    // 放不下
+    cur.removeChild(block);
+    if (cur.childElementCount > 0) {
+      cur = realPage();
+      pages.push(cur);
+      queue.unshift(block);
+      continue;
+    }
+    // 空页都放不下 → 拆开
+    const [head, tail] = splitBlockToFit(block, cur, PDF_PAGE_H);
+    cur.appendChild(head);
+    if (tail) queue.unshift(tail);
+    if (queue.length > 0) {
+      cur = realPage();
+      pages.push(cur);
+    }
+  }
 
   try {
-    // 分页参数：把渲染宽度映射到 A4 的可打印宽度
-    const contentWpt = A4_W - PDF_MARGIN * 2;
-    const contentHpt = A4_H - PDF_MARGIN * 2;
-    const ptPerPx = contentWpt / PDF_RENDER_W;
-    const pageHpx = contentHpt / ptPerPx;
-
-    // 单张图片不得超过一页，否则会被硬切
-    container.querySelectorAll('img').forEach((img) => {
-      img.style.maxHeight = `${Math.floor(pageHpx) - 24}px`;
-      img.style.width = 'auto';
-      img.style.maxWidth = '100%';
-      img.style.objectFit = 'contain';
-    });
-    await waitForImages(container);
-
-    const totalH = container.scrollHeight;
-    const ranges = computePageRanges(container, pageHpx, totalH);
-
-    const canvas = await html2canvas(container, {
-      backgroundColor: '#F2EBE0',
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      windowHeight: totalH,
-      height: totalH,
-    });
-    const pxPerCss = canvas.height / totalH;
-
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-
-    ranges.forEach(([a, b], idx) => {
-      const sy = Math.max(0, Math.floor(a * pxPerCss));
-      const sh = Math.max(1, Math.min(canvas.height - sy, Math.ceil((b - a) * pxPerCss)));
-      const slice = document.createElement('canvas');
-      slice.width = canvas.width;
-      slice.height = sh;
-      const ctx = slice.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = '#F2EBE0';
-      ctx.fillRect(0, 0, slice.width, slice.height);
-      ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
-
-      if (idx > 0) pdf.addPage();
-      // 整页铺米色底，与设计一致
+    for (let i = 0; i < pages.length; i += 1) {
+      const canvas = await html2canvas(pages[i], {
+        backgroundColor: PDF_BG,
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        width: PDF_CONTENT_W,
+        height: PDF_PAGE_H,
+        windowWidth: PDF_CONTENT_W,
+        windowHeight: PDF_PAGE_H,
+      });
+      if (i > 0) pdf.addPage();
       pdf.setFillColor(242, 235, 224);
       pdf.rect(0, 0, A4_W, A4_H, 'F');
       pdf.addImage(
-        slice.toDataURL('image/jpeg', 0.92),
+        canvas.toDataURL('image/jpeg', 0.92),
         'JPEG',
         PDF_MARGIN,
         PDF_MARGIN,
-        contentWpt,
-        sh / pxPerCss * ptPerPx,
+        CONTENT_WPT,
+        CONTENT_HPT,
       );
-    });
-
+    }
     pdf.save(`vidaos-${scopeSlug(scope)}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
   } finally {
-    document.body.removeChild(container);
+    stage.remove();
+    pages.forEach((el) => el.remove());
   }
 }
 

@@ -17,9 +17,13 @@ import {
   Edit3,
   Save,
   Star,
+  Clock,
+  CornerUpLeft,
+  GripVertical,
 } from 'lucide-react';
-import { renderMarkdown, plainText } from '@/lib/markdown';
-import { compressImage, uid, clsx } from '@/lib/utils';
+import { plainText } from '@/lib/markdown';
+import { MarkdownView } from '@/components/common/MarkdownView';
+import { compressImage, uid, clsx, formatDate } from '@/lib/utils';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile } from '@/lib/db';
@@ -30,6 +34,8 @@ interface MarkdownEditorProps {
   title: string;
   initialContent: string;
   initialTitle?: string;
+  /** 动态的发布时间（可编辑） */
+  initialCreatedAt?: number;
   mode: 'article' | 'moment' | 'letter';
   // 文章/动态/信件专用
   imageIds?: string[];
@@ -44,6 +50,7 @@ interface MarkdownEditorProps {
     imageIds: string[];
     collectionId?: string;
     tags?: string[];
+    createdAt?: number;
   }) => void;
   onClose: () => void;
 }
@@ -53,6 +60,7 @@ export function MarkdownEditor({
   title: editorTitle,
   initialContent,
   initialTitle = '',
+  initialCreatedAt,
   mode,
   imageIds: initialImageIds = [],
   collectionId: initialCollectionId,
@@ -67,6 +75,14 @@ export function MarkdownEditor({
   const [collectionId, setCollectionId] = useState<string | undefined>(initialCollectionId);
   const [tags, setTags] = useState<string[]>(initialTags);
   const [tagInput, setTagInput] = useState('');
+  // 动态的发布时间：新建时默认当前时间，可往前调
+  const [createdAt, setCreatedAt] = useState<number>(initialCreatedAt ?? Date.now());
+  /** 拖拽排序中的源下标 */
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  /** 已经插进正文的图片（正文里用 fileRef:<id> 引用），缩略图上会打标记 */
+  const inlineIds = new Set(
+    Array.from(content.matchAll(/fileRef:([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
+  );
   const [mode_, setMode] = useState<'edit' | 'preview'>('edit');
   const [showCollections, setShowCollections] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -102,6 +118,23 @@ export function MarkdownEditor({
     [content],
   );
 
+  /** 在当前光标处插入一段文本 */
+  const insertText = (text: string) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setContent((c) => c + text);
+      return;
+    }
+    const start = ta.selectionStart ?? content.length;
+    const end = ta.selectionEnd ?? start;
+    setContent(content.slice(0, start) + text + content.slice(end));
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + text.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  };
+
   /** 交换两张配图的位置（用于调整文章内图片顺序） */
   const moveImage = (from: number, to: number) => {
     setImageIds((prev) => {
@@ -122,7 +155,14 @@ export function MarkdownEditor({
       showToast('请填写内容', 'error');
       return;
     }
-    onSave({ title: title.trim(), content, imageIds, collectionId, tags });
+    onSave({
+      title: title.trim(),
+      content,
+      imageIds,
+      collectionId,
+      tags,
+      ...(mode === 'moment' ? { createdAt } : {}),
+    });
   };
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,6 +201,21 @@ export function MarkdownEditor({
             {editorTitle}
           </p>
         </div>
+        {mode === 'moment' && (
+          <label className="flex items-center gap-1.5 mr-1" title="发布/记录时间">
+            <Clock size={13} strokeWidth={1.5} className="text-bronze-deep" />
+            <input
+              type="datetime-local"
+              value={formatDate(createdAt, 'YYYY-MM-DDTHH:mm')}
+              onChange={(e) => {
+                const t = new Date(e.target.value).getTime();
+                if (!Number.isNaN(t)) setCreatedAt(t);
+              }}
+              className="px-2 py-1 rounded-pill text-[11px] font-mono text-paper outline-none"
+              style={{ background: 'rgba(42,41,46,0.8)', colorScheme: 'dark' }}
+            />
+          </label>
+        )}
         {favoriteId && (
           <button
             onClick={() => toggleFavorite(favoriteId.refType, favoriteId.refId)}
@@ -326,10 +381,7 @@ export function MarkdownEditor({
         {mode_ === 'preview' && (
           <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 max-w-3xl mx-auto w-full">
             {content.trim() ? (
-              <div
-                className="prose-vidaos"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-              />
+              <MarkdownView markdown={content} />
             ) : (
               <p className="text-bronze-deep italic text-center mt-12">还没有内容</p>
             )}
@@ -344,49 +396,76 @@ export function MarkdownEditor({
       >
         {imageIds.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-[62%] py-1">
-            {imageIds.map((id, i) => (
-              <div
-                key={id}
-                className="relative w-14 h-14 rounded overflow-hidden border border-bronze/20 flex-shrink-0 group"
-              >
-                <MediaImage
-                  fileId={id}
-                  alt={`配图 ${i + 1}`}
-                  className="w-full h-full object-cover"
-                />
-                {/* 序号 */}
-                <span className="absolute top-0 left-0 px-1 font-mono text-[9px] leading-4 text-moon bg-ink/75">
-                  {i + 1}
-                </span>
-                {/* 移除 */}
-                <button
-                  onClick={() => setImageIds(imageIds.filter((x) => x !== id))}
-                  aria-label={`移除第 ${i + 1} 张图片`}
-                  className="absolute top-0 right-0 w-4 h-4 flex items-center justify-center bg-ink/80 text-moon text-[11px] leading-none"
+            {imageIds.map((id, i) => {
+              const inText = inlineIds.has(id);
+              return (
+                <div
+                  key={id}
+                  draggable
+                  onDragStart={() => setDragFrom(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragFrom !== null && dragFrom !== i) moveImage(dragFrom, i);
+                    setDragFrom(null);
+                  }}
+                  onDragEnd={() => setDragFrom(null)}
+                  className={clsx(
+                    'relative w-14 h-14 rounded overflow-hidden border flex-shrink-0 group cursor-grab active:cursor-grabbing',
+                    dragFrom === i ? 'border-candle opacity-60' : 'border-bronze/20',
+                    inText && 'ring-1 ring-amber',
+                  )}
+                  title={inText ? '已插入正文' : '未插入正文（显示在文章下方）'}
                 >
-                  ×
-                </button>
-                {/* 调整顺序 */}
-                <div className="absolute bottom-0 inset-x-0 flex bg-ink/75">
+                  <MediaImage
+                    fileId={id}
+                    alt={`配图 ${i + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  {/* 序号 / 拖拽把手 */}
+                  <span className="absolute top-0 left-0 flex items-center px-0.5 font-mono text-[9px] leading-4 text-moon bg-ink/75">
+                    <GripVertical size={9} strokeWidth={2} />
+                    {i + 1}
+                  </span>
+                  {/* 移除 */}
                   <button
-                    onClick={() => moveImage(i, i - 1)}
-                    disabled={i === 0}
-                    aria-label={`第 ${i + 1} 张左移`}
-                    className="flex-1 h-4 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
+                    onClick={() => setImageIds(imageIds.filter((x) => x !== id))}
+                    aria-label={`移除第 ${i + 1} 张图片`}
+                    className="absolute top-0 right-0 w-4 h-4 flex items-center justify-center bg-ink/80 text-moon text-[11px] leading-none"
                   >
-                    ◀
+                    ×
                   </button>
+                  {/* 插入正文 */}
                   <button
-                    onClick={() => moveImage(i, i + 1)}
-                    disabled={i === imageIds.length - 1}
-                    aria-label={`第 ${i + 1} 张右移`}
-                    className="flex-1 h-4 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
+                    onClick={() => insertText(`\n![图片](fileRef:${id})\n`)}
+                    aria-label={`把第 ${i + 1} 张插入正文`}
+                    title="插入到正文光标处"
+                    className="absolute bottom-0 right-0 w-5 h-5 flex items-center justify-center bg-wine/85 text-moon"
                   >
-                    ▶
+                    <CornerUpLeft size={11} strokeWidth={1.8} />
                   </button>
+                  {/* 调整顺序（触屏友好） */}
+                  <div className="absolute bottom-0 left-0 right-5 flex bg-ink/75">
+                    <button
+                      onClick={() => moveImage(i, i - 1)}
+                      disabled={i === 0}
+                      aria-label={`第 ${i + 1} 张左移`}
+                      className="flex-1 h-5 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
+                    >
+                      ◀
+                    </button>
+                    <button
+                      onClick={() => moveImage(i, i + 1)}
+                      disabled={i === imageIds.length - 1}
+                      aria-label={`第 ${i + 1} 张右移`}
+                      className="flex-1 h-5 flex items-center justify-center text-moon text-[9px] disabled:opacity-25 hover:bg-wine/50"
+                    >
+                      ▶
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         <button

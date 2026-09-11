@@ -2,8 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Edit2, Trash2, Star, Mail } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { renderMarkdown } from '@/lib/markdown';
 import { MediaImage } from '@/components/common/MediaImage';
+import { MarkdownView } from '@/components/common/MarkdownView';
 import { formatDate, chineseWeekday, clsx } from '@/lib/utils';
 
 export function LetterReaderPage() {
@@ -72,10 +72,7 @@ export function LetterReaderPage() {
           </div>
         )}
 
-        <div
-          className="prose-vidaos"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(letter.content) }}
-        />
+        <MarkdownView markdown={letter.content} />
 
         <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-bronze/10">
           <button

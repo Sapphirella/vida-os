@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Star, MessageCircle, Trash2, Send, Search, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Star, MessageCircle, Trash2, Send, Search, X, ChevronUp, ChevronDown, Edit2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { renderMarkdown } from '@/lib/markdown';
+import { MarkdownView } from '@/components/common/MarkdownView';
 import { formatDate, relativeTime, todayKey } from '@/lib/utils';
 import type { Profile } from '@/types';
 
@@ -301,6 +301,16 @@ export function MomentsPage() {
                               </p>
                             </div>
                             <button
+                              onClick={() =>
+                                openEditor({ mode: 'moment', editingId: m.id, open: true })
+                              }
+                              aria-label="编辑动态"
+                              title="编辑（可同时修改时间）"
+                              className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center text-bronze hover:text-candle transition-all"
+                            >
+                              <Edit2 size={13} strokeWidth={1.5} />
+                            </button>
+                            <button
                               onClick={() => {
                                 if (confirm('删除该动态？')) {
                                   deleteMoment(m.id);
@@ -315,11 +325,10 @@ export function MomentsPage() {
                           </div>
 
                           {/* 正文：支持 Markdown；查找时高亮命中 */}
-                          <div
-                            className="prose-vidaos prose-moment"
-                            dangerouslySetInnerHTML={{
-                              __html: highlightHtml(renderMarkdown(m.content), query),
-                            }}
+                          <MarkdownView
+                            markdown={m.content}
+                            className="prose-moment"
+                            htmlTransform={(h) => highlightHtml(h, query)}
                           />
 
                           {/* 配图 */}

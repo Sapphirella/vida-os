@@ -2,8 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Edit2, Trash2, Star, Calendar } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { renderMarkdown } from '@/lib/markdown';
 import { MediaImage } from '@/components/common/MediaImage';
+import { MarkdownView, collectInlineImageIds } from '@/components/common/MarkdownView';
 import { Tag } from '@/components/common/Tag';
 import { formatDate, chineseWeekday } from '@/lib/utils';
 import { clsx } from '@/lib/utils';
@@ -33,8 +33,12 @@ export function ArticleReaderPage() {
     );
   }
 
-  // 封面已在标题下方单独展示，正文配图列表里不再重复
-  const galleryIds = article.imageIds.filter((id) => id !== article.coverId);
+  // 图片统一放在正文下方（不再有任何图片出现在全文上方）；
+  // 已经用 fileRef: 插进正文的图片不在这里重复显示。
+  const inlineIds = new Set(collectInlineImageIds(article.content));
+  const galleryIds = Array.from(
+    new Set([article.coverId, ...article.imageIds].filter((x): x is string => !!x)),
+  ).filter((id) => !inlineIds.has(id));
 
   return (
     <article className="px-4 sm:px-6 view-enter">
@@ -60,14 +64,7 @@ export function ArticleReaderPage() {
           </div>
         </header>
 
-        {/* 封面 */}
-        {article.coverId && (
-          <div className="rounded-card-lg overflow-hidden mb-8 border border-bronze/15">
-            <MediaImage fileId={article.coverId} alt={article.title} className="w-full" />
-          </div>
-        )}
-
-        {/* 配图：上传的图片以 fileId 存在 IndexedDB，此前从未在此渲染 */}
+        {/* 配图：放在正文下方；已插入正文的图不重复 */}
         {galleryIds.length > 0 && (
           <div className="mb-8 space-y-4">
             {galleryIds.map((id, i) => (
@@ -85,11 +82,8 @@ export function ArticleReaderPage() {
           </div>
         )}
 
-        {/* 正文 */}
-        <div
-          className="prose-vidaos"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(article.content) }}
-        />
+        {/* 正文（支持 fileRef: 内嵌本地图片） */}
+        <MarkdownView markdown={article.content} />
 
         {/* 标签 */}
         {article.tags.length > 0 && (
