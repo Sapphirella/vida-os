@@ -13,15 +13,19 @@ import {
   parseJSONImport,
   parseMarkdownImport,
   parseTXTImport,
-  type ExportScope,
+  scopeSlug,
+  ALL_SCOPE_KEYS,
+  type ExportScopeKey,
 } from '@/lib/exportImport';
 
-const SCOPES: { key: ExportScope; label: string; en: string; desc: string }[] = [
-  { key: 'all', label: '全部数据', en: 'All', desc: '完整备份（含图片）' },
+/** 可勾选的导出范围（支持多选） */
+const SCOPES: { key: ExportScopeKey; label: string; en: string; desc: string }[] = [
   { key: 'articles', label: '空间文章', en: 'Articles', desc: '长文 + 合集' },
   { key: 'moments', label: '动态', en: 'Moments', desc: '朋友圈碎片' },
   { key: 'letters', label: '信箱', en: 'Letters', desc: '重要信件' },
   { key: 'notes', label: '便签', en: 'Notes', desc: '灵感 + 日程 + 待办' },
+  { key: 'favorites', label: '收藏夹', en: 'Favorites', desc: '收藏记录 + 被收藏的内容' },
+  { key: 'profile', label: '个人资料', en: 'Profile', desc: '头像 / 昵称 / 签名 / 背景' },
 ];
 
 export function DataPage() {
@@ -30,14 +34,20 @@ export function DataPage() {
   const showToast = useUIStore((s) => s.showToast);
   const showModal = useUIStore((s) => s.showModal);
   const [exporting, setExporting] = useState<string | null>(null);
-  const [scope, setScope] = useState<ExportScope>('all');
+  // 多选：默认全选
+  const [scopes, setScopes] = useState<ExportScopeKey[]>([...ALL_SCOPE_KEYS]);
+  const allSelected = scopes.length === ALL_SCOPE_KEYS.length;
+  const toggleScope = (key: ExportScopeKey) =>
+    setScopes((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const doExportJSON = async () => {
     try {
       setExporting('json');
-      const json = await exportJSON(state, scope);
-      downloadBlob(json, `vidaos-${scope}-${timestamp()}.json`, 'application/json');
+      const json = await exportJSON(state, scopes);
+      downloadBlob(json, `vidaos-${scopeSlug(scopes)}-${timestamp()}.json`, 'application/json');
       showToast('导出成功', 'success');
     } catch (e: any) {
       showToast(`导出失败：${e.message}`, 'error');
@@ -49,8 +59,8 @@ export function DataPage() {
   const doExportMD = () => {
     try {
       setExporting('md');
-      const md = exportMarkdown(state, scope);
-      downloadBlob(md, `vidaos-${scope}-${timestamp()}.md`, 'text/markdown');
+      const md = exportMarkdown(state, scopes);
+      downloadBlob(md, `vidaos-${scopeSlug(scopes)}-${timestamp()}.md`, 'text/markdown');
       showToast('导出成功', 'success');
     } catch (e: any) {
       showToast(`导出失败：${e.message}`, 'error');
@@ -62,8 +72,8 @@ export function DataPage() {
   const doExportTXT = () => {
     try {
       setExporting('txt');
-      const txt = exportTXT(state, scope);
-      downloadBlob(txt, `vidaos-${scope}-${timestamp()}.txt`, 'text/plain');
+      const txt = exportTXT(state, scopes);
+      downloadBlob(txt, `vidaos-${scopeSlug(scopes)}-${timestamp()}.txt`, 'text/plain');
       showToast('导出成功', 'success');
     } catch (e: any) {
       showToast(`导出失败：${e.message}`, 'error');
@@ -75,7 +85,7 @@ export function DataPage() {
   const doExportPDF = async () => {
     try {
       setExporting('pdf');
-      await exportPDF(state, scope);
+      await exportPDF(state, scopes);
       showToast('PDF 已下载', 'success');
     } catch (e: any) {
       showToast(`PDF 失败：${e.message}`, 'error');
@@ -174,25 +184,45 @@ export function DataPage() {
         {/* 范围 */}
         <Card className="p-5">
           <h3 className="font-serif text-moon text-lg mb-1">导出范围</h3>
-          <p className="text-bronze text-xs mb-4">选择要备份的内容</p>
-          <div className="flex flex-wrap gap-2">
-            {SCOPES.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => setScope(s.key)}
-                className={`px-3 py-1.5 rounded-pill text-sm font-serif transition-all ${
-                  scope === s.key
-                    ? 'bg-wine/30 text-candle border border-wine/50'
-                    : 'bg-bronze/8 text-bronze border border-bronze/15 hover:bg-bronze/15'
-                }`}
-              >
-                {s.label}
-                <span className="ml-1.5 font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-                  {s.en}
-                </span>
-              </button>
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-bronze text-xs">可多选，已选 {scopes.length} / {ALL_SCOPE_KEYS.length} 项</p>
+            <button
+              onClick={() => setScopes(allSelected ? [] : [...ALL_SCOPE_KEYS])}
+              className="btn-text"
+            >
+              {allSelected ? '全不选' : '全选'}
+            </button>
           </div>
+          <div className="flex flex-wrap gap-2">
+            {SCOPES.map((s) => {
+              const on = scopes.includes(s.key);
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => toggleScope(s.key)}
+                  aria-pressed={on}
+                  title={s.desc}
+                  className={`px-3 py-1.5 rounded-pill text-sm font-serif transition-all border ${
+                    on
+                      ? 'bg-wine/30 text-candle border-wine/50'
+                      : 'bg-bronze/8 text-bronze border-bronze/15 hover:bg-bronze/15'
+                  }`}
+                >
+                  {/* 勾选标记：让「已选中」一眼可见 */}
+                  <span className={`mr-1 ${on ? 'text-amber' : 'text-bronze-deep'}`}>
+                    {on ? '✓' : '○'}
+                  </span>
+                  {s.label}
+                  <span className="ml-1.5 font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
+                    {s.en}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {scopes.length === 0 && (
+            <p className="text-wine-light text-xs mt-3">请至少选择一项再导出</p>
+          )}
         </Card>
 
         {/* 导出 */}

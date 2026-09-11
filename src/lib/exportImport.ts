@@ -20,7 +20,7 @@ export interface ExportBundle {
   files: Array<{ id: string; mime: string; name: string; dataUrl: string; size: number }>;
 }
 
-export async function exportJSON(state: AppState, scope: ExportScope = 'all'): Promise<string> {
+export async function exportJSON(state: AppState, scope: ExportScopes = ['all']): Promise<string> {
   const scoped = scopedState(state, scope);
   const files = await listFiles();
   const usedFileIds = collectFileIds(scoped);
@@ -50,36 +50,81 @@ export async function exportJSON(state: AppState, scope: ExportScope = 'all'): P
 }
 
 // ============================================================
-// 导出范围
+// 导出范围（支持多选）
 // ============================================================
 
-export type ExportScope =
-  | 'all'
+export type ExportScopeKey =
   | 'articles'
   | 'moments'
   | 'letters'
   | 'notes'
+  | 'favorites'
   | 'profile';
 
-function scopedState(state: AppState, scope: ExportScope): AppState {
-  if (scope === 'all') return state;
-  const base: AppState = {
+/** 'all' 是「全选」的简写；实际参与筛选的是 ExportScopeKey */
+export type ExportScope = ExportScopeKey | 'all';
+export type ExportScopes = ExportScope[];
+
+export const ALL_SCOPE_KEYS: ExportScopeKey[] = [
+  'articles',
+  'moments',
+  'letters',
+  'notes',
+  'favorites',
+  'profile',
+];
+
+/** 把「单选/多选/'all'」统一成实际生效的范围集合 */
+export function normalizeScopes(scope: ExportScopes | ExportScope): Set<ExportScopeKey> {
+  const arr = Array.isArray(scope) ? scope : [scope];
+  if (arr.includes('all')) return new Set(ALL_SCOPE_KEYS);
+  return new Set(arr.filter((s): s is ExportScopeKey => s !== 'all'));
+}
+
+/** 用于文件名：全选时返回 all，否则按固定顺序拼接 */
+export function scopeSlug(scope: ExportScopes | ExportScope): string {
+  const set = normalizeScopes(scope);
+  if (set.size === ALL_SCOPE_KEYS.length) return 'all';
+  if (set.size === 0) return 'none';
+  return ALL_SCOPE_KEYS.filter((k) => set.has(k)).join('+');
+}
+
+export function scopedState(state: AppState, scope: ExportScopes | ExportScope): AppState {
+  const has = normalizeScopes(scope);
+  if (has.size === ALL_SCOPE_KEYS.length) return state;
+
+  // 收藏夹导出：除收藏记录本身，也带上被收藏的内容，否则导出的收藏夹是空壳
+  let favArticles: typeof state.articles = [];
+  let favMoments: typeof state.moments = [];
+  let favLetters: typeof state.letters = [];
+  if (has.has('favorites')) {
+    const refIds = (t: string) =>
+      new Set(state.favorites.filter((f) => f.refType === t).map((f) => f.refId));
+    favArticles = state.articles.filter((a) => refIds('article').has(a.id));
+    favMoments = state.moments.filter((m) => refIds('moment').has(m.id));
+    favLetters = state.letters.filter((l) => refIds('letter').has(l.id));
+  }
+
+  const articles = has.has('articles') ? state.articles : favArticles;
+  const moments = has.has('moments') ? state.moments : favMoments;
+  const letters = has.has('letters') ? state.letters : favLetters;
+
+  return {
     ...state,
-    profile: scope === 'profile' ? state.profile : { name: '', signature: '' },
-    collections: scope === 'articles' ? state.collections : [],
-    articles: scope === 'articles' ? state.articles : [],
-    moments: scope === 'moments' ? state.moments : [],
-    letters: scope === 'letters' ? state.letters : [],
-    favorites: [],
-    notes:
-      scope === 'notes'
-        ? state.notes
-        : { inspiration: [], schedule: [], todo: [] },
+    profile: has.has('profile') ? state.profile : { name: '', signature: '' },
+    // 只导出文章时才带合集；收藏夹导出的文章也尽量带上其所属合集
+    collections: has.has('articles')
+      ? state.collections
+      : state.collections.filter((c) => articles.some((a) => a.collectionId === c.id)),
+    articles,
+    moments,
+    letters,
+    favorites: has.has('favorites') ? state.favorites : [],
+    notes: has.has('notes') ? state.notes : { inspiration: [], schedule: [], todo: [] },
     categories: state.categories,
     tracks: [],
     settings: state.settings,
   };
-  return base;
 }
 
 function collectFileIds(state: AppState): Set<string> {
@@ -99,14 +144,15 @@ function collectFileIds(state: AppState): Set<string> {
 // Markdown 导出
 // ============================================================
 
-export function exportMarkdown(state: AppState, scope: ExportScope = 'articles'): string {
+export function exportMarkdown(state: AppState, scope: ExportScopes = ['articles']): string {
   const s = scopedState(state, scope);
+  const has = normalizeScopes(scope);
   const lines: string[] = [];
   lines.push(`# VidaOS 导出`);
   lines.push(`> 导出时间：${formatDate(new Date(), 'YYYY-MM-DD HH:mm')}`);
   lines.push('');
 
-  if (scope === 'articles' || scope === 'all') {
+  if (has.has('articles')) {
     if (s.collections.length > 0) {
       lines.push(`## 合集`);
       s.collections.forEach((c) => lines.push(`- **${c.name}**${c.desc ? `：${c.desc}` : ''}`));
@@ -127,7 +173,7 @@ export function exportMarkdown(state: AppState, scope: ExportScope = 'articles')
     }
   }
 
-  if (scope === 'moments' || scope === 'all') {
+  if (has.has('moments')) {
     if (s.moments.length > 0) {
       lines.push(`## 动态`);
       s.moments.forEach((m) => {
@@ -139,7 +185,7 @@ export function exportMarkdown(state: AppState, scope: ExportScope = 'articles')
     }
   }
 
-  if (scope === 'letters' || scope === 'all') {
+  if (has.has('letters')) {
     if (s.letters.length > 0) {
       lines.push(`## 信件`);
       s.letters.forEach((l) => {
@@ -154,7 +200,24 @@ export function exportMarkdown(state: AppState, scope: ExportScope = 'articles')
     }
   }
 
-  if (scope === 'notes' || scope === 'all') {
+  if (has.has('favorites') && s.favorites.length > 0) {
+    lines.push(`## 收藏`);
+    s.favorites.forEach((f) => {
+      if (f.refType === 'article') {
+        const a = state.articles.find((x) => x.id === f.refId);
+        lines.push(`- [文章] ${a ? a.title : '(已删除)'}`);
+      } else if (f.refType === 'moment') {
+        const m = state.moments.find((x) => x.id === f.refId);
+        lines.push(`- [动态] ${m ? plainText(m.content).slice(0, 40) : '(已删除)'}`);
+      } else {
+        const l = state.letters.find((x) => x.id === f.refId);
+        lines.push(`- [信件] ${l ? l.title || '(无题)' : '(已删除)'}`);
+      }
+    });
+    lines.push('');
+  }
+
+  if (has.has('notes')) {
     if (s.notes.inspiration.length > 0) {
       lines.push(`## 灵感`);
       s.notes.inspiration.forEach((n) => {
@@ -187,7 +250,7 @@ export function exportMarkdown(state: AppState, scope: ExportScope = 'articles')
 // TXT 导出（纯文本）
 // ============================================================
 
-export function exportTXT(state: AppState, scope: ExportScope = 'all'): string {
+export function exportTXT(state: AppState, scope: ExportScopes = ['all']): string {
   const s = scopedState(state, scope);
   const lines: string[] = [];
   lines.push(`VidaOS 导出`);
@@ -327,8 +390,9 @@ export function computePageRanges(
   return ranges;
 }
 
-export async function exportPDF(state: AppState, scope: ExportScope = 'articles'): Promise<void> {
+export async function exportPDF(state: AppState, scope: ExportScopes = ['articles']): Promise<void> {
   const s = scopedState(state, scope);
+  const has = normalizeScopes(scope);
 
   // 先把要内嵌的图片转成 data URL（Blob 存在 IndexedDB，PDF 必须自带图）
   const dataUrls = await buildImageDataUrls(collectFileIds(s));
@@ -362,7 +426,7 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     </p>
   `;
 
-  if (s.articles.length > 0 && (scope === 'articles' || scope === 'all')) {
+  if (s.articles.length > 0 && has.has('articles')) {
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">文章</h2>`;
     s.articles.forEach((a) => {
       html += `
@@ -376,7 +440,7 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     });
   }
 
-  if (s.moments.length > 0 && (scope === 'moments' || scope === 'all')) {
+  if (s.moments.length > 0 && has.has('moments')) {
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">动态</h2>`;
     s.moments.forEach((m) => {
       html += `
@@ -389,7 +453,7 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     });
   }
 
-  if (s.letters.length > 0 && (scope === 'letters' || scope === 'all')) {
+  if (s.letters.length > 0 && has.has('letters')) {
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">信件</h2>`;
     s.letters.forEach((l) => {
       html += `
@@ -403,7 +467,7 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     });
   }
 
-  if (s.notes.inspiration.length > 0 && (scope === 'notes' || scope === 'all')) {
+  if (s.notes.inspiration.length > 0 && has.has('notes')) {
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">灵感</h2><ul style="list-style: none; padding: 0;">`;
     s.notes.inspiration.forEach((n) => {
       html += `<li style="margin: 8px 0; padding-left: 16px; border-left: 1px solid #947D75;"><span style="color: #947D75; font-size: 11px; letter-spacing: 0.05em;">[${escapeHTML(n.category)}]</span> ${escapeHTML(n.content)}</li>`;
@@ -411,14 +475,14 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
     html += `</ul>`;
   }
 
-  if (s.notes.schedule.length > 0 && (scope === 'notes' || scope === 'all')) {
+  if (s.notes.schedule.length > 0 && has.has('notes')) {
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">日程</h2>`;
     s.notes.schedule.forEach((n) => {
       html += `<p style="margin: 6px 0; font-size: 13px;"><span style="color: #947D75; font-size: 11px;">[${n.date}${n.time ? ' ' + n.time : ''}]</span> <strong>${escapeHTML(n.title)}</strong>${n.done ? ' ✓' : ''}</p>`;
     });
   }
 
-  if (s.notes.todo.length > 0 && (scope === 'notes' || scope === 'all')) {
+  if (s.notes.todo.length > 0 && has.has('notes')) {
     html += `<h2 style="font-size: 16px; letter-spacing: 0.2em; text-transform: uppercase; color: #6A080E; margin: 32px 0 16px; border-bottom: 1px solid #947D75; padding-bottom: 8px;">待办</h2>`;
     s.notes.todo.forEach((n) => {
       html += `<p style="margin: 6px 0; font-size: 13px;">${n.done ? '☑' : '☐'} ${escapeHTML(n.content)}</p>`;
@@ -485,7 +549,7 @@ export async function exportPDF(state: AppState, scope: ExportScope = 'articles'
       );
     });
 
-    pdf.save(`vidaos-${scope}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
+    pdf.save(`vidaos-${scopeSlug(scope)}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
   } finally {
     document.body.removeChild(container);
   }
