@@ -15,10 +15,12 @@ export function EditorOverlay() {
   const addArticle = useAppStore((s) => s.addArticle);
   const updateArticle = useAppStore((s) => s.updateArticle);
   const addMoment = useAppStore((s) => s.addMoment);
+  const updateMoment = useAppStore((s) => s.updateMoment);
   const addLetter = useAppStore((s) => s.addLetter);
   const updateLetter = useAppStore((s) => s.updateLetter);
   const articles = useAppStore((s) => s.articles);
   const letters = useAppStore((s) => s.letters);
+  const moments = useAppStore((s) => s.moments);
 
   if (!editor.open) return null;
 
@@ -30,30 +32,36 @@ export function EditorOverlay() {
     imageIds: string[];
     collectionId?: string;
     tags?: string[];
+    createdAt?: number;
   }) => {
-    const { title, content, imageIds, collectionId } = data;
+    const { title, content, imageIds, collectionId, createdAt } = data;
     const tags = data.tags ?? [];
 
     switch (mode) {
       case 'article': {
-        // 首图自动作封面（README 约定的行为）；已有封面则保留，除非那张图被移除
-        const existing = editingId ? articles.find((a) => a.id === editingId) : undefined;
-        const coverId =
-          existing?.coverId && imageIds.includes(existing.coverId)
-            ? existing.coverId
-            : imageIds[0];
+        // 封面不再自动取首图：图片默认作为正文配图显示在文章下方，
+        // 需要插在正文里可以用编辑器缩略图上的「插入」按钮生成 fileRef: 引用。
         if (editingId) {
-          updateArticle(editingId, { title, content, imageIds, collectionId, tags, coverId });
+          updateArticle(editingId, { title, content, imageIds, collectionId, tags });
           showToast('已更新', 'success');
         } else {
-          addArticle({ title, content, imageIds, collectionId, tags, coverId });
+          addArticle({ title, content, imageIds, collectionId, tags });
           showToast('已发布', 'success');
         }
         break;
       }
       case 'moment': {
-        addMoment({ content, imageIds });
-        showToast('动态已发布', 'success');
+        if (editingId) {
+          updateMoment(editingId, {
+            content,
+            imageIds,
+            ...(createdAt ? { createdAt } : {}),
+          });
+          showToast('已保存', 'success');
+        } else {
+          addMoment({ content, imageIds });
+          showToast('动态已发布', 'success');
+        }
         break;
       }
       case 'letter': {
@@ -76,6 +84,7 @@ export function EditorOverlay() {
   let initialImageIds: string[] = editor.imageIds ?? EMPTY_IDS;
   let initialCollectionId: string | undefined;
   let initialTags: string[] = editor.tags ?? EMPTY_TAGS;
+  let initialCreatedAt = editor.initialCreatedAt;
 
   if (editingId) {
     if (mode === 'article') {
@@ -86,6 +95,13 @@ export function EditorOverlay() {
         initialImageIds = art.imageIds;
         initialCollectionId = art.collectionId;
         initialTags = art.tags;
+      }
+    } else if (mode === 'moment') {
+      const m = moments.find((x) => x.id === editingId);
+      if (m) {
+        initialContent = m.content;
+        initialImageIds = m.imageIds;
+        initialCreatedAt = m.createdAt;
       }
     } else if (mode === 'letter') {
       const l = letters.find((x) => x.id === editingId);
@@ -111,6 +127,7 @@ export function EditorOverlay() {
       title={getEditorTitle(mode, !!editingId)}
       initialContent={initialContent}
       initialTitle={initialTitle}
+      initialCreatedAt={initialCreatedAt}
       mode={mode}
       imageIds={initialImageIds}
       collectionId={initialCollectionId}

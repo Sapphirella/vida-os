@@ -15,6 +15,8 @@ export interface EditorState {
   editingId?: string;
   initialContent?: string;
   initialTitle?: string;
+  /** 动态可顺带修改发布时间 */
+  initialCreatedAt?: number;
   // 文章专用
   collectionId?: string;
   tags?: string[];
