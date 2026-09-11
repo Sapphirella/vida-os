@@ -6,7 +6,6 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md';
   icon?: ReactNode;
   children?: ReactNode;
-  fullWidth?: boolean;
 }
 
 export function Button({
@@ -15,7 +14,6 @@ export function Button({
   icon,
   children,
   className,
-  fullWidth,
   ...rest
 }: ButtonProps) {
   const variantClass = {
@@ -28,7 +26,7 @@ export function Button({
 
   return (
     <button
-      className={clsx(variantClass, fullWidth && 'w-full', className)}
+      className={clsx(variantClass, className)}
       style={sizeStyle}
       {...rest}
     >

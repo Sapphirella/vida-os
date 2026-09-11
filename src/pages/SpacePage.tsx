@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, BookOpen, FolderPlus, Star } from 'lucide-react';
+import { Plus, BookOpen, FolderPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
@@ -7,8 +7,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { plainText, excerpt } from '@/lib/utils';
-import { relativeTime } from '@/lib/utils';
+import { plainText, excerpt, relativeTime } from '@/lib/utils';
 
 export function SpacePage() {
   const navigate = useNavigate();
@@ -16,7 +15,6 @@ export function SpacePage() {
   const collections = useAppStore((s) => s.collections);
   const addCollection = useAppStore((s) => s.addCollection);
   const openEditor = useUIStore((s) => s.openEditor);
-  const showModal = useUIStore((s) => s.showModal);
   const showToast = useUIStore((s) => s.showToast);
 
   const [creating, setCreating] = useState(false);

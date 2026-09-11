@@ -6,10 +6,9 @@ interface MediaImageProps {
   fileId?: string;
   alt?: string;
   className?: string;
-  fallback?: React.ReactNode;
 }
 
-export function MediaImage({ fileId, alt, className, fallback }: MediaImageProps) {
+export function MediaImage({ fileId, alt, className }: MediaImageProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -25,7 +24,7 @@ export function MediaImage({ fileId, alt, className, fallback }: MediaImageProps
     };
   }, [fileId]);
 
-  if (!fileId) return <>{fallback}</>;
+  if (!fileId) return null;
   if (!url) {
     return (
       <div

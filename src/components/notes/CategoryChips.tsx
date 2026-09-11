@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Tag as TagIcon, Plus, X, Edit2, Check } from 'lucide-react';
-import { Tag } from '@/components/common/Tag';
+import { Tag as TagIcon, Plus, X, Check } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { clsx } from '@/lib/utils';

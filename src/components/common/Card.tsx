@@ -7,13 +7,11 @@ interface CardProps {
   elevated?: boolean;
   style?: CSSProperties;
   onClick?: () => void;
-  as?: 'div' | 'button' | 'article' | 'section';
 }
 
-export function Card({ children, className, elevated, style, onClick, as = 'div' }: CardProps) {
-  const Tag: any = as;
+export function Card({ children, className, elevated, style, onClick }: CardProps) {
   return (
-    <Tag
+    <div
       onClick={onClick}
       className={clsx(
         'glass-card',
@@ -24,6 +22,6 @@ export function Card({ children, className, elevated, style, onClick, as = 'div'
       style={style}
     >
       {children}
-    </Tag>
+    </div>
   );
 }

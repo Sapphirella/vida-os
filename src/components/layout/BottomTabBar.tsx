@@ -12,7 +12,6 @@ const TABS: { key: TabKey; label: string; icon: typeof Home; path: string }[] = 
 ];
 
 export function BottomTabBar() {
-  const currentTab = useUIStore((s) => s.currentTab);
   const setTab = useUIStore((s) => s.setTab);
   const navigate = useNavigate();
   const location = useLocation();

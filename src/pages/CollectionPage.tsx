@@ -4,6 +4,7 @@ import { Tag } from '@/components/common/Tag';
 import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { excerpt, plainText, relativeTime } from '@/lib/utils';
 
 export function CollectionPage() {
@@ -143,6 +144,3 @@ export function CollectionPage() {
     </div>
   );
 }
-
-// 重新导入 useUIStore
-import { useUIStore } from '@/stores/useUIStore';

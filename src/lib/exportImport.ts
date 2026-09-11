@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { AppState } from '@/types';
 import { listFiles } from './db';
-import { blobToBase64, base64ToBlob, plainText, formatDate } from './utils';
+import { blobToBase64, plainText, formatDate } from './utils';
 import { renderMarkdown } from './markdown';
 
 // ============================================================
@@ -61,7 +61,7 @@ export type ExportScope =
   | 'notes'
   | 'profile';
 
-export function scopedState(state: AppState, scope: ExportScope): AppState {
+function scopedState(state: AppState, scope: ExportScope): AppState {
   if (scope === 'all') return state;
   const base: AppState = {
     ...state,

@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Check, X, Calendar, Image as ImageIcon } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, Edit2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
 import { EmptyState } from '@/components/common/EmptyState';
 import { CategoryChips } from './CategoryChips';
-import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { uid, now, relativeTime } from '@/lib/utils';
+import { relativeTime } from '@/lib/utils';
 import type { InspirationNote } from '@/types';
 
 export function InspirationView() {
