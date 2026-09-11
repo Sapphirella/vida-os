@@ -36,6 +36,22 @@ V3.0 的视觉灵感来自一个私人书房里最安静的时刻——老打字
 
 ---
 
+## ✦ 界面预览
+
+**桌面（首页）** —— 大时钟 Hero + 功能宫格 + 双卡日历/日程 + 音景播放器
+
+![桌面](docs/preview-v3-desk.png)
+
+| 便签 | 空间 |
+|------|------|
+| ![便签](docs/preview-v3-notes.png) | ![空间](docs/preview-v3-space.png) |
+
+| 设置 | 移动端 |
+|------|--------|
+| ![设置](docs/preview-v3-settings.png) | ![移动端](docs/preview-v3-mobile.png) |
+
+---
+
 ## ✦ 功能一览
 
 ### 桌面（首页）
@@ -97,7 +113,7 @@ V3.0 的视觉灵感来自一个私人书房里最安静的时刻——老打字
 ### 1. 安装依赖
 
 ```bash
-cd /Users/amarisgo/Documents/VidaOS
+cd "/Users/amarisgo/Documents/DeepSeek Harness/VidaOS"
 npm install
 ```
 
@@ -187,7 +203,7 @@ VidaOS/
 │   │   ├── notes/               # Segmented / CategoryChips / Inspiration / Schedule / Todo
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
 │   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
-│   └── pages/                   # 9 个路由页面
+│   └── pages/                   # 11 个路由页面
 │       ├── DeskPage.tsx
 │       ├── NotesPage.tsx
 │       ├── SpacePage.tsx
@@ -201,10 +217,17 @@ VidaOS/
 │       └── SettingsPage.tsx
 ├── index.html
 ├── package.json
+├── package-lock.json            # 依赖锁定（npm ci 可复现安装）
 ├── vite.config.ts               # 含 PWA 配置（vite-plugin-pwa）
 ├── tailwind.config.js           # 暗夜书房色板
 ├── postcss.config.js
 ├── tsconfig.json
+├── docs/                        # 界面预览截图（见上方「界面预览」）
+│   ├── preview-v3-desk.png
+│   ├── preview-v3-notes.png
+│   ├── preview-v3-space.png
+│   ├── preview-v3-settings.png
+│   └── preview-v3-mobile.png
 ├── README.md                    # 本文件
 └── PROJECT_MEMORY.md            # 项目记忆与交接文档
 ```

@@ -11,7 +11,7 @@
 | **项目名称** | VidaOS |
 | **项目类型** | 纯前端单页应用（SPA）—— 个人博客 / 生活记录系统 |
 | **当前版本** | v3.0 — 暗夜书房重构（2026-09-10） |
-| **存放路径** | `/Users/amarisgo/Documents/VidaOS` |
+| **存放路径** | `/Users/amarisgo/Documents/DeepSeek Harness/VidaOS` |
 | **Git 仓库** | 已初始化，`master` 分支 |
 | **技术栈** | Vite 5 + React 18 + TypeScript + TailwindCSS 3 + Zustand + Dexie 4 + vite-plugin-pwa |
 | **设计语言** | 暗夜书房（深色 + 用户色卡 `#BCAEAA / #947D75 / #6A080E / #341915 / #1B1A1F`） |
@@ -94,7 +94,8 @@ VidaOS 不是社交网络，是**私密的个人生活记录空间**。暗色优
 - 持久化：`useAppStore` 状态变更通过 debounce 400ms 后写入 Dexie。
 
 ### 3. 路由：Hash 路由
-- 使用 `HashRouter` 而非 `BrowserRouter`，**支持 `file://` 直接打开 + 静态托管无需配置 SPA fallback**；
+- 使用 `HashRouter` 而非 `BrowserRouter`，**静态托管无需配置 SPA fallback**；
+- ⚠️ **注意：HashRouter 并不能让 `index.html` 用 `file://` 双击打开**（v3.0 文档曾如此声称，已实测证伪）。原因：根 `index.html` 是 Vite 的**入口模板**，其中 `<script type="module" src="/src/main.tsx">` 指向 **TSX 源码**（浏览器无法执行），且 `/src/...`、`/favicon.svg` 是**绝对路径**在 `file://` 下会解析到文件系统根；即便改用相对路径，**ES module 脚本在 `file://` 下也会被 CORS 拦截**（origin 为 `null`）。查看应用的唯一正确方式是 **HTTP 服务**（见「快速上手」）。
 - 主 Tab 路由：`/desk /notes /data /settings`；
 - 子视图路由：`/space/collection/:id`、`/space/article/:id`、`/mailbox/letter/:id`；
 - `TopBar` 根据 `location.pathname` 决定标题和返回键。
@@ -179,6 +180,7 @@ VidaOS/
 │   │   ├── fileUrl.ts           # Blob → objectURL
 │   │   ├── markdown.ts          # marked + DOMPurify（re-export plainText）
 │   │   ├── exportImport.ts      # JSON / TXT / MD / PDF
+│   │   ├── backgrounds.ts       # 背景预设色卡（设置页与背景层共用）
 │   │   └── utils.ts             # 时间 / ID / 压缩 / 文本
 │   ├── stores/                  # 状态
 │   │   ├── useAppStore.ts       # 业务数据（zustand）
@@ -187,7 +189,7 @@ VidaOS/
 │   ├── components/              # 组件
 │   │   ├── layout/              # Background / TopBar / BottomTabBar
 │   │   ├── home/                # Clock / Feature / Calendar / DaySchedule / Music
-│   │   ├── notes/               # Segmented / CategoryChips / Inspiration / Schedule / Todo
+│   │   ├── notes/               # Segmented / CategoryChips / Inspiration / Schedule / Todo / ScheduleEditor
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
 │   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
 │   └── pages/                   # 路由页面
@@ -204,13 +206,16 @@ VidaOS/
 │       └── SettingsPage.tsx
 ├── index.html
 ├── package.json
+├── package-lock.json            # lockfileVersion 3（npm ci 依据）
+├── .gitignore
 ├── vite.config.ts               # PWA + 别名
 ├── tailwind.config.js           # 色板 + 字体 + 阴影
 ├── postcss.config.js
 ├── tsconfig.json
+├── docs/                        # ⚠️ v3 预览截图（README 未引用，见审计 P2）
 ├── README.md
 ├── PROJECT_MEMORY.md            # 本文件
-└── archive/v2/                  # V2.1 完整历史
+└── archive/v2/                  # V2.1 完整历史（git mv 保留，自包含可运行）
 ```
 
 ---
@@ -219,17 +224,17 @@ VidaOS/
 
 - [x] 暗夜书房设计系统（7 色 token + 3 字体 + 烛光环境）
 - [x] 桌面：大时间日期 Hero + 4 功能网格 + 双卡式月历 + 音乐播放器
-- [x] 月历：事项日打点、点日期切换当天日程
+- [x] 月历：事项日打点 + 点日期联动当天日程（2026-09-11 修复，选中日期存于 `useUIStore.selectedDate`）
 - [x] 音乐：内置雨声 + 烛光 WebAudio 音景 + 本地音频导入
 - [x] 便签：灵感 / 日程 / 待办 分区滑块 + 分类管理
 - [x] 空间：Markdown 长文 + 合集 + 标签 + 封面 + 收藏
 - [x] 动态：短内容 + 多图（自适应网格）
 - [x] 信箱：信件 + 照片 + 未读火漆提示
 - [x] 收藏夹：跨类型聚合
-- [x] 全屏 Markdown 编辑器（工具栏 / 预览 / 图片 / 字数 / 收藏）
+- [x] 全屏 Markdown 编辑器（工具栏 / 预览 / 图片 / 字数 / 收藏星标）
 - [x] 导出 JSON（带图片 Base64）/ TXT / Markdown / PDF（米色衬线排版）
 - [x] 导入 JSON（合并 / 覆盖）/ Markdown / TXT
-- [x] 设置：头像（压缩）/ 背景（5 预设 + 自定义）/ 签名 / 昵称
+- [x] 设置：头像（压缩）/ 背景（5 预设 + 自定义，2026-09-11 接通 `Background.tsx`）/ 签名 / 昵称
 - [x] PWA：manifest + Service Worker + 离线缓存
 - [x] 桌面 + 移动双端响应式（移动优先 / 桌面多列）
 - [x] IndexedDB 持久化（state + files）
@@ -251,6 +256,76 @@ VidaOS/
 - 静态站点导出（生成纯 HTML）
 - 自定义主题色（在 v3.0 的暗夜书房风格上扩展）
 - 暗色以外的模式（暂不需要）
+
+---
+
+## 代码审计结果（2026-09-11，全量通读后确认）
+
+> 以下问题均经逐文件核对确认（附 file:line），**与本文档上文"已实现功能清单"的若干条目相互矛盾**，接力时请以本节为准。
+
+### P0 — 功能声称与实现不符
+
+1. **月历与日程未联动** ✅ **已修复（2026-09-11）**：原先 `CalendarCard.tsx` 与 `DayScheduleCard.tsx` 各自持有独立 `selected` 本地 state，点击日期只更新日历自己的标签，右侧日程卡永远停在今天。修复方式：把选中日期提升到 `useUIStore.selectedDate`（新增 `setSelectedDate`），两卡共同读写，实现真正的点日期联动。
+2. **首页日程卡「新增」写错类型** ✅ **已修复（2026-09-11）**：原先以 `mode: 'inspiration'` 打开编辑器并派发**无人监听**的 `CustomEvent('open-schedule-editor')`，结果从首页新增日程会创建一条**灵感**便签。修复方式：把便签页原有的日程表单提取为共用组件 `src/components/notes/ScheduleEditor.tsx`，首页卡片改为内联展开该表单并直接调用 `addSchedule()`，同时删除了那个 CustomEvent。
+3. **背景设置完全无效** ✅ **已修复（2026-09-11）**：原先 `Background.tsx` 是硬编码的 `bg-ink` + 烛光渐变层，**从不读取** `profile.backgroundPreset` / `backgroundFileId`。修复方式：预设色卡提取到共用模块 `src/lib/backgrounds.ts`（`PRESET_BACKGROUNDS` / `getBackgroundPreset` / `DEFAULT_BACKGROUND_PRESET`，设置页与背景层共用），`Background.tsx` 改为读取 profile：自定义图经 `fileURL()` 取 objectURL 并以 `background-image` 铺满（外加 62% 暗色蒙版保可读性），否则渲染预设渐变。**已在无头 Chrome 中实测**：渲染出的背景 style 为 `linear-gradient(135deg, rgb(27,26,31) 0%, rgb(52,25,21) 100%)`（即「夜半」预设）。
+4. **音乐播放/暂停键失效** ✅ **已修复（2026-09-11）**：原先播放键恒调用 `music.play(currentTrack)`（`play()` 内部先 `pause()`），点暂停图标实为**从头重播**。修复方式：卡片改为「播放中则 `pause()`，否则 `play()`」；`useMusicStore` 增加续播语义（暂停时保留 `audioEl`，同曲再播从当前位置继续，`ended` 后归零重播），并补上 `release()` 统一释放 audio 元素与 WebAudio 节点；删除了无调用者且有 bug 的 `toggle()` / `stopBuiltin()`。
+5. **编辑器收藏星标从不渲染** ✅ **已修复（2026-09-11）**：`MarkdownEditor` 的星标依赖 `favoriteId` prop，而 `EditorOverlay` 从不传它。修复方式：`EditorOverlay` 在「编辑已有文章/信件」时传入 `favoriteId={{ refType: mode, refId: editingId }}`；新建条目（尚无 id）时按设计不显示星标。
+6. **日期格式串错误** ✅ **已修复（2026-09-11）**：`ArticleReaderPage.tsx:55` 与 `LetterReaderPage.tsx:50` 传入 `'YYYY 年 M 月 D 日'`，但 `utils.ts` 的 `formatDate` 原先只替换 `YYYY/MM/DD/HH/mm`，**单字母 `M`/`D` 不会被替换** → 页面实际渲染「2026 年 M 月 D 日」。修复方式：`formatDate` 改为 token 正则替换（`/YYYY|MM|DD|HH|mm|M|D/g`），并顺带修掉原先 `.replace()` 只替换**第一处**匹配的隐患。已用 8 种现有格式回归测试，全部通过。
+7. **过去日程只显示一天，且编辑按钮是死按钮** ✅ **已修复（2026-09-11）**：`ScheduleView.tsx:115` 原先只渲染 `grouped[pastDates[0]]`，其余过去日期的事项在 UI 中不可见；且过去项硬编码 `isEditing={false}`、`onEdit` 永不生效、`onSave={() => {}}` 空实现 → 过去日程既看不到也改不了。修复方式：改为遍历全部 `pastDates`（每个日期带自己的标签），并把 `isEditing` / `onSave` 接到真实 state 与 `updateSchedule`。
+8. **编辑器 `schedule`/`todo` 模式不可达** ✅ **已修复（2026-09-11）**：`MarkdownEditor` 的 mode 联合类型原先含 `'schedule' | 'todo'`（以及 `'inspiration'`），但 `EditorOverlay` 的 switch 与 `getEditorTitle` 都未处理。修复方式：mode 收敛为 `'article' | 'moment' | 'letter'`；`inspiration` 路径在首页日程卡改为内联表单后已无任何调用方（灵感便签本来就走 `InspirationView` 的内联编辑器），故一并删除，`EditorState` 中随之无用的 `date` / `time` / `category` 字段也已移除。
+9. **编辑器内容会被父组件重渲染重置（数据丢失风险）** ✅ **已修复（2026-09-11）**：原先 `EditorOverlay` 每渲染都新建数组（`editor.imageIds || []`、`editor.tags ?? []`），而 `MarkdownEditor` 的同步 `useEffect` 把这些数组列入依赖 → 父组件任意重渲染都会重跑并重置 `title`/`content`/`imageIds`/`tags`。修复方式：改用模块级稳定空数组常量；并**删除该同步 effect**，改由 `EditorOverlay` 给 `MarkdownEditor` 加 `key={mode-editingId}` 触发重挂载，初值由 `useState` 初始化取得 —— 结构上杜绝了「输入被清空」的可能。
+
+### P1 — 资源与抽象层问题
+
+10. **重置数据未释放 objectURL 缓存**：`DataPage.tsx:262-263` 调用 `resetAll()` + `db.files.clear()`，但**从不调用** `clearFileURLCache()`。`fileUrl.ts` 的 `clearFileURLCache` / `revokeFileURL` 全仓库 **0 引用**，与本文档第 5 条「切换用户、清空数据时记得调用」的约定相矛盾 → 残留 objectURL 内存泄漏。
+11. **`DataPage.tsx` 重复导入同一符号** ✅ **已修复（2026-09-11）**：原先 `:6` 导入 `putFile`、`:18` 又 `import { putFile as saveFileBlob, db }`（`saveFileBlob` 从未使用）。已合并为一行 `import { putFile, db } from '@/lib/db';`。
+12. **`base64ToBlob` 重复实现** ✅ **已修复（2026-09-11）**：删除了 `DataPage.tsx` 底部的局部副本，改为从 `@/lib/utils` 导入共用实现。
+13. **`CollectionPage.tsx` 文件末尾二次导入 `useUIStore`** ✅ **已修复（2026-09-11）**：已把该 import 移到文件顶部与其他 import 合并，删除遗留的「// 重新导入 useUIStore」注释。
+14. **`SegmentedControl` 指示器位置漂移** ⬜ 未修（P1，本轮范围外）：`:29-41` 的 `useEffect` 只依赖 `notesTab`，窗口 resize 或计数位数变化（9 → 10）后滑块会错位（缺 ResizeObserver）。
+15. **`tsconfig.json` 关闭了未使用变量检查** ✅ **已修复（2026-09-11）**：已开启 `noUnusedLocals: true` + `noUnusedParameters: true`，并清掉编译器报出的**全部 17 处**死代码（`BottomTabBar` `currentTab`；`CategoryChips` `Edit2`/`Tag`；`InspirationView` 8 处；`exportImport` `base64ToBlob`；`DataPage` `Download`/`uid`/`saveFileBlob`；`SpacePage` `Star`/`showModal`）。开启后 `tsc -b --noEmit` 与 `vite build` 均通过，可作为防复发闸门。
+16. **异步操作缺少错误处理（集群）**：`SettingsPage.tsx:27-38`/`:40-50`/`:92-96`/`:177-181`、`MarkdownEditor.tsx:124-134`、`MusicPlayerCard.tsx:24-42` 均为 `async` 点击处理器且**无 try/catch** → `putFile`/`deleteFile`/`compressImage` 失败即 unhandled rejection；`MarkdownEditor.tsx:132` 更是在失败时仍然弹出「已添加 N 张图片」。
+17. **`MediaImage` 无失败态、且 8 处调用点全无 `alt`**：`MediaImage.tsx:28-36` 当 `fileURL()` 返回 `null`（文件已丢失，见 `fileUrl.ts` 的 `failed` 集合）时 `url` 永远为 `null` → 永久脉冲骨架屏，用户无从判断是「加载中」还是「文件没了」。另 8 个调用点（`MarkdownEditor:368`、`LetterReader:69`、`Mailbox:86`、`Settings:81`、`Moments:55`、`ArticleReader:63`、`Collection:117`、`Space:154`）**均未传 `alt`**。
+18. **`ul > div` 非法 DOM 嵌套 3 处**：编辑态直接返回 `<Card>`（渲染为 `div`）而未被 `<li>` 包裹 —— `InspirationView.tsx:149-174`、`ScheduleView.tsx:174-185`、`TodoView.tsx:165-190`。
+19. **待办统计与列表不一致** ✅ **已修复（2026-09-11）**：`TodoView.tsx` 原先列表按分类过滤、而统计 `remaining/total` 按**全量**计算 → 列表为空却显示「0 / 5 项待办」。修复方式：统计与列表共用同一 `scoped`（分类范围内）集合，`EmptyState` 的 `total === 0` 判断也随之正确。
+20. **信箱摘要未净化 Markdown** ✅ **已修复（2026-09-11）**：`MailboxPage.tsx` 原先直接 `l.content.slice(0, 100)`（`SpacePage.tsx` 用了 `plainText()`）→ 卡片摘要会露出 `#`/`**` 等原文标记。修复方式：改用 `excerpt(plainText(l.content), 100)`，并合并了该文件两行重复的 `@/lib/utils` 导入。
+21. **收藏夹的「动态」分支无路径可达** ⬜ **部分处理（2026-09-11）**：全项目**没有任何路径能创建 moment 收藏** —— `toggleFavorite` 的调用点只有 `ArticleReaderPage`（article）、`LetterReaderPage`（letter）、`FavoritesPage` 自身与 `MarkdownEditor`（现已能传入 `favoriteId`，但仅对 article/letter）。同时 `MomentsPage` 既无收藏入口也无编辑入口（`EditorOverlay` 的 moment 分支不处理 `editingId`）。本轮只把 `FavoritesPage` 的 `any` 断言重写为类型安全的 `FavoriteEntry` 模型；**若要真正启用动态收藏，需要给 `MomentsPage` 补收藏按钮**（或反过来删掉该分支）。
+
+### P2 — 死代码与未用资源（可安全删除）
+
+22. `utils.ts` 死导出：`throttle`、`isSameDay` ✅ **已删除（2026-09-11）**。注意 `clearFileURLCache` / `revokeFileURL` 属「该用而未用」（见第 10 条），**不应删除**，本轮已保留。
+23. `globals.css` 死类：`.divider`、`.safe-left`、`.safe-right`、`.truncate-3`、`.truncate-6` ✅ **已删除（2026-09-11）**；`.tag-candle` 因 `Tag` 的 `candle` 变体被移除也一并删除。现 `globals.css` 中已无 0 引用类。
+24. `tailwind.config.js` 中 0 引用的 token：`fontSize.display/body/caption`，以及 `ink-soft`、`wood-soft`、`card`、`card-elevated`、`border-wine`、`border-bronze`、`border-glow`、`shadow-card`、`shadow-card-elevated`、`shadow-wine-glow`、`shadow-candle-glow`、`shadow-inner-glow`、`backdrop-blur-glass`。取而代之的是各组件内联的 rgba/hex（`SettingsPage` 5 处、`MusicPlayerCard` 4 处、`SegmentedControl` 3 处、`Background` 3 处、`TopBar`/`BottomTabBar`/`ClockHeader`/`MarkdownEditor` 各 2 处等）→ **改 token 不会同步生效**。⬜ **本轮有意保留**：这些是本文档「改设计 token」章节指向的设计系统本体，删除会丢失设计意图；建议后续把内联 rgba 逐步替换为 token 用法，而非删 token。（`animate-pulse-slow` 工具类虽为 0 引用，但 `ClockHeader.tsx:30` 以内联 `animation: 'pulse-slow …'` 使用了同名 keyframe，**不可删 keyframe**。）
+25. **死 props（声明但无人传入）** ✅ **已删除（2026-09-11）**：`Button.fullWidth`、`Card.as`（连带 `const Tag: any = as` 这个类型逃逸）、`EmptyState.icon`、`Tag` 的 `variant="candle"`、`MediaImage.fallback`。
+26. `types/index.ts` `settings.themeAccent` 从未使用 ✅ **已删除（2026-09-11）**。
+27. `MarkdownEditor` 的 **split 预览分支不可达** ✅ **已删除（2026-09-11）**，`mode_` 状态类型收敛为 `'edit' | 'preview'`。
+28. `useMusicStore` 中未被使用的 `ctx` 与无调用者的 `toggle()` ✅ **已删除（2026-09-11）**；`stopBuiltin()` 同样无调用者，一并删除。播放/暂停语义改由 `play()` 的续播分支 + `pause()` 承担。
+29. **类型逃逸（`as any`）** ✅ **已修复（2026-09-11）**：`Card.tsx`、`ScheduleView.tsx`（`addSchedule(data as any)` → 新增 `ScheduleDraft` 类型）、`DataPage.tsx`（`importState` 签名改为接受 `Partial<AppState>`，并新增 `mergeById` 辅助函数）、`FavoritesPage.tsx`（重写为 `FavoriteEntry` 展示模型，消除 `ref: any`）。**额外收获**：`useAppStore.ts` 内 38 处 `set(... as any)` 经实测**全部是多余的**，已一次性移除 —— 此前它们让每个 action 都跳过了类型检查。
+
+### 可提取的重复逻辑（重构候选）
+
+- **浮动新增按钮（FAB）5 处像素级重复**：`InspirationView.tsx:121-131`、`ScheduleView.tsx:136-152`、`TodoView.tsx:136-146`、`MomentsPage.tsx:82-92`、`MailboxPage.tsx:121-131` → `<FloatingAddButton />`
+- **文章卡片**：`SpacePage.tsx:146-182` ≈ `CollectionPage.tsx:108-139` → `<ArticleCard />`
+- **阅读页骨架**（header + 正文 + 图片网格 + 操作栏）：`ArticleReaderPage.tsx:40-123` ≈ `LetterReaderPage.tsx:34-115` → `<ReaderLayout />`
+- **收藏星标按钮**：`ArticleReaderPage.tsx:84-93`、`LetterReaderPage.tsx:81-87`、`MarkdownEditor.tsx:160-171` → `<FavoriteButton />`
+- **1/2/N 列图片网格**：`MomentsPage.tsx:39-59` ≈ `LetterReaderPage.tsx:54-73` → `<ImageGrid />`
+- **圆形勾选按钮**：`DayScheduleCard.tsx:76-86`、`ScheduleView.tsx:190-199`、`TodoView.tsx:197-206` → `<CheckCircle />`
+- **「小标签 + 分隔线」章节头**：`DeskPage.tsx:16-21`、`SpacePage.tsx:83-88,124-129`、`ScheduleView.tsx:77-82,108-113` → `<SectionLabel />`
+- **`'YYYY 年 M 月 D 日'` 日期串**：`ArticleReaderPage.tsx:55`、`LetterReaderPage.tsx:50` → 应统一走 `chineseDate`
+
+### 其他横切问题
+
+- **a11y 缺口集中**：`MediaImage` 8 处调用全无 `alt`；`Card` 带 `onClick` 渲染为 `div`（`FeatureGrid.tsx:35`、`SpacePage.tsx:93,147`、`CollectionPage.tsx:110`、`MailboxPage.tsx:39`、`FavoritesPage.tsx:56` 键盘不可达）；`Toast.tsx:8` 无 `role="status"`/`aria-live`；`Modal.tsx` 无 `role="dialog"`/Escape；`SegmentedControl` 无 `role="tablist"`；`ScheduleView.tsx:225-236`、`TodoView.tsx:216-227`、`MarkdownEditor.tsx:369-374` 图标按钮无 `aria-label`。
+- **列表项草稿不重置 2 处**：`InspirationView.tsx:147`、`TodoView.tsx:163`（取消编辑后再进入会显示上次未保存内容）。
+- **`TopBar.tsx:5-14` `ROUTE_TITLES` 缺 `'/'`** → 首屏 `pathname === '/'` 时标题回落为 `VidaOS` 且无副标题；`canBack` 用 `navigate(-1)`（`:51`），外部深链进入会直接退出应用。
+- **`MusicPlayerCard` 无 useEffect cleanup** → 切换路由后 `new Audio(...)` 与 WebAudio 节点不停、`timeupdate` 监听不移除。
+
+
+### 依赖与构建状态（已验证）
+
+- `npx tsc -b --noEmit` **通过**，`npx vite build` **通过**（2026-09-11 实跑）；PWA 预缓存 19 条，产物约 1.3 MB。
+- `pdf-vendor` chunk 560 KB，触发 Rollup「>500 kB」警告（可接受：jsPDF + html2canvas 体积固有）。
+- **`date-fns` 是未使用依赖**：`src/` 中 0 引用，README/本文档均标注"备用"。可直接从 `package.json` 移除。
+- **`scripts/make-icons.mjs` 依赖 `sharp`，但 `package.json` 未声明**（devDependencies 无此项、`package-lock.json` 也无 `node_modules/sharp` 条目），且 `package.json` 里**没有对应 npm script**。当前 `node_modules/sharp@0.35.4` 属孤儿安装 → 该脚本在干净环境下无法运行。若要保留此脚本，需 `npm i -D sharp` 并加 `"icons": "node scripts/make-icons.mjs"`。
 
 ---
 
@@ -282,7 +357,7 @@ devDeps 还含 @types/*、autoprefixer、postcss 等常规工具。
 ## Agent 接力指南
 
 ### 快速上手
-1. 安装：`cd /Users/amarisgo/Documents/VidaOS && npm install`
+1. 安装：`cd /Users/amarisgo/Documents/DeepSeek Harness/VidaOS && npm install`
 2. 开发：`npm run dev` → http://localhost:5173
 3. 数据：浏览器 DevTools → Application → IndexedDB → `vidaos` → `state` + `files`
 4. 架构：Vite + React + TS，按 `pages/ + components/ + stores/ + lib/` 分层
@@ -308,6 +383,17 @@ devDeps 还含 @types/*、autoprefixer、postcss 等常规工具。
 - `npm run dev` 浏览器手动测试；
 - `npm run build && npm run preview` 测试生产构建（PWA Service Worker 会注册）。
 
+### ⚠️ 如何查看应用（不要双击 index.html）
+根目录的 `index.html` **不是**可以双击打开的独立页面，它是 Vite 的入口模板（引用的是 `src/main.tsx` 源码）。用 `file://` 打开必然白屏：
+
+```bash
+npm run dev          # → http://localhost:5173   （开发模式，改代码即时热更新）
+# 或
+npm run build && npm run preview   # → http://localhost:4173   （生产构建 + PWA/SW）
+```
+
+想不装 Node 直接看，也必须经由 HTTP 服务（例如 `npm run build` 后 `npx serve dist`）。
+
 ### 常见修改场景
 - **改首页布局**：编辑 `src/components/home/*` 和 `src/pages/DeskPage.tsx`；
 - **改编辑器样式**：编辑 `src/components/editor/MarkdownEditor.tsx` 与 `src/styles/globals.css` 的 `.prose-vidaos`；
@@ -317,7 +403,7 @@ devDeps 还含 @types/*、autoprefixer、postcss 等常规工具。
 
 ### Git 提交
 ```bash
-cd /Users/amarisgo/Documents/VidaOS
+cd /Users/amarisgo/Documents/DeepSeek Harness/VidaOS
 git add -A
 git commit -m "feat: ..."
 ```
@@ -334,6 +420,34 @@ git commit -m "feat: ..."
 ---
 
 ## 变更日志（Changelog）
+
+### [v3.0-p0+cleanup] - 2026-09-11 —— 修复全部 P0 缺陷 + 死代码清理
+- **修正文档错误**：本文档决策 #3 曾声称 HashRouter「支持 file:// 直接打开」——**实测证伪**，已改写并新增「如何查看应用」章节（根 `index.html` 是 Vite 入口模板，必须经 HTTP 服务查看）；
+- **P0-1 月历↔日程联动**：选中日期提升到 `useUIStore.selectedDate`，两卡共用；
+- **P0-2 首页新增日程**：提取共用组件 `src/components/notes/ScheduleEditor.tsx`，首页卡片内联展开表单并直连 `addSchedule()`，删除无人监听的 `open-schedule-editor` CustomEvent；
+- **P0-3 背景设置接通**：新增 `src/lib/backgrounds.ts`（预设色卡单一来源），`Background.tsx` 改为读取 `profile`，支持预设渐变与自定义图（含暗色蒙版）；
+- **P0-4 音乐播放/暂停**：卡片改为按 `isPlaying` 分派 `play()`/`pause()`；store 支持同曲续播并新增 `release()` 统一释放资源；
+- **P0-5 编辑器收藏星标**：`EditorOverlay` 在编辑已有文章/信件时传入 `favoriteId`，星标恢复可用；
+- **P0-8 不可达 mode**：mode 收敛为 `article | moment | letter`，删除 `inspiration`/`schedule`/`todo` 死路径及 `EditorState` 的 `date`/`time`/`category`；
+- **P0-9 编辑器状态被重置**：稳定空数组常量 + 删除同步 effect + `key` 重挂载，杜绝输入被清空；
+- **死代码清理**：开启 `noUnusedLocals`/`noUnusedParameters`（清掉 17 处）；删除 `throttle`/`isSameDay`、6 个死 CSS 类、5 个死 props、10 个未使用的 `useXxx` 选择器、`removeToast`/`updateEditor`、`scopedState` 的 `export`；**移除 `useAppStore` 内 38 处多余的 `set(... as any)`**（此前每个 action 都跳过类型检查）；
+- **验证**：`tsc -b --noEmit` 与 `vite build` 通过；`formatDate` 8 种格式回归全通过；**并用无头 Chrome 实际渲染了构建产物**，确认时钟/宫格/月历/日程/音景/底部 Tab 全部正常渲染、无错误覆盖层、且背景已渲染为「夜半」预设渐变。
+
+### [v3.0-cleanup] - 2026-09-11 —— 按审计结果执行清理与低风险修复
+- **删除** `archive/v2/docs/preview-desktop.png` + `preview-mobile.png`（回收 2.53 MB，archive 目录 2.9 MB → 384 KB；v2 全部代码与资源保留，git 历史可随时恢复）；
+- **删除** 构建产物 `dist/` + `tsconfig.tsbuildinfo`（回收 ~1.3 MB；`npm run build` 可完整重建）；
+- **修复 P0-6**：`utils.ts` 的 `formatDate` 改为 token 正则替换，支持 `M`/`D`，并修掉只替换第一处的隐患 → 文章/信件阅读页不再显示「2026 年 M 月 D 日」；
+- **修复 P0-7**：`ScheduleView.tsx` 过去日程改为遍历全部 `pastDates`，并接通编辑态（原先只显示最早一天且编辑按钮为死按钮）；
+- **修复 P1-19**：`TodoView.tsx` 统计与列表共用同一分类范围（原先列表空却显示「0 / 5 项待办」）；
+- **修复 P1-20**：`MailboxPage.tsx` 摘要改用 `excerpt(plainText(...))`（原先露出 `#`/`**` 原文），并合并重复导入；
+- **验证**：`tsc -b --noEmit` 与 `vite build` 均通过；`formatDate` 以 8 种现有格式回归测试全通过。
+
+### [v3.0-audit] - 2026-09-11 —— 全量代码审计（未改动任何功能代码）
+- 逐文件通读 `src/` 全部 45 个文件（44 个 `.ts/.tsx` + `globals.css`）+ 全部配置与文档，确认 P0 缺陷 9 项、P1 12 项、P2 8 项，另附重构候选与横切问题（详见上文「代码审计结果」）；
+- 修正文档过时信息：存放路径 `.../DeepSeek Harness/VidaOS`（原写作 `/Users/amarisgo/Documents/VidaOS`）、README「9 个路由页面」→ 11、结构树补 `docs/` `package-lock.json` `.gitignore`；
+- `.gitignore` 补 `*.tsbuildinfo`（此前 `tsc -b` 产物未被忽略）；
+- 验证 `tsc -b --noEmit` 与 `vite build` 均通过；
+- 资产盘点：`dist/`（1.3 MB）可再生、`docs/` 5 张 v3 截图（447 KB）为孤儿、`archive/v2/docs/` 2 张截图（2.53 MB，占归档 88%）无引用；`node_modules` 含 5 个 extraneous 包（sharp 全家桶 ≈19 MB）。
 
 ### [v3.0] - 2026-09-10 —— 暗夜书房重构 ✦ 当前版本
 - V2.1 整体归档至 `archive/v2/`，保留为历史（git mv，不删除）；
@@ -376,4 +490,4 @@ git commit -m "feat: ..."
 - **V2.x 设计借鉴**：[Sui-IB / InternalBeyond-Mobile](https://github.com/Sui-IB/InternalBeyond-Mobile)（仅 V2 借用，V3 已切换为完全自研方向）
 - **V3.x 设计哲学**：用户自定义「暗夜书房」色板与方向
 - **V3.x 重写 Agent**：Mavis（基于用户 2026-09-10 需求）
-- **最后更新日期**：2026-09-10
+- **最后更新日期**：2026-09-11（全量审计）
