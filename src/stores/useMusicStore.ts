@@ -15,143 +15,132 @@ interface MusicStore {
 
   play: (track: Track) => Promise<void>;
   pause: () => void;
-  toggle: () => void;
   next: (tracks: Track[]) => void;
   prev: (tracks: Track[]) => void;
   seek: (ratio: number) => void;
   setVolume: (v: number) => void;
-  stopBuiltin: () => void;
 }
 
-export const useMusicStore = create<MusicStore>((set, get) => ({
-  currentTrackId: null,
-  isPlaying: false,
-  progress: 0,
-  duration: 0,
-  volume: 0.6,
-  audioEl: null,
-  audioCtx: null,
-  builtinNodes: null,
-
-  play: async (track) => {
-    const state = get();
-    // 停止之前的
-    state.pause();
-
-    if (track.builtin) {
-      // 内置音景
-      try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const nodes = createBuiltin(ctx, track.builtin, get().volume);
-        set({
-          audioCtx: ctx,
-          builtinNodes: nodes,
-          currentTrackId: track.id,
-          isPlaying: true,
-        });
-        return;
-      } catch (err) {
-        console.error('Builtin play failed', err);
-        return;
-      }
-    }
-
-    if (!track.fileId) return;
-    const url = await fileURL(track.fileId);
-    if (!url) return;
-    const el = new Audio(url);
-    el.volume = get().volume;
-    el.addEventListener('timeupdate', () => {
-      set({ progress: el.currentTime / (el.duration || 1) });
-    });
-    el.addEventListener('loadedmetadata', () => {
-      set({ duration: el.duration });
-    });
-    el.addEventListener('ended', () => {
-      set({ isPlaying: false, progress: 0 });
-    });
-    el.play().catch((err) => console.error('Audio play failed', err));
-    set({ audioEl: el, currentTrackId: track.id, isPlaying: true, progress: 0, duration: 0 });
-  },
-
-  pause: () => {
+export const useMusicStore = create<MusicStore>((set, get) => {
+  /** 彻底释放当前音频资源（本地 audio 元素 + WebAudio 节点） */
+  const release = () => {
     const { audioEl, audioCtx, builtinNodes } = get();
     if (audioEl) {
       audioEl.pause();
+      audioEl.removeAttribute('src');
+      audioEl.load();
     }
-    if (builtinNodes) {
-      builtinNodes.stop();
-    }
-    if (audioCtx && audioCtx.state !== 'closed') {
-      audioCtx.close();
-    }
-    set({ isPlaying: false, audioEl: null, audioCtx: null, builtinNodes: null });
-  },
-
-  toggle: () => {
-    const { audioEl, isPlaying, builtinNodes } = get();
-    if (builtinNodes) {
-      if (isPlaying) {
-        get().pause();
-      } else {
-        // 重启
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const currentTrackId = get().currentTrackId;
-        // 找到当前 track 重启
-        // 这里简化：用户从列表重新点
-      }
-      return;
-    }
-    if (audioEl) {
-      if (isPlaying) {
-        audioEl.pause();
-        set({ isPlaying: false });
-      } else {
-        audioEl.play();
-        set({ isPlaying: true });
-      }
-    }
-  },
-
-  next: (tracks) => {
-    const cur = get().currentTrackId;
-    const idx = tracks.findIndex((t) => t.id === cur);
-    if (idx === -1) {
-      if (tracks[0]) get().play(tracks[0]);
-    } else {
-      const next = tracks[(idx + 1) % tracks.length];
-      if (next) get().play(next);
-    }
-  },
-  prev: (tracks) => {
-    const cur = get().currentTrackId;
-    const idx = tracks.findIndex((t) => t.id === cur);
-    if (idx === -1) return;
-    const prev = tracks[(idx - 1 + tracks.length) % tracks.length];
-    if (prev) get().play(prev);
-  },
-  seek: (ratio) => {
-    const { audioEl } = get();
-    if (audioEl && audioEl.duration) {
-      audioEl.currentTime = audioEl.duration * ratio;
-      set({ progress: ratio });
-    }
-  },
-  setVolume: (v) => {
-    set({ volume: v });
-    const { audioEl, audioCtx, builtinNodes } = get();
-    if (audioEl) audioEl.volume = v;
-    if (builtinNodes && audioCtx) {
-      builtinNodes.gain.gain.value = v * 0.5;
-    }
-  },
-  stopBuiltin: () => {
-    const { builtinNodes, audioCtx } = get();
     if (builtinNodes) builtinNodes.stop();
-    if (audioCtx) audioCtx.close();
-    set({ builtinNodes: null, audioCtx: null, isPlaying: false });
-  },
-}));
+    if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+    set({ audioEl: null, audioCtx: null, builtinNodes: null });
+  };
+
+  return {
+    currentTrackId: null,
+    isPlaying: false,
+    progress: 0,
+    duration: 0,
+    volume: 0.6,
+    audioEl: null,
+    audioCtx: null,
+    builtinNodes: null,
+
+    play: async (track) => {
+      const state = get();
+
+      // 同一首本地曲目：从暂停处继续，而不是从头重播
+      if (!track.builtin && state.audioEl && track.id === state.currentTrackId) {
+        if (state.audioEl.ended) state.audioEl.currentTime = 0;
+        state.audioEl.play().catch((err) => console.error('Audio resume failed', err));
+        set({ isPlaying: true });
+        return;
+      }
+
+      release();
+
+      if (track.builtin) {
+        // 内置音景（WebAudio 实时合成）
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const nodes = createBuiltin(ctx, track.builtin, get().volume);
+          set({
+            audioCtx: ctx,
+            builtinNodes: nodes,
+            currentTrackId: track.id,
+            isPlaying: true,
+          });
+        } catch (err) {
+          console.error('Builtin play failed', err);
+        }
+        return;
+      }
+
+      if (!track.fileId) return;
+      const url = await fileURL(track.fileId);
+      if (!url) return;
+      const el = new Audio(url);
+      el.volume = get().volume;
+      el.addEventListener('timeupdate', () => {
+        set({ progress: el.currentTime / (el.duration || 1) });
+      });
+      el.addEventListener('loadedmetadata', () => {
+        set({ duration: el.duration });
+      });
+      el.addEventListener('ended', () => {
+        set({ isPlaying: false, progress: 0 });
+      });
+      el.play().catch((err) => console.error('Audio play failed', err));
+      set({ audioEl: el, currentTrackId: track.id, isPlaying: true, progress: 0, duration: 0 });
+    },
+
+    pause: () => {
+      const { audioEl, audioCtx, builtinNodes } = get();
+      if (audioEl) audioEl.pause();
+      if (builtinNodes) builtinNodes.stop();
+      if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+      set({
+        isPlaying: false,
+        // 本地音频保留元素以便续播；内置音景节点已销毁，无法续播故清空
+        audioEl: builtinNodes ? null : audioEl,
+        audioCtx: null,
+        builtinNodes: null,
+      });
+    },
+
+    next: (tracks) => {
+      const cur = get().currentTrackId;
+      const idx = tracks.findIndex((t) => t.id === cur);
+      if (idx === -1) {
+        if (tracks[0]) get().play(tracks[0]);
+      } else {
+        const next = tracks[(idx + 1) % tracks.length];
+        if (next) get().play(next);
+      }
+    },
+    prev: (tracks) => {
+      const cur = get().currentTrackId;
+      const idx = tracks.findIndex((t) => t.id === cur);
+      if (idx === -1) return;
+      const prev = tracks[(idx - 1 + tracks.length) % tracks.length];
+      if (prev) get().play(prev);
+    },
+    seek: (ratio) => {
+      const { audioEl } = get();
+      if (audioEl && audioEl.duration) {
+        audioEl.currentTime = audioEl.duration * ratio;
+        set({ progress: ratio });
+      }
+    },
+    setVolume: (v) => {
+      set({ volume: v });
+      const { audioEl, audioCtx, builtinNodes } = get();
+      if (audioEl) audioEl.volume = v;
+      if (builtinNodes && audioCtx) {
+        builtinNodes.gain.gain.value = v * 0.5;
+      }
+    },
+  };
+});
 
 // ============================================================
 // 内置音景生成（WebAudio）

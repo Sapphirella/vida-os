@@ -5,8 +5,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { formatDate, relativeTime } from '@/lib/utils';
-import { clsx } from '@/lib/utils';
+import { formatDate, clsx, plainText, excerpt } from '@/lib/utils';
 
 export function MailboxPage() {
   const navigate = useNavigate();
@@ -74,7 +73,7 @@ export function MailboxPage() {
                         )}
                       </div>
                       <p className="font-serif text-bronze text-sm line-clamp-2 leading-relaxed">
-                        {l.content.slice(0, 100)}
+                        {excerpt(plainText(l.content), 100)}
                       </p>
                       {l.imageIds.length > 0 && (
                         <div className="flex gap-1.5 mt-2">

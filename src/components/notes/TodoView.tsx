@@ -20,12 +20,12 @@ export function TodoView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
-  const filtered = (selectedCat ? todo.filter((t) => t.category === selectedCat) : todo).filter(
-    (t) => showCompleted || !t.done,
-  );
+  // 统计与列表共用同一分类范围，否则过滤后会出现「列表为空却显示 0 / 5 项待办」
+  const scoped = selectedCat ? todo.filter((t) => t.category === selectedCat) : todo;
+  const filtered = scoped.filter((t) => showCompleted || !t.done);
 
-  const remaining = todo.filter((t) => !t.done).length;
-  const total = todo.length;
+  const remaining = scoped.filter((t) => !t.done).length;
+  const total = scoped.length;
 
   return (
     <div>

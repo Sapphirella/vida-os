@@ -1,5 +1,5 @@
 // 全屏 Markdown 编辑器
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import {
   X,
   Bold,
@@ -19,7 +19,7 @@ import {
   Star,
 } from 'lucide-react';
 import { renderMarkdown, plainText } from '@/lib/markdown';
-import { compressImage, uid, now, clsx } from '@/lib/utils';
+import { compressImage, uid, clsx } from '@/lib/utils';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile } from '@/lib/db';
@@ -30,7 +30,7 @@ interface MarkdownEditorProps {
   title: string;
   initialContent: string;
   initialTitle?: string;
-  mode: 'article' | 'moment' | 'letter' | 'inspiration' | 'schedule' | 'todo';
+  mode: 'article' | 'moment' | 'letter';
   // 文章/动态/信件专用
   imageIds?: string[];
   collectionId?: string;
@@ -67,7 +67,7 @@ export function MarkdownEditor({
   const [collectionId, setCollectionId] = useState<string | undefined>(initialCollectionId);
   const [tags, setTags] = useState<string[]>(initialTags);
   const [tagInput, setTagInput] = useState('');
-  const [mode_, setMode] = useState<'edit' | 'preview' | 'split'>('edit');
+  const [mode_, setMode] = useState<'edit' | 'preview'>('edit');
   const [showCollections, setShowCollections] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,15 +78,8 @@ export function MarkdownEditor({
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const showToast = useUIStore((s) => s.showToast);
 
-  useEffect(() => {
-    if (open) {
-      setTitle(initialTitle);
-      setContent(initialContent);
-      setImageIds(initialImageIds);
-      setCollectionId(initialCollectionId);
-      setTags(initialTags);
-    }
-  }, [open, initialTitle, initialContent, initialImageIds, initialCollectionId, initialTags]);
+  // 初值由 useState 初始化取得；父组件通过 key 变化触发重挂载，
+  // 这里刻意不做「初值变化就重置」的副作用，避免覆盖用户正在输入的内容。
 
   const wordCount = plainText(content).length;
 
@@ -330,26 +323,6 @@ export function MarkdownEditor({
               <p className="text-bronze-deep italic text-center mt-12">还没有内容</p>
             )}
           </div>
-        )}
-        {mode_ === 'split' && (
-          <>
-            <div className="flex-1 overflow-y-auto border-r border-bronze/10">
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="w-full h-full bg-transparent px-4 sm:px-6 py-4 font-serif text-reading text-paper outline-none resize-none"
-                style={{ lineHeight: 1.95, caretColor: 'var(--candle)' }}
-                spellCheck={false}
-              />
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
-              <div
-                className="prose-vidaos"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-              />
-            </div>
-          </>
         )}
       </div>
 

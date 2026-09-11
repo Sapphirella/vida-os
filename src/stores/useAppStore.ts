@@ -27,6 +27,12 @@ const persist = debounce((state: AppState) => {
   saveState(state);
 }, 400);
 
+/** 按 id 合并两个列表（保留现有项，追加 incoming 中不存在的新项） */
+function mergeById<T extends { id: string }>(cur: T[], incoming?: T[]): T[] {
+  if (!incoming || incoming.length === 0) return cur;
+  return [...cur, ...incoming.filter((x) => !cur.some((c) => c.id === x.id))];
+}
+
 // ============================================================
 // Store
 // ============================================================
@@ -95,7 +101,7 @@ interface Actions {
   updateSettings: (patch: Partial<Settings>) => void;
 
   // 导入
-  importState: (incoming: AppState, mode: 'merge' | 'overwrite') => void;
+  importState: (incoming: Partial<AppState>, mode: 'merge' | 'overwrite') => void;
 }
 
 type Store = AppState & Actions;
@@ -106,7 +112,7 @@ export const useAppStore = create<Store>((set, get) => ({
   hydrate: async () => {
     const loaded = await loadState();
     if (loaded) {
-      set({ ...defaultState(), ...loaded, version: 3 } as any);
+      set({ ...defaultState(), ...loaded, version: 3 });
     } else {
       persist(get());
     }
@@ -114,12 +120,12 @@ export const useAppStore = create<Store>((set, get) => ({
 
   resetAll: async () => {
     const fresh = defaultState();
-    set(fresh as any);
+    set(fresh);
     persist(fresh);
   },
 
   updateProfile: (patch) => {
-    set((s) => ({ profile: { ...s.profile, ...patch } } as any));
+    set((s) => ({ profile: { ...s.profile, ...patch } }));
     persist(get());
   },
 
@@ -128,14 +134,14 @@ export const useAppStore = create<Store>((set, get) => ({
     const id = uid('col_');
     set((s) => ({
       collections: [...s.collections, { id, name, desc, createdAt: now() }],
-    } as any));
+    }));
     persist(get());
     return id;
   },
   updateCollection: (id, patch) => {
     set((s) => ({
       collections: s.collections.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    } as any));
+    }));
     persist(get());
   },
   deleteCollection: (id) => {
@@ -144,7 +150,7 @@ export const useAppStore = create<Store>((set, get) => ({
       articles: s.articles.map((a) =>
         a.collectionId === id ? { ...a, collectionId: undefined } : a,
       ),
-    } as any));
+    }));
     persist(get());
   },
 
@@ -153,7 +159,7 @@ export const useAppStore = create<Store>((set, get) => ({
     const id = uid('art_');
     set((s) => ({
       articles: [{ ...article, id, createdAt: now(), updatedAt: now() }, ...s.articles],
-    } as any));
+    }));
     persist(get());
     return id;
   },
@@ -162,14 +168,14 @@ export const useAppStore = create<Store>((set, get) => ({
       articles: s.articles.map((a) =>
         a.id === id ? { ...a, ...patch, updatedAt: now() } : a,
       ),
-    } as any));
+    }));
     persist(get());
   },
   deleteArticle: (id) => {
     set((s) => ({
       articles: s.articles.filter((a) => a.id !== id),
       favorites: s.favorites.filter((f) => !(f.refType === 'article' && f.refId === id)),
-    } as any));
+    }));
     persist(get());
   },
 
@@ -178,21 +184,21 @@ export const useAppStore = create<Store>((set, get) => ({
     const id = uid('mom_');
     set((s) => ({
       moments: [{ ...moment, id, createdAt: now() }, ...s.moments],
-    } as any));
+    }));
     persist(get());
     return id;
   },
   updateMoment: (id, patch) => {
     set((s) => ({
       moments: s.moments.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-    } as any));
+    }));
     persist(get());
   },
   deleteMoment: (id) => {
     set((s) => ({
       moments: s.moments.filter((m) => m.id !== id),
       favorites: s.favorites.filter((f) => !(f.refType === 'moment' && f.refId === id)),
-    } as any));
+    }));
     persist(get());
   },
 
@@ -201,27 +207,27 @@ export const useAppStore = create<Store>((set, get) => ({
     const id = uid('let_');
     set((s) => ({
       letters: [{ ...letter, id, unread: true, createdAt: now() }, ...s.letters],
-    } as any));
+    }));
     persist(get());
     return id;
   },
   updateLetter: (id, patch) => {
     set((s) => ({
       letters: s.letters.map((l) => (l.id === id ? { ...l, ...patch } : l)),
-    } as any));
+    }));
     persist(get());
   },
   deleteLetter: (id) => {
     set((s) => ({
       letters: s.letters.filter((l) => l.id !== id),
       favorites: s.favorites.filter((f) => !(f.refType === 'letter' && f.refId === id)),
-    } as any));
+    }));
     persist(get());
   },
   markLetterRead: (id) => {
     set((s) => ({
       letters: s.letters.map((l) => (l.id === id ? { ...l, unread: false } : l)),
-    } as any));
+    }));
     persist(get());
   },
 
@@ -233,7 +239,7 @@ export const useAppStore = create<Store>((set, get) => ({
     if (exists) {
       set((s) => ({
         favorites: s.favorites.filter((f) => f.id !== exists.id),
-      } as any));
+      }));
     } else {
       const id = uid('fav_');
       set((s) => ({
@@ -241,7 +247,7 @@ export const useAppStore = create<Store>((set, get) => ({
           ...s.favorites,
           { id, refType, refId, createdAt: now() },
         ],
-      } as any));
+      }));
     }
     persist(get());
   },
@@ -262,7 +268,7 @@ export const useAppStore = create<Store>((set, get) => ({
           ...s.notes.inspiration,
         ],
       },
-    } as any));
+    }));
     persist(get());
     return id;
   },
@@ -274,7 +280,7 @@ export const useAppStore = create<Store>((set, get) => ({
           n.id === id ? { ...n, ...patch, updatedAt: now() } : n,
         ),
       },
-    } as any));
+    }));
     persist(get());
   },
   deleteInspiration: (id) => {
@@ -283,7 +289,7 @@ export const useAppStore = create<Store>((set, get) => ({
         ...s.notes,
         inspiration: s.notes.inspiration.filter((n) => n.id !== id),
       },
-    } as any));
+    }));
     persist(get());
   },
 
@@ -298,7 +304,7 @@ export const useAppStore = create<Store>((set, get) => ({
           ...s.notes.schedule,
         ],
       },
-    } as any));
+    }));
     persist(get());
     return id;
   },
@@ -310,7 +316,7 @@ export const useAppStore = create<Store>((set, get) => ({
           n.id === id ? { ...n, ...patch, updatedAt: now() } : n,
         ),
       },
-    } as any));
+    }));
     persist(get());
   },
   deleteSchedule: (id) => {
@@ -319,7 +325,7 @@ export const useAppStore = create<Store>((set, get) => ({
         ...s.notes,
         schedule: s.notes.schedule.filter((n) => n.id !== id),
       },
-    } as any));
+    }));
     persist(get());
   },
   toggleScheduleDone: (id) => {
@@ -330,7 +336,7 @@ export const useAppStore = create<Store>((set, get) => ({
           n.id === id ? { ...n, done: !n.done, updatedAt: now() } : n,
         ),
       },
-    } as any));
+    }));
     persist(get());
   },
 
@@ -345,7 +351,7 @@ export const useAppStore = create<Store>((set, get) => ({
           ...s.notes.todo,
         ],
       },
-    } as any));
+    }));
     persist(get());
     return id;
   },
@@ -355,7 +361,7 @@ export const useAppStore = create<Store>((set, get) => ({
         ...s.notes,
         todo: s.notes.todo.map((n) => (n.id === id ? { ...n, ...patch } : n)),
       },
-    } as any));
+    }));
     persist(get());
   },
   deleteTodo: (id) => {
@@ -364,7 +370,7 @@ export const useAppStore = create<Store>((set, get) => ({
         ...s.notes,
         todo: s.notes.todo.filter((n) => n.id !== id),
       },
-    } as any));
+    }));
     persist(get());
   },
   toggleTodo: (id) => {
@@ -381,7 +387,7 @@ export const useAppStore = create<Store>((set, get) => ({
             : n,
         ),
       },
-    } as any));
+    }));
     persist(get());
   },
 
@@ -394,7 +400,7 @@ export const useAppStore = create<Store>((set, get) => ({
           ...s.categories,
           [which]: [...s.categories[which], name],
         },
-      } as any;
+      };
     });
     persist(get());
   },
@@ -404,7 +410,7 @@ export const useAppStore = create<Store>((set, get) => ({
         ...s.categories,
         [which]: s.categories[which].filter((c) => c !== name),
       },
-    } as any));
+    }));
     persist(get());
   },
   renameCategory: (which, oldName, newName) => {
@@ -419,7 +425,7 @@ export const useAppStore = create<Store>((set, get) => ({
       return {
         categories: { ...s.categories, [which]: list },
         notes: { ...s.notes, [noteKey]: updatedNotes },
-      } as any;
+      };
     });
     persist(get());
   },
@@ -429,64 +435,44 @@ export const useAppStore = create<Store>((set, get) => ({
     const id = uid('trk_');
     set((s) => ({
       tracks: [{ ...track, id, createdAt: now() }, ...s.tracks],
-    } as any));
+    }));
     persist(get());
     return id;
   },
   deleteTrack: (id) => {
     set((s) => ({
       tracks: s.tracks.filter((t) => t.id !== id),
-    } as any));
+    }));
     persist(get());
   },
 
   // 设置
   setLastTab: (tab) => {
-    set((s) => ({ settings: { ...s.settings, lastTab: tab } } as any));
+    set((s) => ({ settings: { ...s.settings, lastTab: tab } }));
     persist(get());
   },
   updateSettings: (patch) => {
-    set((s) => ({ settings: { ...s.settings, ...patch } } as any));
+    set((s) => ({ settings: { ...s.settings, ...patch } }));
     persist(get());
   },
 
-  // 导入
+  // 导入（incoming 允许是 Partial：Markdown/TXT 导入只带 articles）
   importState: (incoming, mode) => {
     if (mode === 'overwrite') {
-      set({ ...defaultState(), ...incoming, version: 3 } as any);
+      set({ ...defaultState(), ...incoming, version: 3 });
     } else {
-      // 合并
+      // 合并：保留现有数据，追加 incoming 中不存在的新项
       const cur = get();
       const merged: AppState = {
         ...cur,
-        profile: incoming.profile || cur.profile,
-        collections: [
-          ...cur.collections,
-          ...incoming.collections.filter(
-            (c) => !cur.collections.find((x) => x.id === c.id),
-          ),
-        ],
-        articles: [
-          ...cur.articles,
-          ...incoming.articles.filter(
-            (a) => !cur.articles.find((x) => x.id === a.id),
-          ),
-        ],
-        moments: [
-          ...cur.moments,
-          ...incoming.moments.filter(
-            (m) => !cur.moments.find((x) => x.id === m.id),
-          ),
-        ],
-        letters: [
-          ...cur.letters,
-          ...incoming.letters.filter(
-            (l) => !cur.letters.find((x) => x.id === l.id),
-          ),
-        ],
+        profile: incoming.profile ?? cur.profile,
+        collections: mergeById(cur.collections, incoming.collections),
+        articles: mergeById(cur.articles, incoming.articles),
+        moments: mergeById(cur.moments, incoming.moments),
+        letters: mergeById(cur.letters, incoming.letters),
         favorites: [
           ...cur.favorites,
-          ...incoming.favorites.filter(
+          ...(incoming.favorites ?? []).filter(
             (f) =>
               !cur.favorites.find(
                 (x) => x.refType === f.refType && x.refId === f.refId,
@@ -494,48 +480,16 @@ export const useAppStore = create<Store>((set, get) => ({
           ),
         ],
         notes: {
-          inspiration: [
-            ...cur.notes.inspiration,
-            ...incoming.notes.inspiration.filter(
-              (n) => !cur.notes.inspiration.find((x) => x.id === n.id),
-            ),
-          ],
-          schedule: [
-            ...cur.notes.schedule,
-            ...incoming.notes.schedule.filter(
-              (n) => !cur.notes.schedule.find((x) => x.id === n.id),
-            ),
-          ],
-          todo: [
-            ...cur.notes.todo,
-            ...incoming.notes.todo.filter(
-              (n) => !cur.notes.todo.find((x) => x.id === n.id),
-            ),
-          ],
+          inspiration: mergeById(cur.notes.inspiration, incoming.notes?.inspiration),
+          schedule: mergeById(cur.notes.schedule, incoming.notes?.schedule),
+          todo: mergeById(cur.notes.todo, incoming.notes?.todo),
         },
         categories: cur.categories,
-        tracks: [
-          ...cur.tracks,
-          ...incoming.tracks.filter(
-            (t) => !cur.tracks.find((x) => x.id === t.id),
-          ),
-        ],
+        tracks: mergeById(cur.tracks, incoming.tracks),
         settings: cur.settings,
       };
-      set(merged as any);
+      set(merged);
     }
     persist(get());
   },
 }));
-
-// 便捷选择器
-export const useProfile = () => useAppStore((s) => s.profile);
-export const useArticles = () => useAppStore((s) => s.articles);
-export const useMoments = () => useAppStore((s) => s.moments);
-export const useLetters = () => useAppStore((s) => s.letters);
-export const useFavorites = () => useAppStore((s) => s.favorites);
-export const useNotes = () => useAppStore((s) => s.notes);
-export const useCollections = () => useAppStore((s) => s.collections);
-export const useTracks = () => useAppStore((s) => s.tracks);
-export const useCategories = () => useAppStore((s) => s.categories);
-export const useSettings = () => useAppStore((s) => s.settings);

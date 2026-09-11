@@ -1,6 +1,7 @@
 // UI 状态：toast、modal、editor 状态等
 import { create } from 'zustand';
-import { uid } from '@/lib/utils';
+import { uid, todayKey } from '@/lib/utils';
+import type { ReactNode } from 'react';
 
 export interface ToastItem {
   id: string;
@@ -10,7 +11,7 @@ export interface ToastItem {
 
 export interface EditorState {
   open: boolean;
-  mode: 'article' | 'moment' | 'letter' | 'inspiration';
+  mode: 'article' | 'moment' | 'letter';
   editingId?: string;
   initialContent?: string;
   initialTitle?: string;
@@ -18,10 +19,6 @@ export interface EditorState {
   collectionId?: string;
   tags?: string[];
   imageIds?: string[];
-  // 信件专用
-  date?: string; // 适用 schedule
-  time?: string;
-  category?: string;
 }
 
 interface UIStore {
@@ -33,19 +30,21 @@ interface UIStore {
   notesTab: 'inspiration' | 'schedule' | 'todo';
   setNotesTab: (tab: 'inspiration' | 'schedule' | 'todo') => void;
 
+  // 首页选中的日期（YYYY-MM-DD）：月历与当日日程卡共用，保证两卡联动
+  selectedDate: string;
+  setSelectedDate: (date: string) => void;
+
   // 编辑器
   editor: EditorState;
   openEditor: (e: Partial<EditorState>) => void;
   closeEditor: () => void;
-  updateEditor: (patch: Partial<EditorState>) => void;
 
   // Toast
   toasts: ToastItem[];
   showToast: (message: string, kind?: ToastItem['kind']) => void;
-  removeToast: (id: string) => void;
 
   // Modal
-  modal: { open: boolean; title?: string; content?: any; onConfirm?: () => void };
+  modal: { open: boolean; title?: string; content?: ReactNode; onConfirm?: () => void };
   showModal: (m: Partial<UIStore['modal']>) => void;
   closeModal: () => void;
 }
@@ -57,14 +56,15 @@ export const useUIStore = create<UIStore>((set) => ({
   notesTab: 'inspiration',
   setNotesTab: (tab) => set({ notesTab: tab }),
 
+  selectedDate: todayKey(),
+  setSelectedDate: (date) => set({ selectedDate: date }),
+
   editor: { open: false, mode: 'article' },
   openEditor: (e) =>
     set((s) => ({
       editor: { ...s.editor, ...e, open: true },
     })),
   closeEditor: () => set({ editor: { open: false, mode: 'article' } }),
-  updateEditor: (patch) =>
-    set((s) => ({ editor: { ...s.editor, ...patch } })),
 
   toasts: [],
   showToast: (message, kind = 'info') => {
@@ -74,8 +74,6 @@ export const useUIStore = create<UIStore>((set) => ({
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
     }, 2400);
   },
-  removeToast: (id) =>
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   modal: { open: false },
   showModal: (m) => set((s) => ({ modal: { ...s.modal, ...m, open: true } })),

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { todayKey, chineseDate, chineseWeekday } from '@/lib/utils';
 import { clsx } from '@/lib/utils';
 
@@ -11,8 +12,11 @@ export function CalendarCard() {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
-  const [selected, setSelected] = useState<string>(todayKey());
+  // 选中日期与「当日日程」卡共用（useUIStore），因此点日期会真正联动右侧
+  const selected = useUIStore((s) => s.selectedDate);
+  const setSelected = useUIStore((s) => s.setSelectedDate);
   const schedule = useAppStore((s) => s.notes.schedule);
+
 
   const days = useMemo(() => {
     const first = new Date(view.year, view.month, 1);

@@ -22,16 +22,9 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): 
   }) as T;
 }
 
-export function throttle<T extends (...args: any[]) => any>(fn: T, ms: number): T {
-  let last = 0;
-  return ((...args: any[]) => {
-    const now = Date.now();
-    if (now - last >= ms) {
-      last = now;
-      fn(...args);
-    }
-  }) as T;
-}
+// 支持的占位符：YYYY MM DD HH mm，以及单字母 M（不补零月）与 D（不补零日）
+// 注意：正则交替顺序中 MM/DD 必须排在 M/D 之前，否则 'MM' 会被拆成两个 'M'
+const DATE_TOKENS = /YYYY|MM|DD|HH|mm|M|D/g;
 
 export function formatDate(d: Date | number, fmt = 'YYYY-MM-DD'): string {
   const date = typeof d === 'number' ? new Date(d) : d;
@@ -40,26 +33,21 @@ export function formatDate(d: Date | number, fmt = 'YYYY-MM-DD'): string {
   const day = String(date.getDate()).padStart(2, '0');
   const hh = String(date.getHours()).padStart(2, '0');
   const mm = String(date.getMinutes()).padStart(2, '0');
-  return fmt
-    .replace('YYYY', String(y))
-    .replace('MM', m)
-    .replace('DD', day)
-    .replace('HH', hh)
-    .replace('mm', mm);
+  const tokens: Record<string, string> = {
+    YYYY: String(y),
+    MM: m,
+    DD: day,
+    HH: hh,
+    mm,
+    M: String(date.getMonth() + 1),
+    D: String(date.getDate()),
+  };
+  // 用 /g 替换全部出现，而非仅第一处
+  return fmt.replace(DATE_TOKENS, (t) => tokens[t] ?? t);
 }
 
 export function todayKey(d: Date = new Date()): string {
   return formatDate(d, 'YYYY-MM-DD');
-}
-
-export function isSameDay(a: Date | number, b: Date | number): boolean {
-  const da = typeof a === 'number' ? new Date(a) : a;
-  const db2 = typeof b === 'number' ? new Date(b) : b;
-  return (
-    da.getFullYear() === db2.getFullYear() &&
-    da.getMonth() === db2.getMonth() &&
-    da.getDate() === db2.getDate()
-  );
 }
 
 export function greetingByHour(hour: number): string {

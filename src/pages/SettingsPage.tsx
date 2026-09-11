@@ -5,15 +5,8 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MediaImage } from '@/components/common/MediaImage';
 import { putFile, deleteFile } from '@/lib/db';
-import { uid, now, compressImage } from '@/lib/utils';
-
-const PRESET_BACKGROUNDS: { key: string; name: string; gradient: string }[] = [
-  { key: 'midnight', name: '夜半', gradient: 'linear-gradient(135deg, #1B1A1F 0%, #341915 100%)' },
-  { key: 'wine', name: '酒红', gradient: 'linear-gradient(135deg, #1B1A1F 0%, #6A080E 100%)' },
-  { key: 'paper', name: '旧纸', gradient: 'linear-gradient(135deg, #947D75 0%, #BCAEAA 100%)' },
-  { key: 'candle', name: '烛光', gradient: 'linear-gradient(135deg, #341915 0%, #E8C39E 100%)' },
-  { key: 'deep', name: '深紫', gradient: 'linear-gradient(135deg, #0F0A14 0%, #341915 70%, #6A080E 100%)' },
-];
+import { uid, compressImage } from '@/lib/utils';
+import { PRESET_BACKGROUNDS, DEFAULT_BACKGROUND_PRESET } from '@/lib/backgrounds';
 
 export function SettingsPage() {
   const profile = useAppStore((s) => s.profile);
@@ -176,7 +169,7 @@ export function SettingsPage() {
               <button
                 onClick={async () => {
                   if (profile.backgroundFileId) await deleteFile(profile.backgroundFileId);
-                  updateProfile({ backgroundFileId: undefined, backgroundPreset: 'midnight' });
+                  updateProfile({ backgroundFileId: undefined, backgroundPreset: DEFAULT_BACKGROUND_PRESET });
                   showToast('已移除自定义背景', 'success');
                 }}
                 className="btn-text wine"

@@ -18,7 +18,10 @@ export function MusicPlayerCard() {
   const currentTrack = tracks.find((t) => t.id === music.currentTrackId) || tracks[0];
 
   const handlePlay = () => {
-    if (currentTrack) music.play(currentTrack);
+    if (!currentTrack) return;
+    // 播放中则暂停，暂停中则（续）播——原先恒调 play() 会把暂停键变成「从头重播」
+    if (music.isPlaying) music.pause();
+    else music.play(currentTrack);
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {

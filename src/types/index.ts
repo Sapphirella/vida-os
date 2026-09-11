@@ -97,7 +97,6 @@ export interface Categories {
 
 export interface Settings {
   lastTab: 'desk' | 'notes' | 'data' | 'settings';
-  themeAccent?: string; // 未来可扩展多色
 }
 
 export interface AppState {

@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { Download, Upload, FileJson, FileText, FileCode, FileType, AlertTriangle } from 'lucide-react';
+import { Upload, FileJson, FileText, FileCode, FileType, AlertTriangle } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { putFile } from '@/lib/db';
-import { uid } from '@/lib/utils';
+import { putFile, db } from '@/lib/db';
+import { base64ToBlob } from '@/lib/utils';
 import {
   exportJSON,
   exportMarkdown,
@@ -15,7 +15,6 @@ import {
   parseTXTImport,
   type ExportScope,
 } from '@/lib/exportImport';
-import { putFile as saveFileBlob, db } from '@/lib/db';
 
 const SCOPES: { key: ExportScope; label: string; en: string; desc: string }[] = [
   { key: 'all', label: '全部数据', en: 'All', desc: '完整备份（含图片）' },
@@ -145,11 +144,11 @@ export function DataPage() {
         });
       } else if (file.name.endsWith('.md') || file.name.endsWith('.markdown')) {
         parsed = await parseMarkdownImport(text);
-        importState({ ...state, ...parsed } as any, 'merge');
+        importState(parsed, 'merge');
         showToast(`已导入 ${parsed.articles?.length || 0} 篇文章`, 'success');
       } else if (file.name.endsWith('.txt')) {
         parsed = await parseTXTImport(text);
-        importState({ ...state, ...parsed } as any, 'merge');
+        importState(parsed, 'merge');
         showToast(`已导入 ${parsed.articles?.length || 0} 篇文章`, 'success');
       } else {
         throw new Error('不支持的格式');
@@ -321,13 +320,4 @@ function downloadBlob(content: string, filename: string, mime: string) {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function base64ToBlob(dataUrl: string): Blob {
-  const [meta, b64] = dataUrl.split(',');
-  const mime = meta.match(/:(.*?);/)?.[1] || 'application/octet-stream';
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
 }

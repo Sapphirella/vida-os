@@ -4,17 +4,20 @@ import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Tag } from '@/components/common/Tag';
 import { EmptyState } from '@/components/common/EmptyState';
+import { ScheduleEditor } from '@/components/notes/ScheduleEditor';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { todayKey, chineseWeekday, chineseDate } from '@/lib/utils';
+import { chineseWeekday, chineseDate } from '@/lib/utils';
 
 export function DayScheduleCard() {
-  const [selected, setSelected] = useState(todayKey());
+  // 与月历共用同一个「选中日期」（useUIStore.selectedDate），点日期即切换当日日程
+  const selected = useUIStore((s) => s.selectedDate);
   const schedule = useAppStore((s) => s.notes.schedule);
+  const addSchedule = useAppStore((s) => s.addSchedule);
   const toggleDone = useAppStore((s) => s.toggleScheduleDone);
   const del = useAppStore((s) => s.deleteSchedule);
-  const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
+  const [composing, setComposing] = useState(false);
 
   const items = useMemo(() => {
     return schedule
@@ -43,22 +46,24 @@ export function DayScheduleCard() {
           variant="ghost"
           size="sm"
           icon={<Plus size={14} strokeWidth={1.6} />}
-          onClick={() => {
-            openEditor({
-              mode: 'inspiration', // schedule editor 复用
-              date: selected,
-            });
-            // 直接打开 schedule 编辑
-            setTimeout(() => {
-              const ev = new CustomEvent('open-schedule-editor', { detail: { date: selected } });
-              window.dispatchEvent(ev);
-            }, 50);
-            showToast('请填写日程信息', 'info');
-          }}
+          onClick={() => setComposing(true)}
         >
           新增
         </Button>
       </div>
+
+      {/* 新增日程：直接复用便签页的日程表单 */}
+      {composing && (
+        <ScheduleEditor
+          initial={{ date: selected }}
+          onCancel={() => setComposing(false)}
+          onSave={(data) => {
+            addSchedule(data);
+            setComposing(false);
+            showToast('日程已添加', 'success');
+          }}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto -mx-1 px-1">
         {items.length === 0 ? (

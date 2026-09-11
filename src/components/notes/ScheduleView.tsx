@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Plus, Check, Trash2, Calendar, X, Edit2 } from 'lucide-react';
+import { Plus, Check, Trash2, Edit2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
 import { EmptyState } from '@/components/common/EmptyState';
 import { CategoryChips } from './CategoryChips';
+import { ScheduleEditor, type ScheduleDraft } from './ScheduleEditor';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { uid, now, todayKey } from '@/lib/utils';
+import { todayKey } from '@/lib/utils';
 import type { ScheduleNote } from '@/types';
 
 export function ScheduleView() {
@@ -43,7 +44,7 @@ export function ScheduleView() {
           initial={composing}
           onCancel={() => setComposing(null)}
           onSave={(data) => {
-            addSchedule(data as any);
+            addSchedule(data);
             setComposing(null);
             showToast('日程已添加', 'success');
           }}
@@ -111,22 +112,34 @@ export function ScheduleView() {
                 </span>
                 <div className="flex-1 h-px bg-bronze/10" />
               </div>
-              <ul className="space-y-2 opacity-60">
-                {grouped[pastDates[0]].map((it) => (
-                  <ScheduleItem
-                    key={it.id}
-                    item={it}
-                    isEditing={false}
-                    onEdit={() => setEditingId(it.id)}
-                    onCancel={() => setEditingId(null)}
-                    onSave={() => {}}
-                    onDelete={() => {
-                      if (confirm('删除该日程？')) deleteSchedule(it.id);
-                    }}
-                    onToggle={() => toggleDone(it.id)}
-                  />
+              <div className="space-y-4 opacity-60">
+                {pastDates.map((date) => (
+                  <div key={date}>
+                    <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase mb-2 px-1">
+                      {formatDateLabel(date)}
+                    </p>
+                    <ul className="space-y-2">
+                      {grouped[date].map((it) => (
+                        <ScheduleItem
+                          key={it.id}
+                          item={it}
+                          isEditing={editingId === it.id}
+                          onEdit={() => setEditingId(it.id)}
+                          onCancel={() => setEditingId(null)}
+                          onSave={(data) => {
+                            updateSchedule(it.id, data);
+                            setEditingId(null);
+                          }}
+                          onDelete={() => {
+                            if (confirm('删除该日程？')) deleteSchedule(it.id);
+                          }}
+                          onToggle={() => toggleDone(it.id)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
         </div>
@@ -165,7 +178,7 @@ interface ItemProps {
   isEditing: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: (data: Partial<ScheduleNote>) => void;
+  onSave: (data: ScheduleDraft) => void;
   onDelete: () => void;
   onToggle: () => void;
 }
@@ -238,75 +251,5 @@ function ScheduleItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, onT
         </div>
       </Card>
     </li>
-  );
-}
-
-interface EditorProps {
-  initial: Partial<ScheduleNote>;
-  inline?: boolean;
-  onCancel: () => void;
-  onSave: (data: Partial<ScheduleNote>) => void;
-}
-
-function ScheduleEditor({ initial, inline, onCancel, onSave }: EditorProps) {
-  const [title, setTitle] = useState(initial.title || '');
-  const [note, setNote] = useState(initial.note || '');
-  const [date, setDate] = useState(initial.date || todayKey());
-  const [time, setTime] = useState(initial.time || '');
-  const [category, setCategory] = useState(initial.category || '生活');
-
-  return (
-    <div className={inline ? '' : 'glass-card p-4 mb-4 animate-slide-up'}>
-      <input
-        autoFocus={!inline}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="日程标题"
-        className="w-full bg-transparent font-serif text-lg text-paper placeholder:text-bronze-deep outline-none"
-      />
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="备注（可选）"
-        className="w-full bg-transparent mt-2 resize-none font-serif text-sm text-bronze placeholder:text-bronze-deep outline-none"
-        rows={2}
-      />
-      <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-bronze/10">
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="px-2 py-1 text-xs bg-bronze/10 rounded text-paper outline-none font-mono"
-        />
-        <input
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          className="px-2 py-1 text-xs bg-bronze/10 rounded text-paper outline-none font-mono"
-        />
-        <input
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          placeholder="分类"
-          className="px-2 py-1 text-xs bg-bronze/10 rounded text-paper outline-none w-20"
-        />
-        <div className="ml-auto flex gap-2">
-          <button onClick={onCancel} className="btn-text">
-            取消
-          </button>
-          <button
-            onClick={() => {
-              if (title.trim() && date) {
-                onSave({ title: title.trim(), note: note.trim(), date, time, category });
-              }
-            }}
-            className="btn-primary"
-            style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
-          >
-            保存
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

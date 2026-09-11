@@ -1,6 +1,7 @@
 // VidaOS 数据持久化 - Dexie 封装
 import Dexie, { type Table } from 'dexie';
 import type { AppState, MediaFile } from '@/types';
+import { DEFAULT_BACKGROUND_PRESET } from './backgrounds';
 
 class VidaDB extends Dexie {
   state!: Table<{ id: string; data: AppState }, string>;
@@ -66,7 +67,7 @@ export function defaultState(): AppState {
     profile: {
       name: '匿名旅人',
       signature: '在安静的日子里，慢慢写下自己的生活。',
-      backgroundPreset: 'midnight',
+      backgroundPreset: DEFAULT_BACKGROUND_PRESET,
     },
     collections: [],
     articles: [],

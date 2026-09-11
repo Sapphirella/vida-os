@@ -2,7 +2,11 @@
 import { useUIStore } from '@/stores/useUIStore';
 import { useAppStore } from '@/stores/useAppStore';
 import { MarkdownEditor } from './MarkdownEditor';
-import { uid } from '@/lib/utils';
+
+// 稳定的空数组常量：若在渲染中写 `editor.imageIds || []`，每次渲染都会产生新数组，
+// 会让 MarkdownEditor 的初值同步逻辑误判为「初值变了」从而重置用户输入。
+const EMPTY_IDS: string[] = [];
+const EMPTY_TAGS: string[] = [];
 
 export function EditorOverlay() {
   const editor = useUIStore((s) => s.editor);
@@ -13,14 +17,12 @@ export function EditorOverlay() {
   const addMoment = useAppStore((s) => s.addMoment);
   const addLetter = useAppStore((s) => s.addLetter);
   const updateLetter = useAppStore((s) => s.updateLetter);
-  const addInspiration = useAppStore((s) => s.addInspiration);
-  const updateInspiration = useAppStore((s) => s.updateInspiration);
-  const addSchedule = useAppStore((s) => s.addSchedule);
-  const addTodo = useAppStore((s) => s.addTodo);
   const articles = useAppStore((s) => s.articles);
   const letters = useAppStore((s) => s.letters);
 
   if (!editor.open) return null;
+
+  const { mode, editingId } = editor;
 
   const handleSave = (data: {
     title: string;
@@ -31,15 +33,14 @@ export function EditorOverlay() {
   }) => {
     const { title, content, imageIds, collectionId } = data;
     const tags = data.tags ?? [];
-    const editingId = editor.editingId;
 
-    switch (editor.mode) {
+    switch (mode) {
       case 'article': {
         if (editingId) {
           updateArticle(editingId, { title, content, imageIds, collectionId, tags });
           showToast('已更新', 'success');
         } else {
-          const id = addArticle({ title, content, imageIds, collectionId, tags });
+          addArticle({ title, content, imageIds, collectionId, tags });
           showToast('已发布', 'success');
         }
         break;
@@ -59,16 +60,6 @@ export function EditorOverlay() {
         }
         break;
       }
-      case 'inspiration': {
-        if (editingId) {
-          updateInspiration(editingId, { content });
-          showToast('已更新', 'success');
-        } else {
-          addInspiration(content, editor.category || '随想');
-          showToast('已记录', 'success');
-        }
-        break;
-      }
     }
     closeEditor();
   };
@@ -76,13 +67,13 @@ export function EditorOverlay() {
   // 找到当前编辑项的初值
   let initialTitle = editor.initialTitle || '';
   let initialContent = editor.initialContent || '';
-  let initialImageIds: string[] = editor.imageIds || [];
-  let initialCollectionId: string | undefined = undefined;
-  let initialTags: string[] = editor.tags ?? [];
+  let initialImageIds: string[] = editor.imageIds ?? EMPTY_IDS;
+  let initialCollectionId: string | undefined;
+  let initialTags: string[] = editor.tags ?? EMPTY_TAGS;
 
-  if (editor.editingId) {
-    if (editor.mode === 'article') {
-      const art = articles.find((a) => a.id === editor.editingId);
+  if (editingId) {
+    if (mode === 'article') {
+      const art = articles.find((a) => a.id === editingId);
       if (art) {
         initialTitle = art.title;
         initialContent = art.content;
@@ -90,44 +81,47 @@ export function EditorOverlay() {
         initialCollectionId = art.collectionId;
         initialTags = art.tags;
       }
-    } else if (editor.mode === 'letter') {
-      const l = letters.find((x) => x.id === editor.editingId);
+    } else if (mode === 'letter') {
+      const l = letters.find((x) => x.id === editingId);
       if (l) {
         initialTitle = l.title;
         initialContent = l.content;
         initialImageIds = l.imageIds;
       }
-    } else if (editor.mode === 'inspiration') {
-      const ins = useAppStore.getState().notes.inspiration.find((n) => n.id === editor.editingId);
-      if (ins) {
-        initialContent = ins.content;
-      }
     }
   }
 
+  // 收藏星标只对「已存在」的文章/信件有意义：新建时还没有 id 可收藏
+  const favoriteId =
+    editingId && (mode === 'article' || mode === 'letter')
+      ? { refType: mode, refId: editingId }
+      : undefined;
+
   return (
     <MarkdownEditor
+      // mode/editingId 变化时重挂载，初值由 useState 初始化取得（不再依赖副作用重置）
+      key={`${mode}-${editingId ?? 'new'}`}
       open={editor.open}
-      title={getEditorTitle(editor.mode, !!editor.editingId)}
+      title={getEditorTitle(mode, !!editingId)}
       initialContent={initialContent}
       initialTitle={initialTitle}
-      mode={editor.mode}
+      mode={mode}
       imageIds={initialImageIds}
       collectionId={initialCollectionId}
       tags={initialTags}
+      favoriteId={favoriteId}
       onSave={handleSave}
       onClose={closeEditor}
     />
   );
 }
 
-function getEditorTitle(mode: string, isEdit: boolean): string {
-  const map: Record<string, [string, string]> = {
+function getEditorTitle(mode: 'article' | 'moment' | 'letter', isEdit: boolean): string {
+  const map: Record<'article' | 'moment' | 'letter', [string, string]> = {
     article: ['长文 · Space', '空间 · 编辑'],
     moment: ['动态 · Moments', '动态 · 发布'],
     letter: ['信件 · Mailbox', '信件 · 编辑'],
-    inspiration: ['灵感 · Note', '便签 · 编辑'],
   };
-  const [create, edit] = map[mode] || ['编辑', '编辑'];
+  const [create, edit] = map[mode];
   return isEdit ? edit : create;
 }
