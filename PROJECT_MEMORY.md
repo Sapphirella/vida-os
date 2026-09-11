@@ -438,6 +438,19 @@ git commit -m "feat: ..."
 
 ## 变更日志（Changelog）
 
+### [v3.1] - 2026-09-11 —— 动态 Markdown / 配图与 PDF / 配色精进（用户 9 项需求，第 1 批）
+- **配色精进（#2）**：依据 `docs/palette-suggestion.html` 扩展色板 —— 新增 `charcoal #2A292E`（上层卡，比 ink 亮一档做层级）、`line #4A3F3C`（描边/分隔线）、`amber #C9A063`（高亮/星标）、`parchment #D8C3A8`、`ash #8A858C`，以及语义色 `olive #6E7355`（成功）/ `sapphire #5C6B8C`（信息）/ `wine.bright #8C1117`（危险）。卡片底色由「发褐的棕」改为**中性炭黑**，正文背景加一层极淡紫灰，Toast 三态改用语义色 —— 整体不再一片沉闷发闷。
+- **动态支持 Markdown（#3）**：`MomentsPage` 原先把 `m.content` 当纯文本渲染，现改用 `renderMarkdown()`；新增 `.prose-moment` 紧凑排版（比长文更小的段距与标题级差）。
+- **修复文章配图（#6）**：`ArticleReaderPage` 原先只渲染 `coverId`，**上传的 `imageIds` 从未显示**；现新增配图区（排除已作封面的那张，带 alt）。
+- **PDF 内嵌图片 + 分页不切断文字（#6/#8）**：
+  - 新增 `buildImageDataUrls()`：从 IndexedDB 取 Blob 转 data URL 内嵌进 PDF（文章封面/配图、动态图片、信件图片都包含在内）；新增 `waitForImages()` 等图片解码完成，避免漏画。
+  - 新增 `computePageRanges()`：收集容器内**每一行文字与每一张图片的纵向区间**，把「区间上边界」作为候选切点，再贪心选取不超过页高的最大候选点 —— 切点永远落在行间空隙，**不会再出现一行字被劈成两半**；同时限制单张图片不超过一页高度。
+  - 渲染改为逐页切片（每页独立 canvas → 独立 PDF 页），并给每页铺米色底；A4 映射留 24pt 页边距。
+- **配图排序（#6）**：编辑器底部缩略图新增序号与 ◀ ▶ 调序按钮（`moveImage()`），可拖动顺序即文章内图片顺序。
+- **实测**：#8 用独立用例验证 —— 容器 4737px / 每页 1044px，输出 **5 页**（符合预期），**切断文字的切点数量 = 0**；`tsc -b --noEmit` 与 `vite build` 通过。
+- **说明**：#1（编辑器预览无文字）与 #2 的「背景点了不换」在**当前代码中无法复现**（预览/背景均已实测正常）。判断为浏览器标签页停留在修复前的旧 JS（dev server 多次重启后 HMR socket 已断，页面不会自动刷新）。已提醒用户刷新，并将在后续加入版本标记。
+- 剩余待办：#4 动态头像/用户名/评论/收藏、#5 动态时间线 + 搜索替换、#7 导出多选 + 收藏夹导出、#9 本地文件夹快照备份。
+
 ### [v3.0-errorboundary] - 2026-09-11 —— 新增错误边界，杜绝白屏
 - 新增 `src/components/common/ErrorBoundary.tsx`（class 组件），提供**两层**保护：
   - **最外层（`variant="fullscreen"`，挂在 `main.tsx` 的 `HashRouter` 之外）**：兜住 App / 路由自身的错误，整屏显示恢复界面；
