@@ -36,11 +36,17 @@ export function EditorOverlay() {
 
     switch (mode) {
       case 'article': {
+        // 首图自动作封面（README 约定的行为）；已有封面则保留，除非那张图被移除
+        const existing = editingId ? articles.find((a) => a.id === editingId) : undefined;
+        const coverId =
+          existing?.coverId && imageIds.includes(existing.coverId)
+            ? existing.coverId
+            : imageIds[0];
         if (editingId) {
-          updateArticle(editingId, { title, content, imageIds, collectionId, tags });
+          updateArticle(editingId, { title, content, imageIds, collectionId, tags, coverId });
           showToast('已更新', 'success');
         } else {
-          addArticle({ title, content, imageIds, collectionId, tags });
+          addArticle({ title, content, imageIds, collectionId, tags, coverId });
           showToast('已发布', 'success');
         }
         break;
