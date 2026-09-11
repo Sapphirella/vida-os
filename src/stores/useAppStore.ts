@@ -23,10 +23,6 @@ import { debounce, uid, now } from '@/lib/utils';
 // 持久化（防抖）
 // ============================================================
 
-const persist = debounce((state: AppState) => {
-  saveState(state);
-}, 400);
-
 /** 按 id 合并两个列表（保留现有项，追加 incoming 中不存在的新项） */
 function mergeById<T extends { id: string }>(cur: T[], incoming?: T[]): T[] {
   if (!incoming || incoming.length === 0) return cur;
@@ -104,24 +100,57 @@ interface Actions {
   importState: (incoming: Partial<AppState>, mode: 'merge' | 'overwrite') => void;
 }
 
-type Store = AppState & Actions;
+// 运行时标记：是否已完成首次从 IndexedDB 载入（不持久化，不入 AppState）
+interface RuntimeFlags {
+  hydrated: boolean;
+}
+
+type Store = AppState & Actions & RuntimeFlags;
+
+/**
+ * 只取「纯数据」字段做持久化快照。
+ * 关键：不能直接把 get() 交给 IndexedDB —— store 里混着 action 函数，
+ * 结构化克隆会因函数而抛 DataCloneError，导致每次保存都静默失败（数据全丢）。
+ */
+function snapshot(s: Store): AppState {
+  return {
+    version: 3,
+    profile: s.profile,
+    collections: s.collections,
+    articles: s.articles,
+    moments: s.moments,
+    letters: s.letters,
+    favorites: s.favorites,
+    notes: s.notes,
+    categories: s.categories,
+    tracks: s.tracks,
+    settings: s.settings,
+  };
+}
+
+// 防抖持久化：写入「纯数据」快照（绝不能把 action 函数交给 IndexedDB）
+const persist = debounce((s: Store) => {
+  saveState(snapshot(s));
+}, 400);
 
 export const useAppStore = create<Store>((set, get) => ({
   ...defaultState(),
+  hydrated: false,
 
   hydrate: async () => {
     const loaded = await loadState();
     if (loaded) {
-      set({ ...defaultState(), ...loaded, version: 3 });
+      set({ ...defaultState(), ...loaded, version: 3, hydrated: true });
     } else {
+      set({ hydrated: true });
       persist(get());
     }
   },
 
   resetAll: async () => {
     const fresh = defaultState();
-    set(fresh);
-    persist(fresh);
+    set({ ...fresh, hydrated: true });
+    persist(get());
   },
 
   updateProfile: (patch) => {
@@ -459,7 +488,7 @@ export const useAppStore = create<Store>((set, get) => ({
   // 导入（incoming 允许是 Partial：Markdown/TXT 导入只带 articles）
   importState: (incoming, mode) => {
     if (mode === 'overwrite') {
-      set({ ...defaultState(), ...incoming, version: 3 });
+      set({ ...defaultState(), ...incoming, version: 3, hydrated: true });
     } else {
       // 合并：保留现有数据，追加 incoming 中不存在的新项
       const cur = get();

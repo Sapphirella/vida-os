@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -23,7 +23,7 @@ import { CollectionPage } from '@/pages/CollectionPage';
 
 function App() {
   const hydrate = useAppStore((s) => s.hydrate);
-  const hydrated = useAppStore((s) => s.version === 3 && s.articles !== undefined);
+  const hydrated = useAppStore((s) => s.hydrated);
   const currentTab = useUIStore((s) => s.currentTab);
   const setTab = useUIStore((s) => s.setTab);
   const setLastTab = useAppStore((s) => s.setLastTab);
@@ -35,15 +35,25 @@ function App() {
     hydrate();
   }, [hydrate]);
 
+  // 「恢复上次 tab」只能在启动后执行一次。
+  // 若不加这个一次性守卫，它会与下面「把 currentTab 写回 lastTab」的 effect 互相打架：
+  // currentTab → lastTab → currentTab … 无限 ping-pong，React 抛
+  // "Maximum update depth exceeded" 并卸载整棵树（表现为点 tab 直接白屏）。
+  const restoredRef = useRef(false);
   useEffect(() => {
-    if (hydrated && lastTab && lastTab !== currentTab) {
+    if (!hydrated || restoredRef.current) return;
+    restoredRef.current = true;
+    if (lastTab && lastTab !== currentTab) {
       setTab(lastTab);
     }
   }, [hydrated, lastTab, currentTab, setTab]);
 
+  // 单向同步：currentTab → settings.lastTab
+  // 必须等 hydrated 之后再写，否则会用初始的 'desk' 覆盖掉刚读出来的持久化值
   useEffect(() => {
+    if (!hydrated) return;
     setLastTab(currentTab);
-  }, [currentTab, setLastTab]);
+  }, [hydrated, currentTab, setLastTab]);
 
   // 同步 tab 变化到路由
   useEffect(() => {
