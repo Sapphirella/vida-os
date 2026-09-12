@@ -316,25 +316,34 @@ export function exportTXT(state: AppState, scope: ExportScopes = ['all']): strin
 // ============================================================
 // PDF 导出
 //
-// 排版沿用**最早那一版**（用户认为最好的一版）：
-//   - 内容在 720px 宽、上下 64px / 左右 80px 内边距的容器里**连续排版**；
-//   - 整篇一次渲染成一张长图，再按页切片贴到各页 —— 内容是连续流动的，
-//     因此不会出现「每页上下各留 64px 白边」或「图片独占一页、下半页空白」；
-//   - 容器等比铺满整页宽度（与最早版本一致）。
+// 排版设计（暗夜书房 · 纸质版，2026-09-12 重做）：
+//   - 内容在 720px 宽、左右 80px 内边距的容器里连续排版，整篇一次渲染成
+//     一张长图，再按页切片贴到各页 —— 内容连续流动，无「图片独占一页、
+//     下半页空白」问题；
+//   - **页边距由贴图位置统一控制**：每页顶部留 MARGIN_TOP、底部留
+//     MARGIN_BOTTOM，中间页不再顶格、末页内容不足时**垂直居中**，
+//     解决「文字整体偏上、不在正中间」；
+//   - **分页切点只落在行间隙中点**：先把碎片矩形按视觉行聚合，再取相邻
+//     两行间隙的中点（间隙 >= 6px 才允许切），并对 html2canvas 的 1-2px
+//     排版偏差留出余量，解决「一行字被劈到两页」；
+//   - 底部绘制居中页码（· n ·），配色沿用暗夜书房羊皮纸风：米底 + 酒红
+//     标题 + 古铜辅助 + EB Garamond 衬线。
 //
-// 在此之上只保留两处用户明确要求的改动：
-//   1. 切点选在「行与行之间的空隙」，不再把一行字劈成两半；
-//   2. 正文里的配图/封面内嵌为 data URL（最早版本没有图）。
+// 保留用户认可的基础：米色羊皮纸底、衬线正文、酒红小标题、图片内嵌。
 // ============================================================
 
 const A4_W = 595.28;
 const A4_H = 841.89;
-/** 渲染容器宽度（最早版本就是 720px + 64/80 内边距） */
+/** 渲染容器宽度（内容横向布局的依据） */
 const PDF_RENDER_W = 720;
 /** 容器 px → PDF pt：720px 铺满整页宽度 */
 const PT_PER_PX = A4_W / PDF_RENDER_W;
-/** 一页在容器坐标下对应的高度（CSS px） */
-const PAGE_H_PX = A4_H / PT_PER_PX;
+/** 页面上边距（pt） */
+const MARGIN_TOP = 64;
+/** 页面下边距（pt），留出页码位置 */
+const MARGIN_BOTTOM = 48;
+/** 每页内容可用高度（CSS px）—— 分页与图片高度的上限依据 */
+const PAGE_CONTENT_PX = (A4_H - MARGIN_TOP - MARGIN_BOTTOM) / PT_PER_PX;
 const PDF_BG = '#F2EBE0';
 const PDF_FONT = '"EB Garamond", "Lora", Georgia, serif';
 
@@ -371,58 +380,97 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 }
 
 /**
- * 计算「不会切断文字行」的分页位置。
- * 收集容器内每一行文字、每一张图片的纵向区间，把「区间上边界」当候选切点，
- * 再贪心选取不超过页高的最大候选点 —— 切点永远落在行与行之间的空隙里。
+ * 计算「不会切断文字行」的分页位置 —— **在渲染完成后的画布像素上寻找切点**。
+ *
+ * 为什么不用浏览器布局坐标（getClientRects）预测？
+ *   html2canvas 在把整张超长图（2x 时可达两万像素高）渲染进画布时，其实际
+ *   排版与浏览器实测坐标存在系统性偏差，偏差沿页面累积。若按浏览器坐标切片，
+ *   切点即使「数学上」落在行间隙，落到渲染图上时已经偏到一行文字的中间。
+ *
+ * 做法（2026-09-12 重做，像素级）：
+ *   1. 对渲染好的画布按行扫描采样列，标记「有内容行 / 纯背景行」；
+ *   2. 候选切点 = 每段连续背景行（行间空白带）的**中点**——空白的中心天然
+ *      离上下两行最远，任何精度下都不可能切到文字；
+ *   3. 空白带不足（图片贴行、行高内缩等）时保守放大，仍找不到再硬切页容量，
+ *      避免死循环。
+ *
+ * 切点坐标与渲染结果出自**同一张画布**，因此与最终 PDF 内容完全一致。
  */
-export function computePageRanges(
-  container: HTMLElement,
-  pageH: number,
-  totalH: number,
+function computePageCuts(
+  canvas: HTMLCanvasElement,
+  pageCapPx: number,
+  scale: number,
 ): Array<[number, number]> {
-  const cTop = container.getBoundingClientRect().top;
-  const blocks: Array<[number, number]> = [];
+  const W = canvas.width;
+  const H = canvas.height;
+  const cap = Math.round(pageCapPx * scale);
+  const minGap = Math.max(4, Math.round(4 * scale)); // 最小空白带（CSS px）
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [[0, H]];
 
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  const range = document.createRange();
-  let node: Node | null;
-  while ((node = walker.nextNode())) {
-    if (!node.nodeValue || !node.nodeValue.trim()) continue;
-    range.selectNodeContents(node);
-    const rects = range.getClientRects();
-    for (let i = 0; i < rects.length; i += 1) {
-      const r = rects[i];
-      if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
+  // 逐行判断是否纯背景（分块读取，避免大画布一次 getImageData 的内存峰值）
+  // 注意：行判定必须**全宽扫描**——只采样少数几列会把「短行」（段落末行、
+  // 列表项等字数少的行）漏判成空白带：若采样列恰巧全部落在字的缝隙里，
+  // 该行会被当成空白，切点随之落进文字中间。全宽扫描只要有一个像素偏离
+  // 背景即视为内容行，短行再多字少也不会计入空白带。
+  const hasContent = new Uint8Array(H);
+  const CHUNK = 512;
+  const bg = [242, 235, 224]; // PDF_BG
+  for (let y0 = 0; y0 < H; y0 += CHUNK) {
+    const h = Math.min(CHUNK, H - y0);
+    const img = ctx.getImageData(0, y0, W, h).data;
+    for (let y = 0; y < h; y += 1) {
+      const rowBase = y * W * 4;
+      let content = false;
+      // 隔一个像素采样（字宽数十像素，2px 步进不可能穿进字缝漏检）
+      for (let x = 0; x < W; x += 2) {
+        const i = rowBase + x * 4;
+        const dr = Math.abs(img[i] - bg[0]);
+        const dg = Math.abs(img[i + 1] - bg[1]);
+        const db = Math.abs(img[i + 2] - bg[2]);
+        if (dr > 10 || dg > 10 || db > 10) {
+          content = true;
+          break;
+        }
+      }
+      hasContent[y0 + y] = content ? 1 : 0;
     }
   }
-  container.querySelectorAll('img').forEach((img) => {
-    const r = img.getBoundingClientRect();
-    if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
-  });
 
-  const cands = Array.from(
-    new Set(blocks.map(([t]) => Math.max(1, Math.floor(t - 1)))),
-  ).sort((a, b) => a - b);
+  // 空白带中点 = 候选切点
+  const cands: number[] = [];
+  let y = 0;
+  while (y < H) {
+    if (hasContent[y] === 0) {
+      let y2 = y;
+      while (y2 < H && hasContent[y2] === 0) y2 += 1;
+      if (y2 - y >= minGap) cands.push(Math.floor((y + y2) / 2));
+      y = y2;
+    } else {
+      y += 1;
+    }
+  }
 
+  // 贪心分页：每页取「不超过页容量」的最后一个空白带中点
   const ranges: Array<[number, number]> = [];
   let start = 0;
   let guard = 0;
-  while (start < totalH - 0.5 && guard++ < 5000) {
-    const limit = start + pageH;
-    if (limit >= totalH) {
-      ranges.push([start, totalH]);
+  while (start < H - 1 && guard++ < 5000) {
+    const limit = start + cap;
+    if (limit >= H) {
+      ranges.push([start, H]);
       break;
     }
     let end = 0;
     for (const c of cands) {
-      if (c > start + 1 && c <= limit) end = c;
+      if (c > start && c <= limit) end = c;
       else if (c > limit) break;
     }
-    if (end <= start) end = limit; // 找不到候选（如超高的图）时硬切，避免死循环
+    if (end <= start) end = limit; // 兜底：超高的图片等场景硬切，避免死循环
     ranges.push([start, end]);
     start = end;
   }
-  if (ranges.length === 0) ranges.push([0, totalH]);
+  if (ranges.length === 0) ranges.push([0, H]);
   return ranges;
 }
 
@@ -546,14 +594,15 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     });
   }
 
-  // 与最早版本一致的渲染容器：连续排版，整体等比铺满整页
+  // 连续排版容器：整篇渲染成一张长图，再按页切片
+  // 注意：上下内边距为 0 —— 页面留白统一由 MARGIN_TOP / MARGIN_BOTTOM 控制
   const container = document.createElement('div');
   container.style.cssText = `
     position: fixed;
     top: -10000px;
     left: -10000px;
     width: ${PDF_RENDER_W}px;
-    padding: 64px 80px;
+    padding: 0 80px;
     background: ${PDF_BG};
     color: #1B1A1F;
     font-family: ${PDF_FONT};
@@ -563,9 +612,9 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   document.body.appendChild(container);
 
   try {
-    // 单张图片不超过一页
+    // 单张图片不超过一页的内容区（留 24px 安全余量，避免贴图溢出页边距）
     container.querySelectorAll('img').forEach((img) => {
-      img.style.maxHeight = `${Math.floor(PAGE_H_PX) - 40}px`;
+      img.style.maxHeight = `${Math.floor(PAGE_CONTENT_PX) - 24}px`;
       img.style.width = 'auto';
       img.style.maxWidth = '100%';
       img.style.objectFit = 'contain';
@@ -573,21 +622,24 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     await waitForImages(container);
 
     const totalH = container.scrollHeight;
+    const RENDER_SCALE = 2;
     const canvas = await html2canvas(container, {
       backgroundColor: PDF_BG,
-      scale: 2,
+      scale: RENDER_SCALE,
       useCORS: true,
       logging: false,
       windowHeight: totalH,
       height: totalH,
     });
-    const pxPerCss = canvas.height / totalH;
-    const ranges = computePageRanges(container, PAGE_H_PX, totalH);
+    // 分页切点直接从渲染画布像素中取「行间空白带中点」——
+    // 切点与最终贴图出自同一张画布，杜绝「测量坐标 ≠ 渲染坐标」导致的切字
+    const ranges = computePageCuts(canvas, PAGE_CONTENT_PX, RENDER_SCALE);
+    const pageCapPt = A4_H - MARGIN_TOP - MARGIN_BOTTOM;
 
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
     ranges.forEach(([a, b], idx) => {
-      const sy = Math.max(0, Math.round(a * pxPerCss));
-      const sh = Math.max(1, Math.min(canvas.height - sy, Math.round((b - a) * pxPerCss)));
+      const sy = Math.max(0, a);
+      const sh = Math.max(1, Math.min(canvas.height - sy, b - a));
       const slice = document.createElement('canvas');
       slice.width = canvas.width;
       slice.height = sh;
@@ -597,10 +649,25 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
       ctx.fillRect(0, 0, slice.width, slice.height);
       ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
 
+      // 本页内容实际高度（pt）
+      const contentH = (sh / RENDER_SCALE) * PT_PER_PX;
+      // 垂直位置：固定上边距；末页内容不足一页时垂直居中，避免「悬在页面顶部」
+      let y = MARGIN_TOP;
+      const isLast = idx === ranges.length - 1;
+      if (isLast && contentH < pageCapPt) y = MARGIN_TOP + (pageCapPt - contentH) / 2;
+
       if (idx > 0) pdf.addPage();
       pdf.setFillColor(242, 235, 224);
       pdf.rect(0, 0, A4_W, A4_H, 'F');
-      pdf.addImage(slice.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, A4_W, (b - a) * PT_PER_PX);
+      pdf.addImage(slice.toDataURL('image/jpeg', 0.9), 'JPEG', 0, y, A4_W, contentH);
+
+      // 页码（· n ·）居中于页脚边距区，古铜色
+      pdf.setFont('times', 'italic');
+      pdf.setFontSize(10);
+      pdf.setTextColor(148, 125, 117);
+      pdf.text(`· ${idx + 1} ·`, A4_W / 2, A4_H - MARGIN_BOTTOM / 2 - 8, {
+        align: 'center',
+      });
     });
 
     pdf.save(`vidaos-${scopeSlug(scope)}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
