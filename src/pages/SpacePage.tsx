@@ -99,7 +99,7 @@ export function SpacePage() {
                     >
                       <BookOpen size={14} strokeWidth={1.4} className="text-wine-light" />
                     </div>
-                    <h3 className="font-serif text-moon text-base leading-tight mb-1 truncate-1">
+                    <h3 className="font-serif text-headline text-base leading-tight mb-1 truncate-1">
                       {c.name}
                     </h3>
                     {c.desc && (
@@ -153,7 +153,7 @@ export function SpacePage() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-serif text-moon text-lg leading-snug mb-1 truncate-2 group-hover:text-candle transition-colors">
+                        <h3 className="font-serif text-headline text-lg leading-snug mb-1 truncate-2 group-hover:text-candle transition-colors">
                           {a.title}
                         </h3>
                         <p className="font-serif text-bronze text-sm line-clamp-2 leading-relaxed">

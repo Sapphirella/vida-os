@@ -250,7 +250,7 @@ export function MarkdownEditor({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="标题..."
-            className="w-full bg-transparent font-serif text-moon text-2xl sm:text-3xl placeholder:text-bronze-deep outline-none tracking-tight"
+            className="w-full bg-transparent font-serif text-headline text-2xl sm:text-3xl placeholder:text-bronze-deep outline-none tracking-tight"
             style={{ fontWeight: 500, lineHeight: 1.3 }}
           />
           {/* 标签 + 合集（仅文章） */}

@@ -51,7 +51,7 @@ export function FeatureGrid() {
                     className="text-bronze-light group-hover:text-candle transition-colors"
                   />
                 </div>
-                <h3 className="font-serif text-moon text-lg leading-none mb-0.5">
+                <h3 className="font-serif text-headline text-lg leading-none mb-0.5">
                   {label}
                 </h3>
                 <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mb-2">

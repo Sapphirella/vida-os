@@ -61,7 +61,7 @@ export function MailboxPage() {
                         <h3
                           className={clsx(
                             'font-serif text-lg leading-snug truncate-1',
-                            l.unread ? 'text-moon' : 'text-paper-dim',
+                            l.unread ? 'text-headline' : 'text-paper-dim',
                           )}
                         >
                           {l.title || '(无题)'}
@@ -126,7 +126,7 @@ export function MailboxPage() {
           }}
           aria-label="写信"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-moon" />
+          <Plus size={22} strokeWidth={1.6} className="text-headline" />
         </button>
       </div>
     </div>

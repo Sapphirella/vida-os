@@ -67,7 +67,7 @@ export function TopBar() {
         )}
 
         <div className="flex-1 min-w-0">
-          <h1 className="font-serif text-title text-moon tracking-tight leading-none">
+          <h1 className="font-serif text-title text-headline tracking-tight leading-none">
             {title}
           </h1>
           {sub && (

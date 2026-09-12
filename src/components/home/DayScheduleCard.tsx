@@ -35,7 +35,7 @@ export function DayScheduleCard() {
           <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
             schedule
           </p>
-          <h3 className="font-serif text-moon text-lg mt-0.5">
+          <h3 className="font-serif text-headline text-lg mt-0.5">
             {chineseDate(new Date(selected))}
           </h3>
           <p className="font-sans text-bronze text-xs mt-0.5">
@@ -87,7 +87,7 @@ export function DayScheduleCard() {
                   }`}
                   aria-label="完成"
                 >
-                  {it.done && <Check size={12} strokeWidth={2.4} className="text-moon" />}
+                  {it.done && <Check size={12} strokeWidth={2.4} className="text-headline" />}
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">

@@ -7,6 +7,13 @@ import { MediaImage } from '@/components/common/MediaImage';
 import { putFile, deleteFile } from '@/lib/db';
 import { uid, compressImage } from '@/lib/utils';
 import { PRESET_BACKGROUNDS, DEFAULT_BACKGROUND_PRESET, getBackgroundPreset } from '@/lib/backgrounds';
+import { setThemeMode, readThemeMode, resolveTheme, type ThemeMode } from '@/lib/theme';
+
+const THEME_OPTIONS: { key: ThemeMode; label: string; hint: string }[] = [
+  { key: 'system', label: '跟随系统', hint: '随系统浅色 / 深色自动切换' },
+  { key: 'day', label: '日间', hint: '白昼书房 · 温润纸面' },
+  { key: 'night', label: '夜间', hint: '暗夜书房 · 深夜紫黑' },
+];
 
 export function SettingsPage() {
   const profile = useAppStore((s) => s.profile);
@@ -17,6 +24,14 @@ export function SettingsPage() {
   const activePreset = getBackgroundPreset(profile.backgroundPreset);
   const [name, setName] = useState(profile.name);
   const [signature, setSignature] = useState(profile.signature);
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => readThemeMode());
+
+  const handleTheme = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    setThemeModeState(mode);
+    const label = THEME_OPTIONS.find((o) => o.key === mode)?.label ?? '';
+    showToast(`已切换：${label}`, 'success');
+  };
 
   const handleAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -64,7 +79,7 @@ export function SettingsPage() {
         <Card className="p-5 sm:p-6">
           <div className="flex items-center gap-2 mb-4">
             <User size={14} strokeWidth={1.4} className="text-bronze" />
-            <h3 className="font-serif text-moon text-lg">头像</h3>
+            <h3 className="font-serif text-headline text-lg">头像</h3>
           </div>
           <div className="flex items-center gap-4">
             <div
@@ -100,7 +115,7 @@ export function SettingsPage() {
 
         {/* 名字 + 签名 */}
         <Card className="p-5 sm:p-6">
-          <h3 className="font-serif text-moon text-lg mb-4">个人信息</h3>
+          <h3 className="font-serif text-headline text-lg mb-4">个人信息</h3>
           <div className="space-y-4">
             <div>
               <label className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase block mb-1.5">
@@ -138,7 +153,7 @@ export function SettingsPage() {
 
         {/* 背景 */}
         <Card className="p-5 sm:p-6">
-          <h3 className="font-serif text-moon text-lg mb-1">背景</h3>
+          <h3 className="font-serif text-headline text-lg mb-1">背景</h3>
           <p className="font-sans text-bronze text-xs mb-3">
             页面底层的背景。当前：
             <span className="text-amber">
@@ -215,9 +230,54 @@ export function SettingsPage() {
           </div>
         </Card>
 
+        {/* 外观 */}
+        <Card className="p-5 sm:p-6">
+          <h3 className="font-serif text-headline text-lg mb-1">外观</h3>
+          <p className="font-sans text-bronze text-xs mb-3">
+            主题皮肤。当前：
+            <span className="text-amber">
+              {resolveTheme(themeMode) === 'day' ? '白昼书房' : '暗夜书房'}
+            </span>
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {THEME_OPTIONS.map((opt) => {
+              const active = themeMode === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={() => handleTheme(opt.key)}
+                  aria-pressed={active}
+                  className={`relative h-20 rounded-card overflow-hidden border-2 transition-all ${
+                    active ? 'border-candle scale-[0.97]' : 'border-bronze/15 hover:border-bronze/30'
+                  }`}
+                >
+                  {/* 皮肤预览条 */}
+                  <span
+                    className="absolute inset-x-0 top-0 h-10"
+                    style={{
+                      background:
+                        opt.key === 'day'
+                          ? 'linear-gradient(180deg, #FFFCF6, #F4ECDE)'
+                          : opt.key === 'night'
+                            ? 'linear-gradient(180deg, #1B1A1F, #241920)'
+                            : 'linear-gradient(90deg, #1B1A1F 0%, #241920 50%, #FFFCF6 50%, #F4ECDE 100%)',
+                    }}
+                  />
+                  <span className="absolute inset-x-0 top-10 px-2 pt-1.5 pb-1 text-[10px] font-mono tracking-wider uppercase">
+                    {opt.label}
+                  </span>
+                  <span className="absolute inset-x-0 bottom-0 px-2 pb-1 text-[9px] leading-tight text-bronze-deep/80">
+                    {opt.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
         {/* 关于 */}
         <Card className="p-5 sm:p-6 text-center">
-          <p className="font-serif text-moon text-lg tracking-widest">VidaOS</p>
+          <p className="font-serif text-headline text-lg tracking-widest">VidaOS</p>
           <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mt-1">
             v3.0 · night study
           </p>

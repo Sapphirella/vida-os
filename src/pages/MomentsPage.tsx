@@ -293,7 +293,7 @@ export function MomentsPage() {
                           <div className="flex items-center gap-3 mb-3">
                             <Avatar profile={profile} size={38} />
                             <div className="min-w-0 flex-1">
-                              <p className="font-serif text-moon text-base leading-tight truncate-1">
+                              <p className="font-serif text-headline text-base leading-tight truncate-1">
                                 {profile.name || '我'}
                               </p>
                               <p className="font-mono text-[10px] text-bronze-deep tracking-wider mt-0.5">
@@ -433,7 +433,7 @@ export function MomentsPage() {
                                   className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                                   style={{ background: 'var(--wine)' }}
                                 >
-                                  <Send size={13} strokeWidth={1.6} className="text-moon" />
+                                  <Send size={13} strokeWidth={1.6} className="text-headline" />
                                 </button>
                               </div>
                             </div>
@@ -454,7 +454,7 @@ export function MomentsPage() {
           style={{ background: 'var(--wine)', boxShadow: '0 4px 20px rgba(106, 8, 14, 0.5)' }}
           aria-label="写动态"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-moon" />
+          <Plus size={22} strokeWidth={1.6} className="text-headline" />
         </button>
       </div>
     </div>

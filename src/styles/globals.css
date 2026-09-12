@@ -3,11 +3,38 @@
 @tailwind utilities;
 
 /* ============================================================
-   VidaOS 暗夜书房 - 全局基础样式
+   VidaOS 全局基础样式
+   - :root                    = 暗夜书房（夜间主题，默认，保持既有观感）
+   - :root[data-theme='day']  = 白昼书房（日间主题，配色依据 palette-day 色卡）
+   tailwind 色板全部引用 --x-rgb，两个主题仅切换一套变量。
    ============================================================ */
 
 :root {
-  /* 色板（依据 palette-suggestion 扩展） */
+  /* ---- 色板 rgb 三元组（tailwind 引用，alpha 语法靠它生效） ---- */
+  --ink-rgb: 27 26 31;
+  --charcoal-rgb: 42 41 46;
+  --elevated-rgb: 56 54 60;
+  --wood-rgb: 52 25 21;
+  --wine-rgb: 106 8 14;
+  --wine-light-rgb: 139 26 31;
+  --wine-deep-rgb: 74 6 8;
+  --wine-bright-rgb: 140 17 23;
+  --bronze-rgb: 148 125 117;
+  --bronze-light-rgb: 168 146 137;
+  --bronze-deep-rgb: 122 103 95;
+  --paper-rgb: 188 174 170;
+  --paper-dim-rgb: 154 142 137;
+  --candle-rgb: 232 195 158;
+  --moon-rgb: 242 235 224;
+  --headline-rgb: 242 235 224;
+  --parchment-rgb: 216 195 168;
+  --amber-rgb: 201 160 99;
+  --ash-rgb: 138 133 140;
+  --olive-rgb: 110 115 85;
+  --sapphire-rgb: 92 107 140;
+  --line-rgb: 74 63 60;
+
+  /* ---- 色板 hex（内联样式 var() 与静态 CSS 规则使用） ---- */
   --ink: #1B1A1F;
   --charcoal: #2A292E;      /* 上层卡：比 ink 亮一档，做层级 */
   --wood: #341915;
@@ -18,8 +45,10 @@
   --bronze: #947D75;
   --bronze-light: #A89289;
   --paper: #BCAEAA;
+  --paper-dim: #9A8E89;
   --candle: #E8C39E;
   --moon: #F2EBE0;
+  --headline: #F2EBE0;      /* 标题 / 强调文字 */
   --parchment: #D8C3A8;     /* 引文 / 代码底色 */
   --amber: #C9A063;         /* 高亮 / 星标 / 选中 */
   --ash: #8A858C;           /* 禁用 / 元信息 */
@@ -28,17 +57,41 @@
   --line: #4A3F3C;          /* 描边 / 分隔线 */
 
   /* 文字层级 */
-  --text-moon: #F2EBE0;
-  --text-paper: #BCAEAA;
-  --text-bronze: #947D75;
-  --text-bronze-deep: #7A675F;
+  --text-moon: #F2EBE0;         /* 强调底上的亮字 */
+  --text-paper: #BCAEAA;        /* 正文 */
+  --text-bronze: #947D75;       /* 次要 */
+  --text-bronze-deep: #7A675F;  /* 强烈次要 */
   --text-ash: #8A858C;
 
-  /* 卡片：改用中性炭黑打底，避免整体发闷发褐 */
+  /* 卡片：中性炭黑打底 */
   --card-bg: rgba(42, 41, 46, 0.72);
   --card-bg-elevated: rgba(56, 54, 60, 0.82);
   --card-border: rgba(74, 63, 60, 0.55);
   --card-glow: rgba(232, 195, 158, 0.1);
+
+  /* 页面与栏 */
+  --bg-base: #1B1A1F;
+  --bar-bg: rgba(27, 26, 31, 0.6);
+
+  /* 阴影（tailwind boxShadow 引用整串变量） */
+  --shadow-rgb: 0 0 0;
+  --shadow-card: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.04), 0 1px 12px 0 rgb(var(--shadow-rgb) / 0.4);
+  --shadow-card-elevated: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.06), 0 8px 32px 0 rgb(var(--shadow-rgb) / 0.5);
+  --shadow-wine-glow: 0 0 24px 0 rgb(var(--wine-rgb) / 0.18);
+  --shadow-candle-glow: 0 0 32px 0 rgb(var(--candle-rgb) / 0.12);
+  --shadow-inner-glow: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.06), inset 0 0 0 1px rgb(var(--bronze-rgb) / 0.05);
+
+  /* 语义组件色 */
+  --code-bg: rgba(20, 18, 22, 0.7);
+  --quote-bg: linear-gradient(90deg, rgb(var(--wine-rgb) / 0.06), transparent 50%);
+  --mark-bg: rgb(var(--amber-rgb) / 0.45);
+  --mark-fg: var(--moon);
+  --mark-active-bg: var(--amber);
+  --mark-active-fg: var(--ink);
+  --selection-bg: rgba(106, 8, 14, 0.4);
+  --selection-fg: var(--moon);
+  --focus-ring: rgb(var(--candle-rgb) / 0.4);
+  --caret: var(--candle);
 
   /* 间距 */
   --space-page: 24px;
@@ -57,16 +110,110 @@
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* ============================================================
+   白昼书房（日间主题）——依据 palette-day 色卡：
+   ink 底→linen 底，wood 卡底→cream 卡底，paper 文字→ink 文字，
+   bronze 次文→taupe 次文，wine 两版通用，金色高亮统一 amber #B8863F。
+   ============================================================ */
+:root[data-theme='day'] {
+  /* rgb 三元组 */
+  --ink-rgb: 46 38 34;            /* ink 暖墨褐：压暗层 */
+  --charcoal-rgb: 255 252 246;    /* cream 奶油白：卡片底 */
+  --elevated-rgb: 255 255 255;    /* 纯白：浮层 / 弹窗 */
+  --wood-rgb: 235 225 208;        /* sand 沙米：副背景 */
+  --wine-rgb: 106 8 14;           /* wine 沿用 */
+  --wine-light-rgb: 139 26 31;
+  --wine-deep-rgb: 74 6 8;
+  --wine-bright-rgb: 140 17 23;
+  --bronze-rgb: 122 106 94;       /* taupe 暖灰褐：次要文字 */
+  --bronze-light-rgb: 154 138 124;
+  --bronze-deep-rgb: 102 87 76;
+  --paper-rgb: 46 38 34;          /* ink 暖墨褐：主文字 */
+  --paper-dim-rgb: 109 95 83;
+  --candle-rgb: 184 134 63;       /* amber 琥珀金：高亮 / 装饰（浅底可读） */
+  --moon-rgb: 251 246 236;        /* 奶油白：强调底上的亮字 */
+  --headline-rgb: 46 38 34;       /* 标题：墨褐 */
+  --parchment-rgb: 201 183 154;   /* 旧羊皮：引文 / 代码底色 */
+  --amber-rgb: 184 134 63;        /* amber 琥珀金 */
+  --ash-rgb: 183 173 160;         /* mist 雾灰：禁用 */
+  --olive-rgb: 110 115 85;
+  --sapphire-rgb: 92 107 140;
+  --line-rgb: 222 211 194;        /* 暖石灰：分隔线 / 描边 */
+
+  /* hex */
+  --ink: #2E2622;
+  --charcoal: #FFFCF6;
+  --wood: #EBE1D0;
+  --wine: #6A080E;
+  --wine-light: #8B1A1F;
+  --wine-deep: #4A0608;
+  --wine-bright: #8C1117;
+  --bronze: #7A6A5E;
+  --bronze-light: #9A8A7C;
+  --bronze-deep: #66574C;
+  --paper: #2E2622;
+  --paper-dim: #6D5F53;
+  --candle: #B8863F;              /* 日间统一琥珀金 */
+  --moon: #FBF6EC;
+  --headline: #2E2622;
+  --parchment: #C9B79A;
+  --amber: #B8863F;
+  --ash: #B7ADA0;
+  --olive: #6E7355;
+  --sapphire: #5C6B8C;
+  --line: #DED3C2;
+
+  /* 文字层级 */
+  --text-moon: #FBF6EC;
+  --text-paper: #2E2622;
+  --text-bronze: #7A6A5E;
+  --text-bronze-deep: #66574C;
+  --text-ash: #B7ADA0;
+
+  /* 卡片：奶油玻璃 */
+  --card-bg: rgba(255, 252, 246, 0.78);
+  --card-bg-elevated: rgba(255, 255, 255, 0.92);
+  --card-border: rgba(222, 211, 194, 0.95);
+  --card-glow: rgba(184, 134, 63, 0.16);
+
+  /* 页面与栏 */
+  --bg-base: #F7F1E6;
+  --bar-bg: rgba(255, 252, 246, 0.72);
+
+  /* 阴影：柔和暖褐 */
+  --shadow-rgb: 90 70 50;
+  --shadow-card: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.12), 0 1px 12px 0 rgb(var(--shadow-rgb) / 0.16);
+  --shadow-card-elevated: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.16), 0 8px 32px 0 rgb(var(--shadow-rgb) / 0.2);
+  --shadow-wine-glow: 0 0 24px 0 rgb(var(--wine-rgb) / 0.16);
+  --shadow-candle-glow: 0 0 32px 0 rgb(var(--candle-rgb) / 0.18);
+  --shadow-inner-glow: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.14), inset 0 0 0 1px rgb(var(--bronze-rgb) / 0.08);
+
+  /* 语义组件色 */
+  --code-bg: rgba(201, 183, 154, 0.3);
+  --quote-bg: linear-gradient(90deg, rgb(var(--wine-rgb) / 0.08), transparent 60%);
+  --mark-bg: rgb(var(--amber-rgb) / 0.32);
+  --mark-fg: #2E2622;
+  --mark-active-bg: var(--amber);
+  --mark-active-fg: #2E1E08;
+  --selection-bg: rgba(106, 8, 14, 0.16);
+  --selection-fg: #2E2622;
+  --focus-ring: rgb(var(--amber-rgb) / 0.5);
+  --caret: #B8863F;
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  background: var(--bg-base);
 }
 
 html, body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background: var(--ink);
   color: var(--text-paper);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -102,6 +249,24 @@ body {
   min-height: 100dvh;
 }
 
+/* 白昼书房：晨光纸面（顶部烛光晨光 + 米白纸底） */
+:root[data-theme='day'] body {
+  background:
+    radial-gradient(
+      ellipse 80% 45% at 50% -5%,
+      rgba(232, 195, 158, 0.3) 0%,
+      rgba(232, 195, 158, 0.08) 45%,
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 70% 40% at 12% 0%,
+      rgba(106, 8, 14, 0.05) 0%,
+      transparent 50%
+    ),
+    linear-gradient(180deg, #FFFCF6 0%, #F4ECDE 100%);
+  background-attachment: fixed;
+}
+
 #root {
   min-height: 100vh;
   min-height: 100dvh;
@@ -116,22 +281,22 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 125, 117, 0.2);
+  background: rgb(var(--bronze-rgb) / 0.2);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 125, 117, 0.35);
+  background: rgb(var(--bronze-rgb) / 0.35);
 }
 
 /* 选中文本 */
 ::selection {
-  background: rgba(106, 8, 14, 0.4);
-  color: var(--moon);
+  background: var(--selection-bg);
+  color: var(--selection-fg);
 }
 
 /* 输入光标 */
 textarea, input, [contenteditable] {
-  caret-color: var(--candle);
+  caret-color: var(--caret);
 }
 
 /* 字体工具类 */
@@ -139,7 +304,7 @@ textarea, input, [contenteditable] {
 .font-mono { font-family: var(--font-mono); }
 .font-sans { font-family: var(--font-sans); }
 
-/* 文字色 */
+/* 文字色（text-headline 由 tailwind 生成） */
 .text-moon { color: var(--text-moon); }
 .text-paper { color: var(--text-paper); }
 .text-bronze { color: var(--text-bronze); }
@@ -158,7 +323,7 @@ textarea, input, [contenteditable] {
   border-radius: var(--radius-card);
   box-shadow:
     inset 0 1px 0 0 var(--card-glow),
-    0 1px 12px 0 rgba(0, 0, 0, 0.4);
+    0 1px 12px 0 rgb(var(--shadow-rgb) / 0.4);
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   position: relative;
@@ -174,10 +339,10 @@ textarea, input, [contenteditable] {
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(232, 195, 158, 0.12) 0%,
+    rgb(var(--candle-rgb) / 0.14) 0%,
     transparent 30%,
     transparent 70%,
-    rgba(106, 8, 14, 0.1) 100%
+    rgb(var(--wine-rgb) / 0.1) 100%
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -190,7 +355,7 @@ textarea, input, [contenteditable] {
   background: var(--card-bg-elevated);
   box-shadow:
     inset 0 1px 0 0 var(--card-glow),
-    0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    0 8px 32px 0 rgb(var(--shadow-rgb) / 0.5);
 }
 
 /* 细线按钮 */
@@ -213,8 +378,8 @@ textarea, input, [contenteditable] {
   user-select: none;
 }
 .btn-ghost:hover {
-  border-color: rgba(148, 125, 117, 0.3);
-  background: rgba(148, 125, 117, 0.05);
+  border-color: rgb(var(--bronze-rgb) / 0.3);
+  background: rgb(var(--bronze-rgb) / 0.05);
 }
 .btn-ghost:active {
   transform: scale(0.98);
@@ -233,16 +398,16 @@ textarea, input, [contenteditable] {
   letter-spacing: 0.02em;
   color: var(--moon);
   background: var(--wine);
-  border: 1px solid rgba(232, 195, 158, 0.1);
+  border: 1px solid rgb(var(--candle-rgb) / 0.1);
   cursor: pointer;
   transition: all 0.2s ease;
   -webkit-user-select: none;
   user-select: none;
-  box-shadow: 0 0 0 0 rgba(106, 8, 14, 0);
+  box-shadow: 0 0 0 0 rgb(var(--wine-rgb) / 0);
 }
 .btn-primary:hover {
   background: var(--wine-light);
-  box-shadow: 0 0 20px 0 rgba(106, 8, 14, 0.3);
+  box-shadow: 0 0 20px 0 rgb(var(--wine-rgb) / 0.3);
 }
 .btn-primary:active {
   transform: scale(0.98);
@@ -280,14 +445,14 @@ textarea, input, [contenteditable] {
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--text-paper);
-  background: rgba(148, 125, 117, 0.08);
-  border: 1px solid rgba(148, 125, 117, 0.12);
+  background: rgb(var(--bronze-rgb) / 0.08);
+  border: 1px solid rgb(var(--bronze-rgb) / 0.12);
   white-space: nowrap;
 }
 .tag-wine {
   color: var(--candle);
-  background: rgba(106, 8, 14, 0.15);
-  border-color: rgba(106, 8, 14, 0.3);
+  background: rgb(var(--wine-rgb) / 0.15);
+  border-color: rgb(var(--wine-rgb) / 0.3);
 }
 
 /* 视图过渡 */
@@ -307,7 +472,7 @@ textarea, input, [contenteditable] {
 
 /* 焦点环（键盘可访问性） */
 *:focus-visible {
-  outline: 2px solid rgba(232, 195, 158, 0.4);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -336,7 +501,7 @@ textarea, input, [contenteditable] {
 .prose-vidaos h2,
 .prose-vidaos h3,
 .prose-vidaos h4 {
-  color: var(--moon);
+  color: var(--headline);
   font-weight: 500;
   letter-spacing: -0.01em;
   margin: 1.6em 0 0.6em;
@@ -350,7 +515,7 @@ textarea, input, [contenteditable] {
 .prose-vidaos a {
   color: var(--candle);
   text-decoration: underline;
-  text-decoration-color: rgba(232, 195, 158, 0.3);
+  text-decoration-color: rgb(var(--candle-rgb) / 0.3);
   text-underline-offset: 3px;
   transition: text-decoration-color 0.2s ease;
 }
@@ -363,19 +528,19 @@ textarea, input, [contenteditable] {
   margin: 1.2em 0;
   color: var(--text-bronze);
   font-style: italic;
-  background: linear-gradient(90deg, rgba(106, 8, 14, 0.06), transparent 50%);
+  background: var(--quote-bg);
   border-radius: 2px;
 }
 .prose-vidaos code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: rgba(148, 125, 117, 0.1);
+  background: rgb(var(--bronze-rgb) / 0.12);
   padding: 2px 6px;
   border-radius: 4px;
   color: var(--candle);
 }
 .prose-vidaos pre {
-  background: rgba(20, 18, 22, 0.7);
+  background: var(--code-bg);
   border: 1px solid var(--card-border);
   padding: 16px;
   border-radius: 12px;
@@ -424,7 +589,7 @@ textarea, input, [contenteditable] {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.prose-vidaos strong { color: var(--moon); font-weight: 600; }
+.prose-vidaos strong { color: var(--headline); font-weight: 600; }
 .prose-vidaos em { color: var(--candle); }
 
 /* 工具：单行省略 */
@@ -470,28 +635,43 @@ textarea, input, [contenteditable] {
   border-radius: 8px;
   font-size: 0.8125rem;
   color: var(--bronze);
-  background: rgba(140, 17, 23, 0.12);
-  border: 1px dashed rgba(140, 17, 23, 0.4);
+  background: rgb(var(--wine-bright-rgb) / 0.12);
+  border: 1px dashed rgb(var(--wine-bright-rgb) / 0.4);
 }
 
 /* 查找命中高亮（动态页的查找/替换） */
 mark.vd-mark {
-  background: rgba(201, 160, 99, 0.45);
-  color: var(--moon);
+  background: var(--mark-bg);
+  color: var(--mark-fg);
   border-radius: 3px;
   padding: 0 2px;
 }
 mark.vd-mark-active {
-  background: var(--amber);
-  color: var(--ink);
+  background: var(--mark-active-bg);
+  color: var(--mark-active-fg);
   box-shadow: 0 0 0 1px var(--candle);
 }
 
 /* 顶栏 / 底栏颜色由背景预设驱动（见 src/lib/backgrounds.ts 的 bar 字段）。
-   组件里是内联样式，所以这里必须用 !important 才能覆盖。 */
+   组件里是内联样式，所以这里必须用 !important 才能覆盖。
+   日间主题下 --bar-bg 换成奶油玻璃，同一机制生效。 */
 header,
 nav {
   background: var(--bar-bg, rgba(27, 26, 31, 0.6)) !important;
+}
+
+/* 白昼书房：全局背景层适配（见 src/components/layout/Background.tsx）
+   - 预设深色渐变减淡，露出晨光纸面
+   - 自定义图片上的暗色蒙版减淡
+   - 顶部"木色光"换成顶部晨光 */
+:root[data-theme='day'] .bg-preset {
+  opacity: 0.55;
+}
+:root[data-theme='day'] .bg-mask {
+  background: rgba(46, 38, 34, 0.28) !important;
+}
+:root[data-theme='day'] .glow-top {
+  background: radial-gradient(ellipse at top, rgba(232, 195, 158, 0.4) 0%, transparent 60%) !important;
 }
 
 /* 链接默认样式 */

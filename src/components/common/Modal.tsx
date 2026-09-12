@@ -18,7 +18,7 @@ export function Modal() {
         className="glass-card glass-card-elevated w-full max-w-md p-6 animate-slide-up"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-serif text-xl text-moon tracking-tight">
+          <h2 className="font-serif text-xl text-headline tracking-tight">
             {modal.title || '提示'}
           </h2>
           <button

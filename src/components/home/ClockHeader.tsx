@@ -38,7 +38,7 @@ export function ClockHeader() {
         {/* 大时间 - 打字机风格 */}
         <div className="flex items-end gap-2 sm:gap-3 mb-4 sm:mb-5">
           <span
-            className="font-mono text-moon leading-none tracking-tighter"
+            className="font-mono text-headline leading-none tracking-tighter"
             style={{
               fontSize: 'clamp(3.5rem, 14vw, 7.5rem)',
               fontWeight: 300,
@@ -60,7 +60,7 @@ export function ClockHeader() {
             :
           </span>
           <span
-            className="font-mono text-moon leading-none tracking-tighter"
+            className="font-mono text-headline leading-none tracking-tighter"
             style={{
               fontSize: 'clamp(3.5rem, 14vw, 7.5rem)',
               fontWeight: 300,

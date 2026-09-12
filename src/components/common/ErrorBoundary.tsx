@@ -110,7 +110,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </p>
         </div>
 
-        <h1 className="font-serif text-moon text-2xl leading-snug">这一页出了点问题</h1>
+        <h1 className="font-serif text-headline text-2xl leading-snug">这一页出了点问题</h1>
         <p className="font-serif text-bronze text-sm mt-2 leading-relaxed">
           界面渲染时遇到了错误。你的内容仍然保存在本地，不会因此丢失。
           可以点「重试」再试一次，或回到桌面继续使用其它部分。

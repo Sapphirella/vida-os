@@ -161,7 +161,7 @@ export function ScheduleView() {
           }}
           aria-label="新建日程"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-moon" />
+          <Plus size={22} strokeWidth={1.6} className="text-headline" />
         </button>
       )}
     </div>
@@ -212,7 +212,7 @@ function ScheduleItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, onT
                 : 'border-bronze/40 hover:border-candle'
             }`}
           >
-            {item.done && <Check size={12} strokeWidth={2.4} className="text-moon" />}
+            {item.done && <Check size={12} strokeWidth={2.4} className="text-headline" />}
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2 flex-wrap">

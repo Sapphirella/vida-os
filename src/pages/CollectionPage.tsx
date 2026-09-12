@@ -39,7 +39,7 @@ export function CollectionPage() {
               <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase mb-1">
                 collection
               </p>
-              <h2 className="font-serif text-moon text-huge">{collection.name}</h2>
+              <h2 className="font-serif text-headline text-huge">{collection.name}</h2>
               {collection.desc && (
                 <p className="font-serif italic text-bronze mt-2 leading-relaxed">
                   {collection.desc}
@@ -119,7 +119,7 @@ export function CollectionPage() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-serif text-moon text-lg leading-snug mb-1 truncate-2 group-hover:text-candle transition-colors">
+                      <h3 className="font-serif text-headline text-lg leading-snug mb-1 truncate-2 group-hover:text-candle transition-colors">
                         {a.title}
                       </h3>
                       <p className="font-serif text-bronze text-sm line-clamp-2 leading-relaxed">

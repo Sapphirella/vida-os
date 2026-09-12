@@ -102,7 +102,7 @@ export function FavoritesPage() {
                         <Icon size={14} strokeWidth={1.4} className="text-wine-light" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-serif text-moon text-base leading-snug truncate-1 group-hover:text-candle transition-colors">
+                        <h3 className="font-serif text-headline text-base leading-snug truncate-1 group-hover:text-candle transition-colors">
                           {g.title}
                         </h3>
                         {g.excerpt && (

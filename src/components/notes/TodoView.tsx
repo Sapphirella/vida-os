@@ -142,7 +142,7 @@ export function TodoView() {
           }}
           aria-label="新建待办"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-moon" />
+          <Plus size={22} strokeWidth={1.6} className="text-headline" />
         </button>
       )}
     </div>
@@ -206,7 +206,7 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
                 : 'border-bronze/40 hover:border-candle'
             }`}
           >
-            {item.done && <Check size={12} strokeWidth={2.4} className="text-moon" />}
+            {item.done && <Check size={12} strokeWidth={2.4} className="text-headline" />}
           </button>
           <p
             className={`flex-1 font-serif text-paper ${

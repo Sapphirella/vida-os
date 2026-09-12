@@ -2,6 +2,24 @@
 <html lang="zh-CN" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // 主题防闪烁：CSS/JS 加载前先按持久化偏好设置 data-theme（系统偏好浅色时走日间）
+      ;(function () {
+        try {
+          var m = localStorage.getItem('vidaos-theme') || 'system';
+          var light =
+            m === 'day' ||
+            (m === 'system' &&
+              window.matchMedia('(prefers-color-scheme: light)').matches);
+          document.documentElement.setAttribute(
+            'data-theme',
+            light ? 'day' : 'night',
+          );
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'night');
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />

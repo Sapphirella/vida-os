@@ -5,52 +5,50 @@ export default {
   theme: {
     extend: {
       colors: {
-        // VidaOS 暗夜书房色板（依据 palette-suggestion 扩展）
-        ink: '#1B1A1F',        // 主背景 - 深夜紫黑
-        charcoal: '#2A292E',   // 上层卡 - 比 ink 亮一档，用于层级
-        wood: '#341915',       // 副背景 - 暗咖啡
+        // VidaOS 色板：值全部引用 CSS 变量（rgb 三元组），
+        // 由 globals.css 的 :root（暗夜书房）与 [data-theme='day']（白昼书房）驱动。
+        // 这样所有 tailwind 色类（含 bg-x/20 这类 alpha 语法）都能跟随主题切换。
+        ink: 'rgb(var(--ink-rgb) / <alpha-value>)',           // 深墨：压暗层 / 编辑器工具条
+        charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)', // 上层卡：层级
+        wood: 'rgb(var(--wood-rgb) / <alpha-value>)',         // 副背景 - 暗咖啡 / 沙米
         wine: {
-          DEFAULT: '#6A080E',  // 强调 - 暗酒红
-          light: '#8B1A1F',    // hover/active
-          deep: '#4A0608',     // pressed
-          bright: '#8C1117',   // 危险 / 删除
+          DEFAULT: 'rgb(var(--wine-rgb) / <alpha-value>)',    // 强调 - 酒红（两版通用）
+          light: 'rgb(var(--wine-light-rgb) / <alpha-value>)',
+          deep: 'rgb(var(--wine-deep-rgb) / <alpha-value>)',
+          bright: 'rgb(var(--wine-bright-rgb) / <alpha-value>)',
         },
         bronze: {
-          DEFAULT: '#947D75',  // 次要 - 古铜
-          light: '#A89289',    // hover
-          deep: '#7A675F',     // active
+          DEFAULT: 'rgb(var(--bronze-rgb) / <alpha-value>)',  // 次要 - 古铜 / 暖灰褐
+          light: 'rgb(var(--bronze-light-rgb) / <alpha-value>)',
+          deep: 'rgb(var(--bronze-deep-rgb) / <alpha-value>)',
         },
         paper: {
-          DEFAULT: '#BCAEAA',  // 主要文字 - 旧纸
-          dim: '#9A8E89',      // 较暗
+          DEFAULT: 'rgb(var(--paper-rgb) / <alpha-value>)',   // 主要文字 - 旧纸 / 墨褐
+          dim: 'rgb(var(--paper-dim-rgb) / <alpha-value>)',
         },
-        candle: '#E8C39E',     // 高光 - 烛光
-        moon: '#F2EBE0',       // 标题 - 月光
-        // 氛围扩展色
-        parchment: '#D8C3A8',  // 旧羊皮 - 引文/代码底色
-        amber: '#C9A063',      // 陈年琥珀 - 高亮/星标/选中
-        ash: '#8A858C',        // 灰雾 - 禁用/元信息
-        // 语义色
-        olive: '#6E7355',      // 成功 / 已完成
-        sapphire: '#5C6B8C',   // 信息 / 链接
-        line: '#4A3F3C',       // 描边 / 分隔线
+        candle: 'rgb(var(--candle-rgb) / <alpha-value>)',     // 高光 - 烛光 / 日间琥珀金
+        moon: 'rgb(var(--moon-rgb) / <alpha-value>)',         // 强调底上的亮字 - 月光 / 奶油
+        headline: 'rgb(var(--headline-rgb) / <alpha-value>)', // 标题 - 月光 / 墨褐
+        parchment: 'rgb(var(--parchment-rgb) / <alpha-value>)', // 引文 / 代码底色
+        amber: 'rgb(var(--amber-rgb) / <alpha-value>)',       // 陈年琥珀 - 高亮 / 星标 / 选中
+        ash: 'rgb(var(--ash-rgb) / <alpha-value>)',           // 灰雾 - 禁用 / 元信息
+        olive: 'rgb(var(--olive-rgb) / <alpha-value>)',       // 成功 / 已完成
+        sapphire: 'rgb(var(--sapphire-rgb) / <alpha-value>)', // 信息 / 链接
+        line: 'rgb(var(--line-rgb) / <alpha-value>)',         // 描边 / 分隔线
 
-        // 透明度版本（改用中性炭黑打底，避免整体发闷发褐）
-        'ink-soft': 'rgba(27, 26, 31, 0.75)',
-        'wood-soft': 'rgba(52, 25, 21, 0.55)',
-        'card': 'rgba(42, 41, 46, 0.72)',
-        'card-elevated': 'rgba(56, 54, 60, 0.82)',
-        'border-wine': 'rgba(106, 8, 14, 0.22)',
-        'border-bronze': 'rgba(148, 125, 117, 0.16)',
-        'border-line': 'rgba(74, 63, 60, 0.55)',
-        'border-glow': 'rgba(232, 195, 158, 0.1)',
+        // 透明度版本（基于各自基色，跟随主题）
+        'ink-soft': 'rgb(var(--ink-rgb) / 0.75)',
+        'wood-soft': 'rgb(var(--wood-rgb) / 0.55)',
+        'card': 'rgb(var(--charcoal-rgb) / 0.72)',
+        'card-elevated': 'rgb(var(--elevated-rgb) / 0.82)',
+        'border-wine': 'rgb(var(--wine-rgb) / 0.22)',
+        'border-bronze': 'rgb(var(--bronze-rgb) / 0.16)',
+        'border-line': 'rgb(var(--line-rgb) / 0.55)',
+        'border-glow': 'rgb(var(--candle-rgb) / 0.1)',
       },
       fontFamily: {
-        // 数字/UI - 打字机风格
         mono: ['"JetBrains Mono"', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'],
-        // 正文/标题 - 衬线
         serif: ['"EB Garamond"', '"Lora"', 'Georgia', 'serif'],
-        // UI 元素 - 无衬线
         sans: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       fontSize: {
@@ -71,11 +69,12 @@ export default {
         'glass': '24px',
       },
       boxShadow: {
-        'card': '0 1px 0 0 rgba(232, 195, 158, 0.04) inset, 0 1px 12px 0 rgba(0, 0, 0, 0.4)',
-        'card-elevated': '0 1px 0 0 rgba(232, 195, 158, 0.06) inset, 0 8px 32px 0 rgba(0, 0, 0, 0.5)',
-        'wine-glow': '0 0 24px 0 rgba(106, 8, 14, 0.18)',
-        'candle-glow': '0 0 32px 0 rgba(232, 195, 158, 0.12)',
-        'inner-glow': 'inset 0 1px 0 0 rgba(232, 195, 158, 0.06), inset 0 0 0 1px rgba(148, 125, 117, 0.05)',
+        // 完整阴影串由 globals.css 变量提供，夜间 / 日间各有柔和的取值
+        'card': 'var(--shadow-card)',
+        'card-elevated': 'var(--shadow-card-elevated)',
+        'wine-glow': 'var(--shadow-wine-glow)',
+        'candle-glow': 'var(--shadow-candle-glow)',
+        'inner-glow': 'var(--shadow-inner-glow)',
       },
       animation: {
         'fade-in': 'fade-in 0.4s ease-out',

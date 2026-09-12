@@ -51,7 +51,7 @@ export function CalendarCard() {
           <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
             calendar
           </p>
-          <h3 className="font-serif text-moon text-lg mt-0.5">{monthLabel}</h3>
+          <h3 className="font-serif text-headline text-lg mt-0.5">{monthLabel}</h3>
         </div>
         <div className="flex items-center gap-1">
           <button
