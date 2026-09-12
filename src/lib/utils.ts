@@ -113,6 +113,73 @@ export function base64ToBlob(dataUrl: string): Blob {
   return new Blob([arr], { type: mime });
 }
 
+/**
+ * 保存/分享文件，按能力分级：
+ *   1. 桌面端（Chromium File System Access API）：showSaveFilePicker 弹系统
+ *      「另存为」对话框，用户可自选任意本地文件夹写入；
+ *   2. 手机端（无 File System Access）：Web Share API「存储到文件」/保存/发网盘；
+ *   3. 兜底：浏览器下载（a.download）。
+ */
+export async function saveBlob(blob: Blob, filename: string): Promise<void> {
+  // 1) 桌面端：系统「另存为」—— 用户可自由选择保存到本地文件夹
+  const picker = (window as Window & {
+    showSaveFilePicker?: (opts?: {
+      suggestedName?: string;
+      types?: Array<{ description: string; accept: Record<string, string[]> }>;
+    }) => Promise<{
+      createWritable: () => Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>;
+    }>;
+  }).showSaveFilePicker;
+  if (typeof picker === 'function') {
+    try {
+      const handle = await picker({ suggestedName: filename });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return; // 已写入用户选择的本地位置
+    } catch (err) {
+      // 用户取消保存对话框时静默退出，其余错误继续走后面的路径
+      if ((err as Error)?.name === 'AbortError') return;
+    }
+  }
+
+  // 2) 手机端：系统分享面板（可「存储到文件」/保存到下载/发到网盘）
+  const nav = navigator as Navigator & {
+    canShare?: (data: { files?: File[] }) => boolean;
+    share?: (data: { files?: File[]; title?: string }) => Promise<void>;
+  };
+  const file = new File([blob], filename, {
+    type: blob.type || 'application/octet-stream',
+  });
+  if (
+    typeof nav.share === 'function' &&
+    typeof nav.canShare === 'function' &&
+    nav.canShare({ files: [file] })
+  ) {
+    try {
+      await nav.share({ files: [file], title: filename });
+      return; // 已交给系统（可能已保存，用户也可能取消了分享）
+    } catch (err) {
+      // 用户主动取消分享面板时静默退出，其余错误继续走下载兜底
+      if ((err as Error)?.name === 'AbortError') return;
+    }
+  }
+
+  // 3) 兜底：浏览器下载
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+export async function saveText(text: string, filename: string, mime: string): Promise<void> {
+  return saveBlob(new Blob([text], { type: `${mime};charset=utf-8` }), filename);
+}
+
 // 压缩图片
 export async function compressImage(blob: Blob, maxSide = 1600, quality = 0.82): Promise<Blob> {
   if (blob.size < 500 * 1024) return blob; // < 500KB 不压缩

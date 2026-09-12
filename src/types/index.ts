@@ -96,7 +96,6 @@ export interface Track {
   title: string;
   artist?: string;
   fileId?: string; // 导入的本地音频
-  builtin?: 'rain' | 'candle' | 'silence'; // 内置音景
   createdAt: number;
 }
 

@@ -474,7 +474,10 @@ function computePageCuts(
   return ranges;
 }
 
-export async function exportPDF(state: AppState, scope: ExportScopes = ['articles']): Promise<void> {
+export async function exportPDF(
+  state: AppState,
+  scope: ExportScopes = ['articles'],
+): Promise<Blob> {
   const s = scopedState(state, scope);
   const has = normalizeScopes(scope);
 
@@ -670,7 +673,8 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
       });
     });
 
-    pdf.save(`vidaos-${scopeSlug(scope)}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
+    // 不再在库内落盘：返回 Blob，由调用方决定「系统分享 / 下载」路径
+    return pdf.output('blob');
   } finally {
     container.remove();
   }

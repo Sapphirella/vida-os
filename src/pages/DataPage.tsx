@@ -15,7 +15,7 @@ import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile, db } from '@/lib/db';
-import { base64ToBlob } from '@/lib/utils';
+import { base64ToBlob, saveBlob, saveText } from '@/lib/utils';
 import {
   exportJSON,
   exportMarkdown,
@@ -145,7 +145,7 @@ export function DataPage() {
     try {
       setExporting('json');
       const json = await exportJSON(state, scopes);
-      downloadBlob(json, `vidaos-${scopeSlug(scopes)}-${timestamp()}.json`, 'application/json');
+      await saveText(json, `vidaos-${scopeSlug(scopes)}-${timestamp()}.json`, 'application/json');
       showToast('导出成功', 'success');
     } catch (e: any) {
       showToast(`导出失败：${e.message}`, 'error');
@@ -154,11 +154,11 @@ export function DataPage() {
     }
   };
 
-  const doExportMD = () => {
+  const doExportMD = async () => {
     try {
       setExporting('md');
       const md = exportMarkdown(state, scopes);
-      downloadBlob(md, `vidaos-${scopeSlug(scopes)}-${timestamp()}.md`, 'text/markdown');
+      await saveText(md, `vidaos-${scopeSlug(scopes)}-${timestamp()}.md`, 'text/markdown');
       showToast('导出成功', 'success');
     } catch (e: any) {
       showToast(`导出失败：${e.message}`, 'error');
@@ -167,11 +167,11 @@ export function DataPage() {
     }
   };
 
-  const doExportTXT = () => {
+  const doExportTXT = async () => {
     try {
       setExporting('txt');
       const txt = exportTXT(state, scopes);
-      downloadBlob(txt, `vidaos-${scopeSlug(scopes)}-${timestamp()}.txt`, 'text/plain');
+      await saveText(txt, `vidaos-${scopeSlug(scopes)}-${timestamp()}.txt`, 'text/plain');
       showToast('导出成功', 'success');
     } catch (e: any) {
       showToast(`导出失败：${e.message}`, 'error');
@@ -183,10 +183,25 @@ export function DataPage() {
   const doExportPDF = async () => {
     try {
       setExporting('pdf');
-      await exportPDF(state, scopes);
-      showToast('PDF 已下载', 'success');
+      const blob = await exportPDF(state, scopes);
+      await saveBlob(blob, `vidaos-${scopeSlug(scopes)}-${timestamp()}.pdf`);
+      showToast('PDF 导出成功', 'success');
     } catch (e: any) {
       showToast(`PDF 失败：${e.message}`, 'error');
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  /** 手机端替代文件夹快照：导出含全部媒体文件的 JSON 备份，走系统分享/保存 */
+  const doExportFullBackup = async () => {
+    try {
+      setExporting('json');
+      const json = await exportJSON(state, ['all']);
+      await saveText(json, `vidaos-backup-${timestamp()}.json`, 'application/json');
+      showToast('备份已生成', 'success');
+    } catch (e: any) {
+      showToast(`备份失败：${e.message}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -281,7 +296,7 @@ export function DataPage() {
 
         {/* 范围 */}
         <Card className="p-5">
-          <h3 className="font-serif text-moon text-lg mb-1">导出范围</h3>
+          <h3 className="font-serif text-headline text-lg mb-1">导出范围</h3>
           <div className="flex items-center justify-between mb-4">
             <p className="text-bronze text-xs">可多选，已选 {scopes.length} / {ALL_SCOPE_KEYS.length} 项</p>
             <button
@@ -325,7 +340,7 @@ export function DataPage() {
 
         {/* 导出 */}
         <Card className="p-5">
-          <h3 className="font-serif text-moon text-lg mb-1">导出</h3>
+          <h3 className="font-serif text-headline text-lg mb-1">导出</h3>
           <p className="text-bronze text-xs mb-4">下载一份你的数据</p>
           <div className="grid grid-cols-2 gap-2">
             <ExportBtn
@@ -361,7 +376,7 @@ export function DataPage() {
 
         {/* 导入 */}
         <Card className="p-5">
-          <h3 className="font-serif text-moon text-lg mb-1">导入</h3>
+          <h3 className="font-serif text-headline text-lg mb-1">导入</h3>
           <p className="text-bronze text-xs mb-4">从备份文件恢复</p>
           <input
             ref={fileInputRef}
@@ -382,7 +397,7 @@ export function DataPage() {
         <Card className="p-5">
           <div className="flex items-center gap-2 mb-1">
             <FolderOpen size={15} strokeWidth={1.5} className="text-amber" />
-            <h3 className="font-serif text-moon text-lg">本地文件夹备份</h3>
+            <h3 className="font-serif text-headline text-lg">本地文件夹备份</h3>
           </div>
           <p className="text-bronze text-xs mb-4 leading-relaxed">
             选一个本地文件夹，点「保存快照」就把当前全部数据写进去。
@@ -392,10 +407,24 @@ export function DataPage() {
           </p>
 
           {!folderSupported ? (
-            <p className="text-wine-light text-xs leading-relaxed">
-              当前浏览器不支持选择本地文件夹（Safari / Firefox 暂不支持该接口）。
-              请改用 <span className="text-candle">Chrome 或 Edge</span> 打开本页；在那之前可以用上面的「JSON 导出」做备份。
-            </p>
+            <div className="space-y-3">
+              <p className="text-wine-light text-xs leading-relaxed">
+                当前浏览器不支持选择本地文件夹（这是手机浏览器 / Safari 的接口限制，Chrome 桌面版才支持）。
+              </p>
+              <p className="text-bronze text-xs leading-relaxed">
+                已为你接入「系统分享」：点下面的按钮会把完整备份生成并弹出分享面板——
+                <span className="text-candle">iOS 可「存储到文件」，Android 可保存到下载 / 发给网盘</span>。
+                在电脑上只需把这份 JSON 拖回本页「导入」即可完整恢复（含所有图片与音频）。
+              </p>
+              <button
+                onClick={() => void doExportFullBackup()}
+                disabled={exporting === 'json'}
+                className="btn-primary w-full justify-center disabled:opacity-50"
+              >
+                <Save size={13} strokeWidth={1.6} />
+                {exporting === 'json' ? '备份生成中…' : '分享 / 保存完整备份（JSON）'}
+              </button>
+            </div>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -471,7 +500,7 @@ export function DataPage() {
 
         {/* 危险区 */}
         <Card className="p-5 border-wine/30">
-          <h3 className="font-serif text-moon text-lg mb-1">重置</h3>
+          <h3 className="font-serif text-headline text-lg mb-1">重置</h3>
           <p className="text-bronze text-xs mb-4">清空所有数据，回到初始状态</p>
           <button
             onClick={() => {
@@ -527,16 +556,4 @@ function ExportBtn({
 function timestamp(): string {
   const d = new Date();
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function downloadBlob(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: mime + ';charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

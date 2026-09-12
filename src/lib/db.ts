@@ -31,7 +31,16 @@ const STATE_KEY = 'root';
 export async function loadState(): Promise<AppState | null> {
   try {
     const row = await db.state.get(STATE_KEY);
-    return row?.data ?? null;
+    if (!row?.data) return null;
+    // 兼容迁移：旧版本含内置音景轨道（WebAudio 合成，无实体文件），
+    // 新版已移除内置音频，只保留用户自己导入的本地文件曲目。
+    const data: AppState = {
+      ...row.data,
+      tracks: (row.data.tracks ?? []).filter(
+        (t) => !(t as { builtin?: unknown }).builtin,
+      ),
+    };
+    return data;
   } catch (err) {
     console.error('[VidaOS] loadState failed', err);
     return null;
@@ -92,20 +101,7 @@ export function defaultState(): AppState {
       schedule: ['生活', '工作', '学习'],
       todo: ['生活', '工作', '学习'],
     },
-    tracks: [
-      {
-        id: 'builtin-rain',
-        title: '夜雨',
-        builtin: 'rain',
-        createdAt: Date.now(),
-      },
-      {
-        id: 'builtin-candle',
-        title: '烛光',
-        builtin: 'candle',
-        createdAt: Date.now(),
-      },
-    ],
+    tracks: [],
     settings: {
       lastTab: 'desk',
     },
