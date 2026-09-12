@@ -146,29 +146,33 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete }
   const [draft, setDraft] = useState(item.content);
 
   if (isEditing) {
+    // 必须包 <li>：本组件被渲染在 <ul> 里，编辑态直接返回 <Card>（div）
+    // 会造成 ul > div 非法嵌套。
     return (
-      <Card className="p-4 animate-slide-up">
-        <textarea
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          className="w-full bg-transparent resize-none font-serif text-reading text-paper outline-none"
-          rows={4}
-          style={{ lineHeight: 1.95 }}
-        />
-        <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-bronze/10">
-          <button onClick={onCancel} className="btn-text">
-            取消
-          </button>
-          <button
-            onClick={() => draft.trim() && onSave(draft.trim())}
-            className="btn-primary"
-            style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
-          >
-            保存
-          </button>
-        </div>
-      </Card>
+      <li>
+        <Card className="p-4 animate-slide-up">
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-full bg-transparent resize-none font-serif text-reading text-paper outline-none"
+            rows={4}
+            style={{ lineHeight: 1.95 }}
+          />
+          <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-bronze/10">
+            <button onClick={onCancel} className="btn-text">
+              取消
+            </button>
+            <button
+              onClick={() => draft.trim() && onSave(draft.trim())}
+              className="btn-primary"
+              style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
+            >
+              保存
+            </button>
+          </div>
+        </Card>
+      </li>
     );
   }
 

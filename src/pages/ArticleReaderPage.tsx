@@ -64,9 +64,14 @@ export function ArticleReaderPage() {
           </div>
         </header>
 
-        {/* 配图：放在正文下方；已插入正文的图不重复 */}
+        {/* 正文（支持 fileRef: 内嵌本地图片） */}
+        <MarkdownView markdown={article.content} />
+
+        {/* 配图：放在正文**下方**；已用 fileRef: 插入正文的图不在这里重复。
+            注意顺序：本块必须写在 <MarkdownView> 之后，否则配图会跑到正文上方
+            （与 EditorOverlay 的「留在文章下方」以及 PDF 导出的排版保持一致）。 */}
         {galleryIds.length > 0 && (
-          <div className="mb-8 space-y-4">
+          <div className="mt-8 space-y-4">
             {galleryIds.map((id, i) => (
               <figure
                 key={id}
@@ -81,9 +86,6 @@ export function ArticleReaderPage() {
             ))}
           </div>
         )}
-
-        {/* 正文（支持 fileRef: 内嵌本地图片） */}
-        <MarkdownView markdown={article.content} />
 
         {/* 标签 */}
         {article.tags.length > 0 && (

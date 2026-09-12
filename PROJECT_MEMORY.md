@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-12（v3.7 目录整理后）
+> 最后更新：2026-09-12（v3.8 修复配图顺序 / 滑块 resize / ul&gt;div 三项）
 
 ---
 
@@ -14,7 +14,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/` |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
-| **当前版本** | package.json 写的是 `3.0.0`；文档按迭代日志记到 **v3.7** |
+| **当前版本** | package.json 写的是 `3.0.0`；文档按迭代日志记到 **v3.8** |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`）；**无后端、无账号** |
 
@@ -278,21 +278,31 @@ VidaOS/
 
 ## 8. 已知问题与待处理（真实未修项）
 
+> v3.8 已修掉三项：`SegmentedControl` 滑块 resize 错位、`ul > div` 非法嵌套 3 处、
+> 以及新发现的「文章配图渲染在正文上方」。明细见第 13 节。
+> 下面剩下的都仍是**真实未修**的。
+
 - **`DataPage` 重置数据时未调用 `clearFileURLCache()`** → objectURL 缓存残留
   （`fileUrl.ts` 里这两个函数目前 0 调用）。
-- **`SegmentedControl` 滑块位置**只在 `notesTab` 变化时测量，窗口 resize 或计数位数
-  变化后会错位（缺 ResizeObserver）。
 - **异步操作缺 try/catch**：`SettingsPage`（头像/背景上传）、`MarkdownEditor.handleImage`、
   `MusicPlayerCard.handleImport` —— 失败会产生 unhandled rejection，
   `handleImage` 失败时还会误报「已添加 N 张图片」。
 - **a11y**：`MediaImage` 多数调用未传 `alt`；`Card` 带 `onClick` 时渲染为 `div`（键盘不可达）；
   `Toast` 无 `aria-live`；`Modal` 无 dialog 语义 / Escape。
-- **`ul > div` 非法嵌套 3 处**（编辑态 `<Card>` 未包 `<li>`）：
-  `InspirationView` / `ScheduleView` / `TodoView`。
 - **`date-fns` 是未使用依赖**（`src/` 0 引用），可移除。
 - **`scripts/make-icons.mjs` 跑不了**：依赖 `sharp` 但未写入 `package.json`
-  （node_modules 里那个 sharp 是孤儿安装）。
+  （node_modules 里那个 sharp 是孤儿安装，实测版本 0.35.4）。
 - **动态目前不能调整配图顺序**（只有文章编辑器有拖拽排序）。
+- **`DataPage` 用 `useAppStore()` 订阅了整个 store**：任一字段（含 `hydrated`）变化都会
+  重渲染整页；且它把整个 store（混着 action 函数）传进 `exportJSON` / `saveSnapshot`，
+  目前靠 `JSON.stringify` 静默丢弃函数才没出事 —— 与 v3.0 那次 `DataCloneError` 同源，
+  建议统一改成传 `snapshot()` 的纯数据。
+- **时区隐患**：`ScheduleView.formatDateLabel`、`CalendarCard` 用 `new Date('YYYY-MM-DD')`
+  解析（按 UTC 解析、再按本地显示）。UTC+8 下正确，UTC 以西会整体差一天。
+- **`TopBar` 返回用 `navigate(-1)`**：直接刷新在 `/space/article/:id` 这类深链接后按返回，
+  可能退出应用而不是回到列表。
+- **收藏夹里的「动态」类收藏只跳到 `/moments`**，不定位到被收藏的那一条。
+- **版本号三处不一致**：`package.json`=3.0.0、设置页显示「v3.0 · night study」、文档=v3.8。
 - 低优先级设想：文章加密、静态站点导出、自定义主题色。
 
 ---
@@ -408,10 +418,50 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
    （Service Worker 会缓存旧资源）。
 6. **移动历史目录时记得同步 `tsconfig.json` 的 `exclude`**（`archive` 已改为 `废案`）。
 7. **`noUnusedLocals` 是防复发闸门**：它曾一次性抓出 17 处死代码。**别关掉它。**
+8. **注释写的行为 ≠ 代码的行为，必须实测。** v3.8 发现 `ArticleReaderPage` 的注释写着
+   「配图：放在正文下方」，但那段 JSX 实际渲染在 `<MarkdownView>` **之前** —— 图一直在
+   正文上方。只读代码很容易顺着注释的意图「看懂」而漏掉顺序错误。
+   **凡是断言 DOM 顺序 / 位置 / 版式的，要么量 `getBoundingClientRect()` 坐标，
+   要么比对 `compareDocumentPosition()`，不要靠阅读下结论。**
+9. **探针自己也会说谎，写完要检验探针。** 本轮踩到三次：
+   - 用 `innerText` 找 `selected` / `navigate` 文案，但 Tailwind 的 `uppercase` 会把
+     `innerText` 变成大写 → 误判为「功能没渲染」；
+   - 在**空列表**上检查 `ul > div` 是否合法 —— 空列表根本没有 `<ul>`，于是「通过」了
+     一个什么都没测的断言（补上数据后才复现出真实缺陷）；
+   - 用 `Page.navigate` 改 hash 想测「刷新后数据仍在」，但**同文档导航不会重新挂载
+     React**，等于没刷新（要加查询串或 `Page.reload` 才是真重载）。
+   **每次「通过」都要问一句：这个指标真的能区分好坏吗？（呼应第 2 条）**
+10. **在本机跑无头 Chrome 要带这些参数**：`--no-sandbox --disable-setuid-sandbox
+    --disable-dev-shm-usage --disable-crash-reporter --disable-breakpad
+    --disable-gpu --disable-software-rasterizer`。否则 Chrome 自己的 sandbox 初始化
+    失败会直接 `SIGTRAP` 崩掉，表现为「DevTools 连上了又立刻断开」。
+    仍然**不要加 `--virtual-time-budget`**（见第 11 节，会卡死 IndexedDB）。
 
 ---
 
 ## 13. 变更日志
+
+### [v3.8] - 2026-09-12 —— 修掉三项实测确认的缺陷
+本轮先做了一次全量实测审计（无头 Chrome 走真实 UI，4 轮共 42 项检查），
+确认核心链路健康后，修掉以下三项。**修完复测 15 项全绿，其中 7 项是回归不变量。**
+
+- **文章配图渲染在正文上方**（新发现，文档此前未记录）：`ArticleReaderPage.tsx`
+  的 gallery 块写在 `<MarkdownView>` **之前**，而它自己的注释和 README 写的都是
+  「放在正文下方」。已把 gallery 移到正文之后、间距 `mb-8` → `mt-8`。
+  实测：修前 `proseTop=712 / figTops=[164]`（图在上方），修后
+  `prose=[200,530] / figTops=[562]`（图在下方），且「已插入正文的图不在下方重复」
+  的不变量仍成立。
+- **`SegmentedControl` 滑块 resize 后错位**：原来只在 `notesTab` 变化时测量。
+  改为 `measure()` + `ResizeObserver`（同时观察容器与三个按钮），并在 `setState`
+  前做值比较以防 ResizeObserver 首次回调导致自激。实测：1280px → 390px，
+  修前偏差 **218px**（指示器宽 322px 而按钮只有 105px），修后偏差 **1px**；
+  「resize 后再切分区」「放大回桌面」两个方向也都 1px。
+- **`ul > div` 非法嵌套 3 处**：`InspirationView` / `ScheduleView` / `TodoView` 的
+  编辑态直接返回 `<Card>`（div）而没包 `<li>`。已各补一层 `<li>`，
+  实测三处编辑态 `ul` 直接子元素全部为 `LI`，且编辑态「保存」仍生效。
+
+> 教训见第 12 节第 8 条：**注释写的行为不等于代码的行为**，涉及 DOM 顺序/版式
+> 的断言必须用真实浏览器量坐标，不能靠读代码下结论。
 
 ### [v3.7] - 2026-09-12 —— 目录整理
 - 新建 `废案/`，把 `archive/v2/`（git mv）与 `.dumate/`（上一轮 PDF 排查的临时产物，

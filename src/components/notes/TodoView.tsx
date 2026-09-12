@@ -163,30 +163,34 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
   const [draft, setDraft] = useState(item.content);
 
   if (isEditing) {
+    // 必须包 <li>：本组件渲染在 <ul> 内，编辑态直接返回 <Card>（div）
+    // 会造成 ul > div 非法嵌套。
     return (
-      <Card className="p-4 animate-slide-up">
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          className="w-full bg-transparent font-serif text-base text-paper outline-none"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && draft.trim()) onSave(draft.trim());
-          }}
-        />
-        <div className="flex justify-end gap-2 mt-2">
-          <button onClick={onCancel} className="btn-text">
-            取消
-          </button>
-          <button
-            onClick={() => draft.trim() && onSave(draft.trim())}
-            className="btn-primary"
-            style={{ padding: '4px 12px', fontSize: '0.75rem' }}
-          >
-            保存
-          </button>
-        </div>
-      </Card>
+      <li>
+        <Card className="p-4 animate-slide-up">
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-full bg-transparent font-serif text-base text-paper outline-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && draft.trim()) onSave(draft.trim());
+            }}
+          />
+          <div className="flex justify-end gap-2 mt-2">
+            <button onClick={onCancel} className="btn-text">
+              取消
+            </button>
+            <button
+              onClick={() => draft.trim() && onSave(draft.trim())}
+              className="btn-primary"
+              style={{ padding: '4px 12px', fontSize: '0.75rem' }}
+            >
+              保存
+            </button>
+          </div>
+        </Card>
+      </li>
     );
   }
 

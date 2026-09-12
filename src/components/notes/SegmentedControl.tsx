@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAppStore } from '@/stores/useAppStore';
 import { clsx } from '@/lib/utils';
@@ -26,19 +26,40 @@ export function SegmentedControl() {
     todo: todo.filter((t) => !t.done).length,
   };
 
-  useEffect(() => {
-    const el = containerRef.current?.querySelector<HTMLButtonElement>(
-      `[data-tab="${current}"]`,
+  // 量出当前分区的位置/宽度，用来摆放滑块。
+  // setState 前做值比较：ResizeObserver 的首次回调也会触发一次测量，
+  // 若无条件写入新对象会让 React 每次都重渲染，容易自激。
+  const measure = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const el = container.querySelector<HTMLButtonElement>(`[data-tab="${current}"]`);
+    if (!el) return;
+    const cRect = container.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    const left = eRect.left - cRect.left;
+    const width = eRect.width;
+    setIndicator((prev) =>
+      prev.left === left && prev.width === width ? prev : { left, width },
     );
-    if (el && containerRef.current) {
-      const cRect = containerRef.current.getBoundingClientRect();
-      const eRect = el.getBoundingClientRect();
-      setIndicator({
-        left: eRect.left - cRect.left,
-        width: eRect.width,
-      });
-    }
   }, [current]);
+
+  useEffect(() => {
+    measure();
+  }, [measure]);
+
+  // 只在 current 变化时测量是不够的：窗口 resize / 手机转屏 / 字体加载完成
+  // 都会改变按钮宽度，滑块会停在旧位置（曾实测移动端偏差达 218px）。
+  // 这里同时观察容器与三个按钮，任何尺寸变化都重新测量。
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(container);
+    container
+      .querySelectorAll('button[data-tab]')
+      .forEach((btn) => ro.observe(btn));
+    return () => ro.disconnect();
+  }, [measure]);
 
   return (
     <div className="px-4 sm:px-6 pt-2 pb-4">

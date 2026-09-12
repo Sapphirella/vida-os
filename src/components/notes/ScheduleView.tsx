@@ -185,15 +185,19 @@ interface ItemProps {
 
 function ScheduleItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, onToggle }: ItemProps) {
   if (isEditing) {
+    // 必须包 <li>：本组件渲染在 <ul> 内，编辑态直接返回 <Card>（div）
+    // 会造成 ul > div 非法嵌套。
     return (
-      <Card className="p-4 animate-slide-up">
-        <ScheduleEditor
-          initial={item}
-          inline
-          onCancel={onCancel}
-          onSave={(data) => onSave(data)}
-        />
-      </Card>
+      <li>
+        <Card className="p-4 animate-slide-up">
+          <ScheduleEditor
+            initial={item}
+            inline
+            onCancel={onCancel}
+            onSave={(data) => onSave(data)}
+          />
+        </Card>
+      </li>
     );
   }
   return (
