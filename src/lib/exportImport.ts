@@ -652,108 +652,67 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
 
   const pages: HTMLElement[] = [];
   const queue: PdfUnit[] = [...units];
-  const unitOfTop = new Map<Node, PdfUnit>();
-  let cur = newPage();
-  pages.push(cur);
-  let used = 0;
-  let placed: Node[] = [];
-  let guard = 0;
 
-  /** 收尾当前页：一页只读一次高度，若溢出就把末尾单元退回队列（上限 500 次防死循环） */
-  const closePage = () => {
-    let n = 0;
-    while (cur.scrollHeight > PDF_PAGE_H && n++ < 500) {
-      const top = placed[placed.length - 1];
-      if (!top) break;
-      // 页面上只剩一个单元还溢出：优先压缩其中的图片，而不是把它推走
-      // （推走会留下一整页空白，正是用户遇到的「图片后面两大页空白」）
-      if (placed.length === 1) {
-        const host = top.nodeType === Node.ELEMENT_NODE ? (top as HTMLElement) : null;
-        const img = host
-          ? host.tagName === 'IMG'
-            ? (host as HTMLImageElement)
-            : host.querySelector('img')
-          : null;
-        if (img) {
-          const over = cur.scrollHeight - PDF_PAGE_H;
-          const h = img.getBoundingClientRect().height;
-          if (h - over > 160) {
-            img.style.maxHeight = `${Math.floor(h - over - 8)}px`;
-            img.style.width = 'auto';
-            continue;
-          }
-        }
-        break; // 压不动了，接受这点溢出
-      }
-      const t = placed.pop()!;
-      cur.removeChild(t);
-      const u = unitOfTop.get(t);
-      unitOfTop.delete(t);
-      if (u) queue.unshift(u);
-    }
+  /** 清空页面并按顺序放上这些单元 */
+  const renderPage = (page: HTMLElement, list: PdfUnit[]) => {
+    while (page.firstChild) page.removeChild(page.firstChild);
+    list.forEach((u) => appendUnit(page, u));
   };
 
-  while (queue.length > 0 && guard++ < 20000) {
-    const unit = queue.shift()!;
-
-    // 单元比一整页还高（只可能是超长文本节点）→ 在空页上单独切分
-    if (unit.h > PDF_INNER_H) {
-      if (used > 0) {
-        closePage();
-        cur = newPage();
-        pages.push(cur);
-        used = 0;
-        placed = [];
-      }
-      // 文本节点才做二分切分；其他（例如超高的图片）整体放上去并压到页内，
-      // 绝不丢弃 —— 早先这里直接 return null 会把图片吞掉并留下空白页。
-      const rest = unit.node.nodeType === Node.TEXT_NODE ? splitTextUnit(unit, cur) : null;
-      if (rest) {
-        queue.unshift(rest);
+  // 用「真实布局 + 二分」决定每页放多少：
+  // 早先按单元高度累加来估算，但相邻段落的 margin 会折叠（我只累加了各自边距），
+  // 于是严重高估每页容量 —— 每页被塞得过满、收敛时又把内容推走，
+  // 结果每页只剩上半部分有字。
+  // 二分只读 log2(n) 次高度：21 页约 100 次读取，既不卡也精确。
+  let guard = 0;
+  while (queue.length > 0 && guard++ < 5000) {
+    const page = newPage();
+    let lo = 1;
+    let hi = queue.length;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      renderPage(page, queue.slice(0, mid));
+      if (page.scrollHeight <= PDF_PAGE_H) {
+        best = mid;
+        lo = mid + 1;
       } else {
-        const top = appendUnit(cur, unit);
-        placed.push(top);
-        unitOfTop.set(top, unit);
+        hi = mid - 1;
+      }
+    }
+
+    if (best === 0) {
+      // 这一页连一个单元都放不下
+      const unit = queue[0];
+      if (unit.node.nodeType === Node.TEXT_NODE) {
+        renderPage(page, []);
+        const rest = splitTextUnit(unit, page);
+        if (rest) queue[0] = rest;
+        else queue.shift();
+        if (!page.firstChild) queue.shift(); // 一个字都放不下 → 丢弃以免死循环
+      } else {
+        // 图片等不可拆分的：放上去并把图片压到页内，绝不丢内容
+        renderPage(page, [unit]);
         let shrink = 0;
-        while (cur.scrollHeight > PDF_PAGE_H && shrink++ < 12) {
-          const host = top.nodeType === Node.ELEMENT_NODE ? (top as HTMLElement) : null;
-          const img = host
-            ? host.tagName === 'IMG'
-              ? (host as HTMLImageElement)
-              : host.querySelector('img')
-            : null;
+        while (page.scrollHeight > PDF_PAGE_H && shrink++ < 12) {
+          const img = page.querySelector('img');
           if (!img) break;
-          const over = cur.scrollHeight - PDF_PAGE_H;
+          const over = page.scrollHeight - PDF_PAGE_H;
           const h = img.getBoundingClientRect().height;
           if (h <= 120) break;
-          img.style.maxHeight = `${Math.max(120, Math.floor(h - over - 6))}px`;
+          img.style.maxHeight = `${Math.max(120, Math.floor(h - over - 8))}px`;
           img.style.width = 'auto';
         }
+        queue.shift();
       }
-      if (queue.length > 0) {
-        cur = newPage();
-        pages.push(cur);
-        used = 0;
-        placed = [];
-      }
+      pages.push(page);
       continue;
     }
 
-    // 算术判断放不下 → 换页（不测高度）
-    if (used > 0 && used + unit.h > PDF_INNER_H) {
-      closePage();
-      cur = newPage();
-      pages.push(cur);
-      used = 0;
-      placed = [];
-    }
-
-    const top = appendUnit(cur, unit);
-    unitOfTop.set(top, unit);
-    placed.push(top);
-    used += unit.h;
+    renderPage(page, queue.slice(0, best));
+    queue.splice(0, best);
+    pages.push(page);
   }
-  closePage();
 
   try {
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });

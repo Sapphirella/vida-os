@@ -243,8 +243,8 @@ export function MarkdownEditor({
         </button>
       </div>
 
-      {/* 标题（仅 article） */}
-      {mode === 'article' && (
+      {/* 标题（文章与信件都需要；信件同样有 title 字段） */}
+      {(mode === 'article' || mode === 'letter') && (
         <div className="px-4 sm:px-8 pt-4 pb-2 max-w-3xl w-full mx-auto">
           <input
             value={title}
@@ -253,7 +253,8 @@ export function MarkdownEditor({
             className="w-full bg-transparent font-serif text-moon text-2xl sm:text-3xl placeholder:text-bronze-deep outline-none tracking-tight"
             style={{ fontWeight: 500, lineHeight: 1.3 }}
           />
-          {/* 标签 + 合集 */}
+          {/* 标签 + 合集（仅文章） */}
+          {mode === 'article' && (
           <div className="flex flex-wrap items-center gap-2 mt-3">
             {tags.map((t) => (
               <span
@@ -313,6 +314,7 @@ export function MarkdownEditor({
               )}
             </div>
           </div>
+          )}
         </div>
       )}
 
