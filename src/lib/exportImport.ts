@@ -407,26 +407,42 @@ interface PdfUnit {
   shells: HTMLElement[];
 }
 
+/** 块级 display 取值：只有子元素都是块级时才适合继续下钻 */
+const BLOCK_DISPLAYS = new Set(['block', 'list-item', 'flex', 'grid', 'table', 'flow-root']);
+
 /**
- * 把内容摊平成「能整体挪动的单元」。
- * 高度超过一整页的元素继续下钻到子节点，直到每块都放得进一页 ——
- * 之后装箱只靠算术累加，不需要反复测量。
- * 下钻用 cloneNode(false) 保留标签与样式做「空壳」，重建时结构不会丢
- * （早先用 textContent 切分会把 <img> 和段落结构抹掉，导致 PDF 丢图、排版被压扁）。
+ * 把内容摊平成「排版单元」（段落粒度）。
+ *
+ * 关键点：下钻阈值必须远小于一页高度，否则一个 600px 的块会作为整体单元，
+ * 一页只能放一个、下半页全空（用户反馈的「只有上半部分有字」）。
+ * 这里只要「子元素都是块级」且高度超过一页的 ~1/8，就继续下钻到子节点，
+ * 于是单元自然落到段落/标题/列表项粒度，页面能被填满。
+ *
+ * 只对「子元素全为块级」的元素下钻：若子元素含行内元素（<strong>/<em> 等），
+ * 下钻会把一段话拆成碎片、导致行内格式与换行错乱，因此保持整段。
+ * 下钻用 cloneNode(false) 保留标签与样式做「空壳」，重建时结构不会丢。
  */
 function flattenUnits(node: Node, shells: HTMLElement[], max: number, out: PdfUnit[]): void {
   const h = nodeHeight(node);
-  const isEl = node.nodeType === Node.ELEMENT_NODE;
-  const hasKids = isEl && (node as HTMLElement).childNodes.length > 0;
-  if (h <= max || !hasKids) {
+  if (node.nodeType !== Node.ELEMENT_NODE) {
     out.push({ node, h, shells });
     return;
   }
-  const shell = (node as HTMLElement).cloneNode(false) as HTMLElement;
+  const el = node as HTMLElement;
+  const kids = Array.from(el.childNodes);
+  const elKids = kids.filter((k) => k.nodeType === Node.ELEMENT_NODE) as HTMLElement[];
+  const allBlock =
+    elKids.length > 0 &&
+    elKids.every((k) => BLOCK_DISPLAYS.has(getComputedStyle(k).display));
+  const worthSplitting = allBlock && h > max * 0.12;
+
+  if (!worthSplitting) {
+    out.push({ node, h, shells });
+    return;
+  }
+  const shell = el.cloneNode(false) as HTMLElement;
   const nextShells = [...shells, shell];
-  Array.from((node as HTMLElement).childNodes).forEach((child) =>
-    flattenUnits(child, nextShells, max, out),
-  );
+  kids.forEach((child) => flattenUnits(child, nextShells, max, out));
 }
 
 /** 按空壳链把单元放回页面，返回挂在页面上的顶层节点 */
