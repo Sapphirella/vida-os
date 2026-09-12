@@ -20,7 +20,6 @@ export function SettingsPage() {
   const updateProfile = useAppStore((s) => s.updateProfile);
   const showToast = useUIStore((s) => s.showToast);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const bgInputRef = useRef<HTMLInputElement>(null);
   const activePreset = getBackgroundPreset(profile.backgroundPreset);
   const [name, setName] = useState(profile.name);
   const [signature, setSignature] = useState(profile.signature);
@@ -43,18 +42,6 @@ export function SettingsPage() {
     await putFile({ id, blob: compressed, mime: compressed.type, name: f.name, size: compressed.size });
     updateProfile({ avatarId: id });
     showToast('头像已更新', 'success');
-    e.target.value = '';
-  };
-
-  const handleBackground = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const compressed = await compressImage(f, 1600, 0.8);
-    const id = uid('bg_');
-    if (profile.backgroundFileId) await deleteFile(profile.backgroundFileId);
-    await putFile({ id, blob: compressed, mime: compressed.type, name: f.name, size: compressed.size });
-    updateProfile({ backgroundFileId: id, backgroundPreset: undefined });
-    showToast('背景已更新', 'success');
     e.target.value = '';
   };
 
@@ -160,6 +147,9 @@ export function SettingsPage() {
               {profile.backgroundFileId ? '自定义图片' : `「${activePreset.name}」`}
             </span>
           </p>
+          <p className="font-sans text-bronze/60 text-[10px] -mt-2 mb-3">
+            仅暗夜模式下生效
+          </p>
           {/* 大预览：让「换背景」这件事一眼可见（卡片会遮住大部分真实背景） */}
           <div
             className="h-24 rounded-card overflow-hidden border border-line/60 mb-3 relative"
@@ -211,9 +201,6 @@ export function SettingsPage() {
             })}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => bgInputRef.current?.click()} className="btn-ghost">
-              <ImageIcon size={13} strokeWidth={1.5} /> 上传自定义
-            </button>
             {profile.backgroundFileId && (
               <button
                 onClick={async () => {
@@ -226,7 +213,6 @@ export function SettingsPage() {
                 <Trash2 size={11} strokeWidth={1.5} /> 移除
               </button>
             )}
-            <input ref={bgInputRef} type="file" accept="image/*" hidden onChange={handleBackground} />
           </div>
         </Card>
 
