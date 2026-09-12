@@ -25,7 +25,7 @@
 - 初版：文章 CRUD、Markdown、图片 Base64、JSON/TXT/MD/PDF 导入导出。
 - 由 DuMate 实现。
 
-### v2.0 / v2.1 (2026-09-08) —— **已归档至 `archive/v2/`**
+### v2.0 / v2.1 (2026-09-08) —— **已归档至 `废案/archive-v2/`**
 - **设计语言**：iOS 液态玻璃（浅色磨砂玻璃，无边框，低饱和灰蓝）；
 - **技术栈**：原生 HTML/CSS/JS（无构建）；
 - **功能**：完整实现桌面/便签/空间/动态/信箱/收藏/数据/设置八大模块；
@@ -39,7 +39,7 @@
 - **技术栈**：Vite + React 18 + TypeScript + TailwindCSS + Zustand + Dexie；
 - **核心差异**：完全重写 UI 与样式系统，保留 V2 数据模型与功能架构；
 - **目标**：在 V2 已有功能基础上，提供「暗色情绪向、朦胧大气」的视觉体验与现代化前端工程。
-- V2 整体归档至 `archive/v2/`，保留为历史（可对照查阅）。
+- V2 整体归档至 `废案/archive-v2/`，保留为历史（可对照查阅）。
 
 ---
 
@@ -215,7 +215,7 @@ VidaOS/
 ├── docs/                        # ⚠️ v3 预览截图（README 未引用，见审计 P2）
 ├── README.md
 ├── PROJECT_MEMORY.md            # 本文件
-└── archive/v2/                  # V2.1 完整历史（git mv 保留，自包含可运行）
+└── 废案/archive-v2/                  # V2.1 完整历史（git mv 保留，自包含可运行）
 ```
 
 ---
@@ -438,6 +438,22 @@ git commit -m "feat: ..."
 
 ## 变更日志（Changelog）
 
+### [v3.7] - 2026-09-12 —— 文件夹整理（用户要求集中废案）
+用户反馈目录经历多个版本迭代后很乱，要求把「已用不上的废案」集中到一个文件夹，
+由用户自行备份后删除。本次整理：
+- 新建 **`废案/`**，并把以下内容移入（均可安全删除）：
+  - `archive/v2/` → `废案/archive-v2/`：V2.1 完整旧应用（原生 JS，历史对照用）；
+  - `.dumate/` → `废案/dumate-临时验证/`：上一个 agent 排查 PDF 时的临时验证产物
+    （51MB 的页面渲染图、测试 PDF、验证脚本，全部可重新生成）。
+- 删除纯垃圾：`.DS_Store`、`tsconfig.tsbuildinfo`、`dist/`（后两者本就可再生）。
+- `.gitignore` 增加 `/废案/`，避免待删内容干扰 `git status`。
+- `tsconfig.json` 的 `exclude` 由 `archive` 改为 `废案`。
+- **未移入废案（仍属在用的文件）**：`src/`、`public/`、`scripts/`、`docs/preview-v3-*.png`
+  （README 引用中）、`docs/palette-suggestion.html`（记录当前生效的色板依据）、
+  全部配置与文档。
+- 保留说明：`archive-v2` 的文件在 git 历史中永远可取回
+  （`git checkout 4377d94 -- archive/v2`），所以删除 `废案/` 不会丢失它们。
+
 ### [v3.6] - 2026-09-11 —— PDF 排版回退到最早那一版（用户认为最好的一版）
 用户在尝试了 v3.1~v3.5 的多轮改动后明确要求：**把 PDF 排版改回最早那一版**。
 
@@ -547,7 +563,7 @@ git commit -m "feat: ..."
 - **验证**：`tsc -b --noEmit` 与 `vite build` 通过；`formatDate` 8 种格式回归全通过；**并用无头 Chrome 实际渲染了构建产物**，确认时钟/宫格/月历/日程/音景/底部 Tab 全部正常渲染、无错误覆盖层、且背景已渲染为「夜半」预设渐变。
 
 ### [v3.0-cleanup] - 2026-09-11 —— 按审计结果执行清理与低风险修复
-- **删除** `archive/v2/docs/preview-desktop.png` + `preview-mobile.png`（回收 2.53 MB，archive 目录 2.9 MB → 384 KB；v2 全部代码与资源保留，git 历史可随时恢复）；
+- **删除** `废案/archive-v2/docs/preview-desktop.png` + `preview-mobile.png`（回收 2.53 MB，archive 目录 2.9 MB → 384 KB；v2 全部代码与资源保留，git 历史可随时恢复）；
 - **删除** 构建产物 `dist/` + `tsconfig.tsbuildinfo`（回收 ~1.3 MB；`npm run build` 可完整重建）；
 - **修复 P0-6**：`utils.ts` 的 `formatDate` 改为 token 正则替换，支持 `M`/`D`，并修掉只替换第一处的隐患 → 文章/信件阅读页不再显示「2026 年 M 月 D 日」；
 - **修复 P0-7**：`ScheduleView.tsx` 过去日程改为遍历全部 `pastDates`，并接通编辑态（原先只显示最早一天且编辑按钮为死按钮）；
@@ -560,10 +576,10 @@ git commit -m "feat: ..."
 - 修正文档过时信息：存放路径 `.../DeepSeek Harness/VidaOS`（原写作 `/Users/amarisgo/Documents/VidaOS`）、README「9 个路由页面」→ 11、结构树补 `docs/` `package-lock.json` `.gitignore`；
 - `.gitignore` 补 `*.tsbuildinfo`（此前 `tsc -b` 产物未被忽略）；
 - 验证 `tsc -b --noEmit` 与 `vite build` 均通过；
-- 资产盘点：`dist/`（1.3 MB）可再生、`docs/` 5 张 v3 截图（447 KB）为孤儿、`archive/v2/docs/` 2 张截图（2.53 MB，占归档 88%）无引用；`node_modules` 含 5 个 extraneous 包（sharp 全家桶 ≈19 MB）。
+- 资产盘点：`dist/`（1.3 MB）可再生、`docs/` 5 张 v3 截图（447 KB）为孤儿、`废案/archive-v2/docs/` 2 张截图（2.53 MB，占归档 88%）无引用；`node_modules` 含 5 个 extraneous 包（sharp 全家桶 ≈19 MB）。
 
 ### [v3.0] - 2026-09-10 —— 暗夜书房重构 ✦ 当前版本
-- V2.1 整体归档至 `archive/v2/`，保留为历史（git mv，不删除）；
+- V2.1 整体归档至 `废案/archive-v2/`，保留为历史（git mv，不删除）；
 - 设计语言由「液态玻璃浅色」改为「暗夜书房深色」+ 用户自定义色板；
 - 技术栈由 vanilla JS 升级为 Vite 5 + React 18 + TypeScript + TailwindCSS 3 + Zustand + Dexie 4；
 - 字体升级为 EB Garamond（衬线）+ JetBrains Mono（打字机）+ Inter（UI）；

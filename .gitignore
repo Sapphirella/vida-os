@@ -29,3 +29,6 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# 待删除的废案（用户会自行备份后删除）
+/废案/
