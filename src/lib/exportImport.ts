@@ -316,33 +316,27 @@ export function exportTXT(state: AppState, scope: ExportScopes = ['all']): strin
 // ============================================================
 // PDF 导出
 //
-// 采用「逐页渲染」而不是「渲成一张长图再按像素切」：
-// 先把内容按页装进固定尺寸的页面容器（每页自己量高度），再对每一页单独
-// html2canvas —— 量到的就是渲染出来的，从根上避免把一行字切到两页里。
+// 排版沿用**最早那一版**（用户认为最好的一版）：
+//   - 内容在 720px 宽、上下 64px / 左右 80px 内边距的容器里**连续排版**；
+//   - 整篇一次渲染成一张长图，再按页切片贴到各页 —— 内容是连续流动的，
+//     因此不会出现「每页上下各留 64px 白边」或「图片独占一页、下半页空白」；
+//   - 容器等比铺满整页宽度（与最早版本一致）。
+//
+// 在此之上只保留两处用户明确要求的改动：
+//   1. 切点选在「行与行之间的空隙」，不再把一行字劈成两半；
+//   2. 正文里的配图/封面内嵌为 data URL（最早版本没有图）。
 // ============================================================
 
 const A4_W = 595.28;
 const A4_H = 841.89;
-/** 页面容器的渲染尺寸（CSS px）—— 沿用上一版观感：720 宽 + 64/80 内边距 */
-const PDF_PAGE_W = 720;
-const PDF_PAGE_H = 1018; // 720 × (297/210)，即整页 A4 等比
-const PDF_PAD = '64px 80px';
-/** 内容区可用高度（去掉上下内边距） */
-const PDF_INNER_H = PDF_PAGE_H - 128;
-
+/** 渲染容器宽度（最早版本就是 720px + 64/80 内边距） */
+const PDF_RENDER_W = 720;
+/** 容器 px → PDF pt：720px 铺满整页宽度 */
+const PT_PER_PX = A4_W / PDF_RENDER_W;
+/** 一页在容器坐标下对应的高度（CSS px） */
+const PAGE_H_PX = A4_H / PT_PER_PX;
 const PDF_BG = '#F2EBE0';
-const PDF_FONT =
-  '"EB Garamond", "Lora", Georgia, serif';
-
-/** 页面容器的基础样式（量测与渲染都用它，保证一致） */
-// 注意：量测容器（stage）必须与页面容器的「内容宽度」一致。
-// 页面有 80px 左右内边距（内容宽 560），若量测容器是 720 宽且无内边距，
-// 文字就会按 720 宽量高度、却按 560 宽渲染 —— 每段都会变高，导致分页溢出。
-const PDF_PAD_X = '0 80px';
-const pageCss = (full?: boolean) =>
-  `box-sizing:border-box;width:${PDF_PAGE_W}px;` +
-  (full ? `height:${PDF_PAGE_H}px;padding:${PDF_PAD};overflow:hidden;` : `padding:${PDF_PAD_X};`) +
-  `background:${PDF_BG};color:#1B1A1F;font-family:${PDF_FONT};line-height:1.85;`;
+const PDF_FONT = '"EB Garamond", "Lora", Georgia, serif';
 
 /** 把一批 fileId 从 IndexedDB 取出并转成 data URL（PDF 里必须内嵌图片） */
 async function buildImageDataUrls(ids: Set<string>): Promise<Map<string, string>> {
@@ -360,7 +354,7 @@ async function buildImageDataUrls(ids: Set<string>): Promise<Map<string, string>
   return map;
 }
 
-/** 等待容器内所有图片解码完成，否则量高度/渲染都会漏 */
+/** 等待容器内所有图片解码完成，否则 html2canvas 会漏画 */
 async function waitForImages(root: HTMLElement): Promise<void> {
   const imgs = Array.from(root.querySelectorAll('img'));
   await Promise.all(
@@ -377,147 +371,65 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 }
 
 /**
-/**
- * 量一个节点的占位高度（含上下外边距）。
- * 这个函数会触发布局，必须在「不修改 DOM」的时机批量调用；否则每加一个节点
- * 就量一次会造成成千上万次强制同步重排 —— 长文导出时页面会直接失去响应。
+ * 计算「不会切断文字行」的分页位置。
+ * 收集容器内每一行文字、每一张图片的纵向区间，把「区间上边界」当候选切点，
+ * 再贪心选取不超过页高的最大候选点 —— 切点永远落在行与行之间的空隙里。
  */
-function nodeHeight(node: Node): number {
-  if (node.nodeType === Node.TEXT_NODE) {
-    if (!node.nodeValue || !node.nodeValue.trim()) return 0;
-    const range = document.createRange();
+export function computePageRanges(
+  container: HTMLElement,
+  pageH: number,
+  totalH: number,
+): Array<[number, number]> {
+  const cTop = container.getBoundingClientRect().top;
+  const blocks: Array<[number, number]> = [];
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (!node.nodeValue || !node.nodeValue.trim()) continue;
     range.selectNodeContents(node);
     const rects = range.getClientRects();
-    if (rects.length === 0) return 0;
-    return rects[rects.length - 1].bottom - rects[0].top;
-  }
-  if (node.nodeType === Node.ELEMENT_NODE) {
-    const el = node as HTMLElement;
-    const rect = el.getBoundingClientRect();
-    const cs = getComputedStyle(el);
-    return rect.height + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
-  }
-  return 0;
-}
-
-/** 一个排版单元：节点 + 高度 + 从外层块到它父级的空壳（用于重建嵌套结构） */
-interface PdfUnit {
-  node: Node;
-  h: number;
-  shells: HTMLElement[];
-}
-
-/** 块级 display 取值：只有子元素都是块级时才适合继续下钻 */
-const BLOCK_DISPLAYS = new Set(['block', 'list-item', 'flex', 'grid', 'table', 'flow-root']);
-
-/**
- * 把内容摊平成「排版单元」（段落粒度）。
- *
- * 关键点：下钻阈值必须远小于一页高度，否则一个 600px 的块会作为整体单元，
- * 一页只能放一个、下半页全空（用户反馈的「只有上半部分有字」）。
- * 这里只要「子元素都是块级」且高度超过一页的 ~1/8，就继续下钻到子节点，
- * 于是单元自然落到段落/标题/列表项粒度，页面能被填满。
- *
- * 只对「子元素全为块级」的元素下钻：若子元素含行内元素（<strong>/<em> 等），
- * 下钻会把一段话拆成碎片、导致行内格式与换行错乱，因此保持整段。
- * 下钻用 cloneNode(false) 保留标签与样式做「空壳」，重建时结构不会丢。
- */
-function flattenUnits(node: Node, shells: HTMLElement[], max: number, out: PdfUnit[]): void {
-  const h = nodeHeight(node);
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    out.push({ node, h, shells });
-    return;
-  }
-  const el = node as HTMLElement;
-  const kids = Array.from(el.childNodes);
-  const elKids = kids.filter((k) => k.nodeType === Node.ELEMENT_NODE) as HTMLElement[];
-  const allBlock =
-    elKids.length > 0 &&
-    elKids.every((k) => BLOCK_DISPLAYS.has(getComputedStyle(k).display));
-  const worthSplitting = allBlock && h > max * 0.12;
-
-  if (!worthSplitting) {
-    out.push({ node, h, shells });
-    return;
-  }
-  const shell = el.cloneNode(false) as HTMLElement;
-  const nextShells = [...shells, shell];
-  kids.forEach((child) => flattenUnits(child, nextShells, max, out));
-}
-
-/** 按空壳链把单元放回页面，返回挂在页面上的顶层节点 */
-function appendUnit(page: HTMLElement, unit: PdfUnit): Node {
-  const clones = unit.shells.map((sh) => sh.cloneNode(false) as HTMLElement);
-  const leaf = unit.node.cloneNode(true);
-  if (clones.length === 0) {
-    page.appendChild(leaf);
-    return leaf;
-  }
-  page.appendChild(clones[0]);
-  for (let i = 1; i < clones.length; i += 1) clones[i - 1].appendChild(clones[i]);
-  clones[clones.length - 1].appendChild(leaf);
-  return clones[0];
-}
-
-/**
- * 文本节点比一整页还长时的兜底：二分找出放得下的最长前缀，
- * 并尽量在空白/句读处断开。只在「该单元单独占一页仍放不下」时才会走到，
- * 此时页面上没有别的内容，二分次数有限，不会卡。
- */
-function splitTextUnit(unit: PdfUnit, page: HTMLElement): PdfUnit | null {
-  const text = unit.node.nodeValue ?? '';
-  if (!text.trim()) return null;
-
-  const clones = unit.shells.map((sh) => sh.cloneNode(false) as HTMLElement);
-  let host: HTMLElement = page;
-  clones.forEach((c, i) => {
-    (i === 0 ? page : clones[i - 1]).appendChild(c);
-    host = c;
-  });
-  const holder = document.createTextNode('');
-  host.appendChild(holder);
-
-  let lo = 1;
-  let hi = text.length;
-  let best = 0;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    holder.nodeValue = text.slice(0, mid);
-    if (page.scrollHeight <= PDF_PAGE_H) {
-      best = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
+    for (let i = 0; i < rects.length; i += 1) {
+      const r = rects[i];
+      if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
     }
   }
+  container.querySelectorAll('img').forEach((img) => {
+    const r = img.getBoundingClientRect();
+    if (r.height > 0.5) blocks.push([r.top - cTop, r.bottom - cTop]);
+  });
 
-  let cut = best;
-  const soft = Math.max(
-    text.lastIndexOf(' ', cut),
-    text.lastIndexOf('\n', cut),
-    text.lastIndexOf('。', cut),
-    text.lastIndexOf('，', cut),
-    text.lastIndexOf('、', cut),
-  );
-  if (soft > cut * 0.6) cut = soft + 1;
+  const cands = Array.from(
+    new Set(blocks.map(([t]) => Math.max(1, Math.floor(t - 1)))),
+  ).sort((a, b) => a - b);
 
-  if (cut <= 0) {
-    // 一个字都放不下 → 原样留给下一页（保证一定前进，不会死循环）
-    page.removeChild(clones[0] ?? holder);
-    return unit;
+  const ranges: Array<[number, number]> = [];
+  let start = 0;
+  let guard = 0;
+  while (start < totalH - 0.5 && guard++ < 5000) {
+    const limit = start + pageH;
+    if (limit >= totalH) {
+      ranges.push([start, totalH]);
+      break;
+    }
+    let end = 0;
+    for (const c of cands) {
+      if (c > start + 1 && c <= limit) end = c;
+      else if (c > limit) break;
+    }
+    if (end <= start) end = limit; // 找不到候选（如超高的图）时硬切，避免死循环
+    ranges.push([start, end]);
+    start = end;
   }
-  holder.nodeValue = text.slice(0, cut);
-  const rest = text.slice(cut);
-  if (!rest) return null;
-  const restNode = document.createTextNode(rest);
-  return { node: restNode, h: nodeHeight(restNode), shells: unit.shells };
+  if (ranges.length === 0) ranges.push([0, totalH]);
+  return ranges;
 }
 
 export async function exportPDF(state: AppState, scope: ExportScopes = ['articles']): Promise<void> {
   const s = scopedState(state, scope);
   const has = normalizeScopes(scope);
 
-  // 先把要内嵌的图片转成 data URL（Blob 存在 IndexedDB，PDF 必须自带图）
   const dataUrls = await buildImageDataUrls(collectFileIds(s));
   const imgTag = (id: string) =>
     `<img src="${dataUrls.get(id)}" alt="" style="display:block;max-width:100%;margin:14px auto;border-radius:8px;" />`;
@@ -525,7 +437,6 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     Array.from(new Set(ids.filter((x): x is string => !!x && dataUrls.has(x))))
       .map((id) => imgTag(id))
       .join('');
-  /** 正文里的 fileRef:<id> 换成 data URL */
   const resolveInline = (html: string) =>
     html.replace(
       /<img[^>]*src="fileRef:([A-Za-z0-9_-]+)"[^>]*>/g,
@@ -539,33 +450,32 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     <h1 style="font-family:${PDF_FONT};font-size:36px;text-align:center;margin:0 0 8px;color:#1B1A1F;letter-spacing:-0.01em;">
       VidaOS
     </h1>
-    <p style="text-align:center;color:#947D75;font-size:12px;letter-spacing:0.1em;margin:0 0 32px;text-transform:uppercase;">
+    <p style="text-align:center;color:#947D75;font-size:12px;letter-spacing:0.1em;margin:0 0 48px;text-transform:uppercase;">
       ${formatDate(new Date(), 'YYYY · MM · DD')}
     </p>
   `;
 
-  // 个人资料（选了「个人资料」范围时输出）
   if (has.has('profile')) {
     const avatar = s.profile.avatarId ? dataUrls.get(s.profile.avatarId) : undefined;
     html += `
       <section style="margin:0 0 32px;padding:20px 0;border-top:1px solid #947D75;border-bottom:1px solid #947D75;text-align:center;">
         ${avatar ? `<img src="${avatar}" alt="" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin:0 auto 12px;display:block;" />` : ''}
         <p style="font-size:22px;margin:0 0 6px;color:#1B1A1F;">${escapeHTML(s.profile.name || '(未填写昵称)')}</p>
-        ${s.profile.signature ? `<p style="font-size:15px;margin:0;color:#7A675F;font-style:italic;">—— ${escapeHTML(s.profile.signature)}</p>` : ''}
+        ${s.profile.signature ? `<p style="font-size:13px;margin:0;color:#7A675F;font-style:italic;">—— ${escapeHTML(s.profile.signature)}</p>` : ''}
       </section>
     `;
   }
 
   const h2 = (t: string) =>
-    `<h2 style="font-size:16px;letter-spacing:0.2em;text-transform:uppercase;color:#6A080E;margin:32px 0 16px;font-size:18px;border-bottom:1px solid #947D75;padding-bottom:8px;">${t}</h2>`;
+    `<h2 style="font-size:16px;letter-spacing:0.2em;text-transform:uppercase;color:#6A080E;margin:32px 0 16px;border-bottom:1px solid #947D75;padding-bottom:8px;">${t}</h2>`;
 
   if (s.articles.length > 0 && has.has('articles')) {
     html += h2('文章');
     s.articles.forEach((a) => {
       html += `
         <article style="margin:32px 0;">
-          <h3 style="font-size:26px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(a.title)}</h3>
-          <p style="color:#947D75;font-size:12px;margin:0 0 16px;letter-spacing:0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
+          <h3 style="font-size:24px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(a.title)}</h3>
+          <p style="color:#947D75;font-size:11px;margin:0 0 16px;letter-spacing:0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
           <div style="font-size:16px;">${resolveInline(renderMarkdown(a.content))}</div>
           ${imagesOf([a.coverId, ...a.imageIds])}
         </article>
@@ -578,7 +488,7 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     s.moments.forEach((m) => {
       html += `
         <div style="margin:24px 0;padding-left:16px;border-left:2px solid #6A080E;">
-          <p style="color:#947D75;font-size:12px;margin:0 0 6px;letter-spacing:0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
+          <p style="color:#947D75;font-size:11px;margin:0 0 6px;letter-spacing:0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
           <div style="font-size:16px;">${resolveInline(renderMarkdown(m.content))}</div>
           ${imagesOf(m.imageIds)}
           ${(m.comments ?? []).map((c) => `<p style="margin:6px 0 0 12px;font-size:12px;color:#7A675F;">— ${escapeHTML(c.content).replace(/\n/g, '<br />')}</p>`).join('')}
@@ -592,8 +502,8 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
     s.letters.forEach((l) => {
       html += `
         <article style="margin:32px 0;">
-          <h3 style="font-size:24px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(l.title || '(无题)')}</h3>
-          <p style="color:#947D75;font-size:12px;margin:0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
+          <h3 style="font-size:22px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(l.title || '(无题)')}</h3>
+          <p style="color:#947D75;font-size:11px;margin:0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
           <div style="font-size:16px;">${resolveInline(renderMarkdown(l.content))}</div>
           ${imagesOf(l.imageIds)}
         </article>
@@ -604,8 +514,7 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   if (s.notes.inspiration.length > 0 && has.has('notes')) {
     html += h2('灵感') + '<ul style="list-style:none;padding:0;">';
     s.notes.inspiration.forEach((n) => {
-      // 用 renderMarkdown 而不是 escapeHTML：否则换行会被 HTML 直接压掉
-      html += `<li style="margin:10px 0;padding-left:16px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:12px;letter-spacing:0.05em;">[${escapeHTML(n.category)}]</span> <span style="font-size:16px;">${resolveInline(renderMarkdown(n.content))}</span></li>`;
+      html += `<li style="margin:10px 0;padding-left:16px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:11px;letter-spacing:0.05em;">[${escapeHTML(n.category)}]</span> <span style="font-size:16px;">${resolveInline(renderMarkdown(n.content))}</span></li>`;
     });
     html += '</ul>';
   }
@@ -613,14 +522,14 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
   if (s.notes.schedule.length > 0 && has.has('notes')) {
     html += h2('日程');
     s.notes.schedule.forEach((n) => {
-      html += `<div style="margin:8px 0;font-size:16px;"><span style="color:#947D75;font-size:12px;">[${n.date}${n.time ? ' ' + n.time : ''}]</span> <strong>${escapeHTML(n.title)}</strong>${n.done ? ' ✓' : ''}${n.note ? `<div style="color:#7A675F;font-size:14px;margin-top:2px;">${resolveInline(renderMarkdown(n.note))}</div>` : ''}</div>`;
+      html += `<div style="margin:8px 0;font-size:15px;"><span style="color:#947D75;font-size:11px;">[${n.date}${n.time ? ' ' + n.time : ''}]</span> <strong>${escapeHTML(n.title)}</strong>${n.done ? ' ✓' : ''}${n.note ? `<div style="color:#7A675F;font-size:13px;margin-top:2px;">${resolveInline(renderMarkdown(n.note))}</div>` : ''}</div>`;
     });
   }
 
   if (s.notes.todo.length > 0 && has.has('notes')) {
     html += h2('待办');
     s.notes.todo.forEach((n) => {
-      html += `<div style="margin:6px 0;font-size:16px;">${n.done ? '☑' : '☐'} <span style="vertical-align:top;">${escapeHTML(n.content).replace(/\n/g, '<br />')}</span></div>`;
+      html += `<div style="margin:6px 0;font-size:15px;">${n.done ? '☑' : '☐'} ${escapeHTML(n.content).replace(/\n/g, '<br />')}</div>`;
     });
   }
 
@@ -633,126 +542,70 @@ export async function exportPDF(state: AppState, scope: ExportScopes = ['article
           : f.refType === 'moment'
             ? plainText(state.moments.find((x) => x.id === f.refId)?.content ?? '').slice(0, 30)
             : state.letters.find((x) => x.id === f.refId)?.title ?? '(无题)';
-      html += `<p style="margin:6px 0;font-size:15px;">★ ${escapeHTML(label)}</p>`;
+      html += `<p style="margin:6px 0;font-size:14px;">★ ${escapeHTML(label)}</p>`;
     });
   }
 
-  // ── 分页：把内容装进固定尺寸的页面容器（在容器里量，量到的就是渲染的）──
-  const stage = document.createElement('div');
-  stage.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss()}`;
-  stage.innerHTML = html;
-  document.body.appendChild(stage);
-  stage.querySelectorAll('img').forEach((img) => {
-    // 留出上下外边距（各 14px）的余量，否则 866+28 会超过每页可用高度，
-    // 被当成「超过一整页的单元」而触发降级处理
-    img.style.maxHeight = `${PDF_INNER_H - 96}px`;
-    img.style.width = 'auto';
-    img.style.maxWidth = '100%';
-    img.style.objectFit = 'contain';
-  });
-  await waitForImages(stage);
-
-  // ── 摊平 + 算术装箱 ──
-  // 关键：先把所有块的高度一次性量完（此时不修改 DOM，只触发一次布局），
-  // 之后按高度累加装箱。早先「加一个节点量一次」的写法在长文下会触发几千次
-  // 强制同步重排，直接让页面失去响应（用户点导出后网页无响应）。
-  const units: PdfUnit[] = [];
-  Array.from(stage.childNodes).forEach((n) => flattenUnits(n, [], PDF_INNER_H, units));
-
-  const newPage = () => {
-    const el = document.createElement('div');
-    el.style.cssText = `position:fixed;top:-20000px;left:-20000px;${pageCss(true)}`;
-    document.body.appendChild(el);
-    return el;
-  };
-
-  const pages: HTMLElement[] = [];
-  const queue: PdfUnit[] = [...units];
-
-  /** 清空页面并按顺序放上这些单元 */
-  const renderPage = (page: HTMLElement, list: PdfUnit[]) => {
-    while (page.firstChild) page.removeChild(page.firstChild);
-    list.forEach((u) => appendUnit(page, u));
-  };
-
-  // 用「真实布局 + 二分」决定每页放多少：
-  // 早先按单元高度累加来估算，但相邻段落的 margin 会折叠（我只累加了各自边距），
-  // 于是严重高估每页容量 —— 每页被塞得过满、收敛时又把内容推走，
-  // 结果每页只剩上半部分有字。
-  // 二分只读 log2(n) 次高度：21 页约 100 次读取，既不卡也精确。
-  let guard = 0;
-  while (queue.length > 0 && guard++ < 5000) {
-    const page = newPage();
-    let lo = 1;
-    let hi = queue.length;
-    let best = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      renderPage(page, queue.slice(0, mid));
-      if (page.scrollHeight <= PDF_PAGE_H) {
-        best = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-
-    if (best === 0) {
-      // 这一页连一个单元都放不下
-      const unit = queue[0];
-      if (unit.node.nodeType === Node.TEXT_NODE) {
-        renderPage(page, []);
-        const rest = splitTextUnit(unit, page);
-        if (rest) queue[0] = rest;
-        else queue.shift();
-        if (!page.firstChild) queue.shift(); // 一个字都放不下 → 丢弃以免死循环
-      } else {
-        // 图片等不可拆分的：放上去并把图片压到页内，绝不丢内容
-        renderPage(page, [unit]);
-        let shrink = 0;
-        while (page.scrollHeight > PDF_PAGE_H && shrink++ < 12) {
-          const img = page.querySelector('img');
-          if (!img) break;
-          const over = page.scrollHeight - PDF_PAGE_H;
-          const h = img.getBoundingClientRect().height;
-          if (h <= 120) break;
-          img.style.maxHeight = `${Math.max(120, Math.floor(h - over - 8))}px`;
-          img.style.width = 'auto';
-        }
-        queue.shift();
-      }
-      pages.push(page);
-      continue;
-    }
-
-    renderPage(page, queue.slice(0, best));
-    queue.splice(0, best);
-    pages.push(page);
-  }
+  // 与最早版本一致的渲染容器：连续排版，整体等比铺满整页
+  const container = document.createElement('div');
+  container.style.cssText = `
+    position: fixed;
+    top: -10000px;
+    left: -10000px;
+    width: ${PDF_RENDER_W}px;
+    padding: 64px 80px;
+    background: ${PDF_BG};
+    color: #1B1A1F;
+    font-family: ${PDF_FONT};
+    line-height: 1.85;
+  `;
+  container.innerHTML = html;
+  document.body.appendChild(container);
 
   try {
+    // 单张图片不超过一页
+    container.querySelectorAll('img').forEach((img) => {
+      img.style.maxHeight = `${Math.floor(PAGE_H_PX) - 40}px`;
+      img.style.width = 'auto';
+      img.style.maxWidth = '100%';
+      img.style.objectFit = 'contain';
+    });
+    await waitForImages(container);
+
+    const totalH = container.scrollHeight;
+    const canvas = await html2canvas(container, {
+      backgroundColor: PDF_BG,
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      windowHeight: totalH,
+      height: totalH,
+    });
+    const pxPerCss = canvas.height / totalH;
+    const ranges = computePageRanges(container, PAGE_H_PX, totalH);
+
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-    for (let i = 0; i < pages.length; i += 1) {
-      const canvas = await html2canvas(pages[i], {
-        backgroundColor: PDF_BG,
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        width: PDF_PAGE_W,
-        height: PDF_PAGE_H,
-        windowWidth: PDF_PAGE_W,
-        windowHeight: PDF_PAGE_H,
-      });
-      if (i > 0) pdf.addPage();
+    ranges.forEach(([a, b], idx) => {
+      const sy = Math.max(0, Math.round(a * pxPerCss));
+      const sh = Math.max(1, Math.min(canvas.height - sy, Math.round((b - a) * pxPerCss)));
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = sh;
+      const ctx = slice.getContext('2d');
+      if (!ctx) return;
+      ctx.fillStyle = PDF_BG;
+      ctx.fillRect(0, 0, slice.width, slice.height);
+      ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+
+      if (idx > 0) pdf.addPage();
       pdf.setFillColor(242, 235, 224);
       pdf.rect(0, 0, A4_W, A4_H, 'F');
-      // 页容器已含 64/80 内边距，直接铺满整页，观感与上一版一致
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.86), 'JPEG', 0, 0, A4_W, A4_H);
-    }
+      pdf.addImage(slice.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, A4_W, (b - a) * PT_PER_PX);
+    });
+
     pdf.save(`vidaos-${scopeSlug(scope)}-${formatDate(new Date(), 'YYYYMMDD-HHmm')}.pdf`);
   } finally {
-    stage.remove();
-    pages.forEach((el) => el.remove());
+    container.remove();
   }
 }
 
