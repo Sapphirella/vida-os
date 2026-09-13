@@ -684,6 +684,7 @@ textarea, input, [contenteditable] {
 .prose-moment {
   font-size: 1rem;
   line-height: 1.85;
+  letter-spacing: 0.06em;
 }
 .prose-moment > *:first-child { margin-top: 0; }
 .prose-moment > *:last-child { margin-bottom: 0; }

@@ -363,7 +363,7 @@ export function MarkdownEditor({
           <Save size={13} strokeWidth={1.6} />
           <span className="hidden sm:inline">保存</span>
           <span className="sm:hidden" aria-hidden aria-label="">
-            存
+            保存
           </span>
         </button>
       </div>
