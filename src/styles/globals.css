@@ -273,8 +273,11 @@ html, body {
 body {
   /* 滚动性能：body 不再承担多层渐变背景（background-attachment:fixed 在移动端
      每次滚动都整页重绘，是卡顿主因）。氛围渐变/光晕统一由 Background 层
-     （fixed -z-10，不随滚动重绘）承载，body 只铺纯色底。 */
-  background: var(--bg-base);
+     （fixed -z-10，不随滚动重绘）承载。
+     注意：body 底色必须是透明的——若给 body 铺不透明底色，它会绘制在
+     负 z-index 背景层之上，把 Background 层整个盖住（曾导致切换背景无效）。
+     兜底底色由 html 层承担（html 背景最先绘制，位于 -z-10 之下）。 */
+  background: transparent;
   min-height: 100vh;
   min-height: 100dvh;
 }
@@ -843,10 +846,12 @@ input, textarea, select {
    触屏滚动性能：**夜间**顶栏/底栏在无 backdrop-filter 时改用实底，
    滚动时内容不再透到栏后（需放在上方 header/nav 规则之后覆盖）。
    日间主题保留奶油玻璃毛玻璃（--bar-bg rgba(255,252,246,0.72) + blur）。
+   重要：实底跟随 --bar-bg（背景预设驱动）而不是钉死固定色，
+   否则手机上切换背景时栏色毫无反应。
    ============================================================ */
 @media (hover: none) {
   :root:not([data-theme='day']) header,
   :root:not([data-theme='day']) nav {
-    background: rgba(27, 26, 31, 0.94) !important;
+    background: var(--bar-bg, rgba(27, 26, 31, 0.6)) !important;
   }
 }
