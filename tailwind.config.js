@@ -48,7 +48,7 @@ export default {
       },
       fontFamily: {
         mono: ['"JetBrains Mono"', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'],
-        serif: ['"EB Garamond"', '"Lora"', 'Georgia', 'serif'],
+        serif: ['"EB Garamond"', '"Noto Serif SC"', '"Lora"', 'Georgia', 'serif'],
         sans: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       fontSize: {

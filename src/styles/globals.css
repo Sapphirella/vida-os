@@ -3,6 +3,26 @@
 @tailwind utilities;
 
 /* ============================================================
+   思源宋体 Noto Serif SC（简体中文子集，SIL OFL 许可，本地内嵌 woff2）
+   - 西文/数字继续由 EB Garamond 优先渲染；
+   - 中文字符回退到思源宋体，手机端不再回落系统黑体。
+   ============================================================ */
+@font-face {
+  font-family: 'Noto Serif SC';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/noto-serif-sc-chinese-simplified-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Serif SC';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/noto-serif-sc-chinese-simplified-700-normal.woff2') format('woff2');
+}
+
+/* ============================================================
    VidaOS 全局基础样式
    - :root                    = 暗夜书房（夜间主题，默认，保持既有观感）
    - :root[data-theme='day']  = 白昼书房（日间主题，配色依据 palette-day 色卡）
@@ -105,7 +125,7 @@
   --lh-body: 1.85;
 
   /* 字体 */
-  --font-serif: "EB Garamond", "Lora", Georgia, serif;
+  --font-serif: "EB Garamond", "Noto Serif SC", "Lora", Georgia, serif;
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 
