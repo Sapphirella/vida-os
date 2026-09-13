@@ -50,19 +50,13 @@ export function TodoView() {
 
       {composing && (
         <Card className="p-4 mb-4 animate-slide-up">
-          <input
+          <textarea
             autoFocus
             value={composing.content}
             onChange={(e) => setComposing({ ...composing, content: e.target.value })}
             placeholder="要做的事..."
-            className="w-full bg-transparent font-serif text-lg text-paper placeholder:text-bronze-deep outline-none"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && composing.content.trim()) {
-                addTodo(composing.content.trim(), composing.category);
-                setComposing(null);
-                showToast('已添加', 'success');
-              }
-            }}
+            rows={2}
+            className="w-full bg-transparent font-serif text-lg text-paper placeholder:text-bronze-deep outline-none resize-none leading-normal"
           />
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-bronze/10">
             <input
@@ -168,14 +162,12 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
     return (
       <li>
         <Card className="p-4 animate-slide-up">
-          <input
+          <textarea
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="w-full bg-transparent font-serif text-base text-paper outline-none"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && draft.trim()) onSave(draft.trim());
-            }}
+            rows={2}
+            className="w-full bg-transparent font-serif text-base text-paper outline-none resize-none leading-normal"
           />
           <div className="flex justify-end gap-2 mt-2">
             <button onClick={onCancel} className="btn-text">
