@@ -36,5 +36,42 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // 挂载兜底：3.8s 后 #root 仍为空（常见于夸克云加速/旧内核导致模块脚本未执行）时，
+      // 展示兼容性提示层，避免纯白屏无任何指引
+      ;(function () {
+        var ua = navigator.userAgent;
+        var quark = /Quark/i.test(ua) || /QQBrowser/i.test(ua);
+        setTimeout(function () {
+          try {
+            var root = document.getElementById('root');
+            if (!root || root.childElementCount > 0) return;
+            var d = document.createElement('div');
+            d.id = 'vidaos-fallback';
+            d.style.cssText =
+              'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#1B1A1F;color:#EDE3D2;font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;padding:24px;box-sizing:border-box';
+            var li1 = quark
+              ? '<li>打开夸克「设置 → 通用」，关闭「云加速 / 智能转码」，再刷新</li><li>或点击地址栏的「云」图标，选择「解除加速」</li><li>或在夸克「设置 → 浏览器UA」中切到电脑模式后重试</li>'
+              : '<li>请检查网络后刷新重试</li><li>或复制链接用系统浏览器（Safari / Chrome / 百度）打开</li>';
+            d.innerHTML =
+              '<div style="max-width:420px">' +
+              '<p style="font-size:15px;font-weight:600;color:#C9A227;margin:0 0 10px">页面没能正常加载</p>' +
+              '<p style="font-size:13px;margin:0 0 14px;color:#B8ACA0;line-height:1.7">' +
+              (quark
+                ? '你正在使用夸克浏览器。夸克的「云加速/智能转码」或旧版内核可能导致本应用无法渲染。'
+                : '页面脚本未能正常执行。') +
+              '</p>' +
+              '<ul style="font-size:12.5px;color:#8F8378;margin:0 0 16px;padding-left:18px;line-height:1.9">' +
+              li1 +
+              '<li>也可以稍等片刻后点下方按钮重试</li></ul>' +
+              '<button onclick="location.reload()" style="background:#6A080E;color:#F5ECD9;border:none;border-radius:16px;padding:8px 22px;font-size:13px">重新加载</button>' +
+              '</div>';
+            document.body.appendChild(d);
+          } catch (e) {
+            /* 兜底失败不影响页面本身 */
+          }
+        }, 3800);
+      })();
+    </script>
   </body>
 </html>
