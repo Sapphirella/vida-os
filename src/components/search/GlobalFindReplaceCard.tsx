@@ -67,6 +67,7 @@ export function GlobalFindReplaceCard() {
   const navigate = useNavigate();
   const open = useUIStore((s) => s.findPanelOpen);
   const close = useUIStore((s) => s.setFindPanelOpen);
+  const setFocusRequest = useUIStore((s) => s.setFocusRequest);
   const articles = useAppStore((s) => s.articles);
   const moments = useAppStore((s) => s.moments);
   const letters = useAppStore((s) => s.letters);
@@ -187,6 +188,26 @@ export function GlobalFindReplaceCard() {
   };
 
   const navigateToHit = (h: Hit) => {
+    // 计算命中位置（标题段 or 正文第几个命中），供目标页做精准定位
+    const t = targets.find((x) => x.kind === h.kind && x.id === h.id);
+    const titleLen = t ? t.title.length : 0;
+    const inTitle = h.pos < titleLen;
+    // 该文档正文中的命中序号：数同文档里 pos 在标题之后且在本命中之前的正文命中
+    let bodyIndex = 0;
+    for (const x of hits) {
+      if (x.kind === h.kind && x.id === h.id && x.pos >= titleLen + 1 && x.pos < h.pos) {
+        bodyIndex++;
+      }
+    }
+    setFocusRequest({
+      kind: h.kind,
+      id: h.id,
+      query: query.trim(),
+      ignoreCase,
+      index: bodyIndex,
+      inTitle,
+      ts: Date.now(),
+    });
     if (h.kind === 'article') navigate(`/space/article/${h.id}`);
     else if (h.kind === 'letter') navigate(`/mailbox/letter/${h.id}`);
     else navigate('/moments');

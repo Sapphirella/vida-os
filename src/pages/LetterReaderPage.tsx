@@ -1,10 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useRef } from 'react';
 import { Edit2, Trash2, Star, Mail } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MediaImage } from '@/components/common/MediaImage';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { formatDate, chineseWeekday, clsx } from '@/lib/utils';
+import { useGlobalFocus } from '@/lib/focusRequest';
 
 export function LetterReaderPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +19,15 @@ export function LetterReaderPage() {
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
+
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useGlobalFocus(
+    'letter',
+    id,
+    () => bodyRef.current?.querySelector('.prose-vidaos') ?? null,
+    () => titleRef.current,
+  );
 
   if (!letter) {
     return (
@@ -43,7 +54,10 @@ export function LetterReaderPage() {
               </span>
             )}
           </div>
-          <h1 className="font-serif text-headline text-[1.75rem] sm:text-[2rem] leading-snug tracking-tight">
+          <h1
+            ref={titleRef}
+            className="font-serif text-headline text-[1.75rem] sm:text-[2rem] leading-snug tracking-tight"
+          >
             {letter.title || '(无题)'}
           </h1>
           <p className="font-mono text-[11px] text-bronze mt-3">
@@ -72,7 +86,9 @@ export function LetterReaderPage() {
           </div>
         )}
 
-        <MarkdownView markdown={letter.content} />
+        <div ref={bodyRef}>
+          <MarkdownView markdown={letter.content} />
+        </div>
 
         <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-bronze/10">
           <button

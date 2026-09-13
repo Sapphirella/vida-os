@@ -45,6 +45,20 @@ interface UIStore {
   findPanelOpen: boolean;
   setFindPanelOpen: (v: boolean) => void;
 
+  // 全局查找「跳转到命中处」：目标页挂载后读取并定位/高亮
+  focusRequest: {
+    kind: 'article' | 'moment' | 'letter';
+    id: string;
+    query: string;
+    ignoreCase: boolean;
+    /** 该文档正文中的命中序号（只计算正文，即 content 部分） */
+    index: number;
+    /** 命中是否落在标题（article/letter 的 title 段） */
+    inTitle: boolean;
+    ts: number;
+  } | null;
+  setFocusRequest: (r: UIStore['focusRequest']) => void;
+
   // Toast
   toasts: ToastItem[];
   showToast: (message: string, kind?: ToastItem['kind']) => void;
@@ -74,6 +88,9 @@ export const useUIStore = create<UIStore>((set) => ({
 
   findPanelOpen: false,
   setFindPanelOpen: (v) => set({ findPanelOpen: v }),
+
+  focusRequest: null,
+  setFocusRequest: (r) => set({ focusRequest: r }),
 
   toasts: [],
   showToast: (message, kind = 'info') => {

@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { formatDate, relativeTime, todayKey } from '@/lib/utils';
+import { useGlobalFocus } from '@/lib/focusRequest';
 import type { Profile } from '@/types';
 
 /** 头像：有图用图，没有就用昵称首字 */
@@ -148,6 +149,20 @@ export function MomentsPage() {
   };
 
   const isFav = (id: string) => favorites.some((f) => f.refType === 'moment' && f.refId === id);
+
+  // 全局查找 → 动态：定位到对应卡片正文里的命中处
+  useGlobalFocus(
+    'moment',
+    undefined,
+    () => {
+      const fr = useUIStore.getState().focusRequest;
+      if (!fr) return null;
+      const card = listRef.current?.querySelector<HTMLElement>(
+        `[data-moment-id="${fr.id}"] .prose-vidaos`,
+      );
+      return card ?? null;
+    },
+  );
 
   const submitComment = (momentId: string) => {
     const text = (drafts[momentId] || '').trim();
@@ -325,11 +340,13 @@ export function MomentsPage() {
                           </div>
 
                           {/* 正文：支持 Markdown；查找时高亮命中 */}
-                          <MarkdownView
-                            markdown={m.content}
-                            className="prose-moment"
-                            htmlTransform={(h) => highlightHtml(h, query)}
-                          />
+                          <div data-moment-id={m.id}>
+                            <MarkdownView
+                              markdown={m.content}
+                              className="prose-moment"
+                              htmlTransform={(h) => highlightHtml(h, query)}
+                            />
+                          </div>
 
                           {/* 配图 */}
                           {m.imageIds.length > 0 && (

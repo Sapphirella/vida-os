@@ -727,6 +727,28 @@ mark.vd-mark-active {
   color: var(--mark-active-fg);
   box-shadow: 0 0 0 1px var(--candle);
 }
+/* 全局查找跳转后的临时高亮（3 次闪烁后由 JS 还原文本） */
+mark.vd-focus-flash {
+  background: var(--mark-active-bg);
+  color: var(--mark-active-fg);
+  border-radius: 3px;
+  padding: 0 2px;
+  box-shadow: 0 0 0 2px var(--candle);
+  animation: vd-focus-pulse 1s ease-in-out 3;
+}
+@keyframes vd-focus-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--candle); }
+  50% { box-shadow: 0 0 0 6px var(--candle); }
+}
+/* 标题命中时的临时高亮 */
+.vd-focus-title {
+  border-radius: 6px;
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  box-shadow: 0 0 0 4px var(--mark-active-bg);
+  animation: vd-focus-pulse 1s ease-in-out 3;
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
 
 /* 顶栏 / 底栏颜色由背景预设驱动（见 src/lib/backgrounds.ts 的 bar 字段）。
    组件里是内联样式，所以这里必须用 !important 才能覆盖。

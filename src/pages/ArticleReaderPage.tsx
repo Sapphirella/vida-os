@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useRef } from 'react';
 import { Edit2, Trash2, Star, Calendar } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -7,6 +8,7 @@ import { MarkdownView, collectInlineImageIds } from '@/components/common/Markdow
 import { Tag } from '@/components/common/Tag';
 import { formatDate, chineseWeekday } from '@/lib/utils';
 import { clsx } from '@/lib/utils';
+import { useGlobalFocus } from '@/lib/focusRequest';
 
 export function ArticleReaderPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +24,15 @@ export function ArticleReaderPage() {
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
+
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useGlobalFocus(
+    'article',
+    id,
+    () => bodyRef.current?.querySelector('.prose-vidaos') ?? null,
+    () => titleRef.current,
+  );
 
   if (!article) {
     return (
@@ -53,7 +64,10 @@ export function ArticleReaderPage() {
               {collection.name}
             </button>
           )}
-          <h1 className="font-serif text-headline text-[1.75rem] sm:text-[2rem] leading-snug tracking-tight">
+          <h1
+            ref={titleRef}
+            className="font-serif text-headline text-[1.75rem] sm:text-[2rem] leading-snug tracking-tight"
+          >
             {article.title}
           </h1>
           <div className="flex items-center justify-center gap-3 mt-4 text-bronze text-xs font-mono">
@@ -108,7 +122,9 @@ export function ArticleReaderPage() {
         </header>
 
         {/* 正文（支持 fileRef: 内嵌本地图片） */}
-        <MarkdownView markdown={article.content} />
+        <div ref={bodyRef}>
+          <MarkdownView markdown={article.content} />
+        </div>
 
         {/* 配图：放在正文**下方**；已用 fileRef: 插入正文的图不在这里重复。
             注意顺序：本块必须写在 <MarkdownView> 之后，否则配图会跑到正文上方
