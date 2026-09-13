@@ -10,7 +10,6 @@ import {
   X,
   Bold,
   Italic,
-  Heading,
   Heading1,
   Heading2,
   List,
@@ -28,9 +27,6 @@ import {
   Clock,
   CornerUpLeft,
   GripVertical,
-  ListChecks,
-  Ellipsis,
-  ChevronUp,
 } from 'lucide-react';
 import { plainText } from '@/lib/markdown';
 import { MarkdownView } from '@/components/common/MarkdownView';
@@ -92,8 +88,6 @@ export function MarkdownEditor({
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   /** 长按拖拽中当前持有的下标（触摸设备） */
   const [dragIdx, setDragIdx] = useState<number | null>(null);
-  /** 移动端「更多」工具栏抽屉 */
-  const [showMore, setShowMore] = useState(false);
   /** 编辑区当前选区（非空时显示浮动格式条） */
   const [selRange, setSelRange] = useState<{ start: number; end: number } | null>(null);
   /** 已经插进正文的图片（正文里用 fileRef:<id> 引用），缩略图上会打标记 */
@@ -105,6 +99,10 @@ export function MarkdownEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /** 插入文本后要恢复到的光标位置（渲染完成后再设，避免跳到文首） */
   const caretRef = useRef<number | null>(null);
+  /** insert 语法标记后要恢复的选区（标记中间内容处于选中态，可直接打字替换） */
+  const selRef = useRef<{ start: number; end: number } | null>(null);
+  /** 编辑区是否聚焦：控制移动端内联语法工具栏显隐 */
+  const [editing, setEditing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** 长按计时器（触摸图片排序） */
   const pressTimer = useRef<number | null>(null);
@@ -134,7 +132,9 @@ export function MarkdownEditor({
       const end = ta.selectionEnd;
       const selected = content.slice(start, end) || placeholder;
       const newText = content.slice(0, start) + before + selected + after + content.slice(end);
-      caretRef.current = start + before.length + selected.length;
+      // 光标放到标记中间：偏移起点 + before 长度 ～ +before+selected 处，
+      // 若插入了占位文本则整段选中，方便直接打字覆盖
+      selRef.current = { start: start + before.length, end: start + before.length + selected.length };
       setContent(newText);
     },
     [content],
@@ -143,6 +143,20 @@ export function MarkdownEditor({
   // 内容更新后（渲染完成）再恢复光标：受控 textarea 重新赋值会把光标重置到文首，
   // 所以必须在 DOM 更新之后设 selectionRange，并且 preventScroll 以免整页跳动。
   useLayoutEffect(() => {
+    const sel = selRef.current;
+    if (sel) {
+      selRef.current = null;
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.setSelectionRange(sel.start, sel.end);
+        // 桌面：恢复键盘焦点，保持连续输入；触屏：不抢键盘——
+        // 手机/iPad 上点完格式按钮不该再次拉起键盘，用户点正文区时自然唤出。
+        if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+          ta.focus({ preventScroll: true });
+        }
+        return;
+      }
+    }
     const pos = caretRef.current;
     if (pos === null) return;
     caretRef.current = null;
@@ -266,15 +280,14 @@ export function MarkdownEditor({
   };
 
   const insertLink = () => {
-    const url = prompt('链接 URL');
-    if (url) insert('[', `](${url})`, '文字');
+    insert('[', '](https://)', '链接文字');
   };
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col animate-fade-in"
+      className="editor-shell fixed inset-0 z-50 flex flex-col animate-fade-in"
       style={{ background: 'var(--ink)' }}
     >
       {/* 顶部 */}
@@ -459,6 +472,8 @@ export function MarkdownEditor({
               ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onFocus={() => setEditing(true)}
+              onBlur={() => setEditing(false)}
               placeholder={mode === 'article' ? '开始书写...' : '说点什么...'}
               className="w-full h-full bg-transparent px-4 sm:px-8 py-6 font-serif text-reading text-paper placeholder:text-bronze-deep outline-none resize-none max-w-3xl mx-auto leading-[1.7] sm:leading-[1.95]"
               style={{ caretColor: 'var(--candle)' }}
@@ -495,63 +510,69 @@ export function MarkdownEditor({
         )}
       </div>
 
-      {/* 移动端工具栏：底部双行大按钮（≥44px 触控目标）+ 更多折叠 */}
-      <div
-        className="sm:hidden border-t border-bronze/10 px-2 pt-2 pb-1.5"
-        style={{ background: 'rgba(20, 18, 22, 0.6)' }}
-      >
-        <div className="grid grid-cols-5 gap-1.5">
-          <MBtn onClick={() => insert('**', '**', '粗体')} icon={<Bold size={18} />} label="粗体" />
-          <MBtn onClick={() => insert('*', '*', '斜体')} icon={<Italic size={18} />} label="斜体" />
-          <MBtn onClick={() => insert('# ', '', '标题')} icon={<Heading size={18} />} label="标题" />
-          <MBtn onClick={() => insert('- ', '', '项目')} icon={<List size={18} />} label="无序列表" />
-          <MBtn
-            onClick={() => fileInputRef.current?.click()}
-            icon={<ImageIcon size={18} />}
-            label="插入图片"
-          />
+      {/* 移动端内联语法工具栏：光标在编辑区时显示，单行细窄条，
+          固定在编辑器底部 / 软键盘上方；失焦自动隐藏 */}
+      {editing && mode_ === 'edit' && (
+        <div
+          className="sm:hidden border-t border-bronze/10 px-1.5 py-0.5"
+          style={{ background: 'rgba(20, 18, 22, 0.6)' }}
+        >
+          <div className="flex items-center gap-0.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            <SBtn
+              onClick={() => {
+                setEditing(true);
+                insert('**', '**', '粗体');
+              }}
+              icon={<Bold size={15} strokeWidth={1.5} />}
+              label="粗体"
+            />
+            <SBtn onClick={() => insert('*', '*', '斜体')} icon={<Italic size={15} strokeWidth={1.5} />} label="斜体" />
+            <SBtn onClick={() => insert('> ', '', '引用')} icon={<Quote size={15} strokeWidth={1.5} />} label="引用" />
+            <SBtn onClick={() => insert('- ', '', '列表项')} icon={<List size={15} strokeWidth={1.5} />} label="无序列表" />
+            <SBtn onClick={() => insert('1. ', '', '列表项')} icon={<ListOrdered size={15} strokeWidth={1.5} />} label="有序列表" />
+            <SBtn onClick={() => insert('\n---\n', '', '')} icon={<Minus size={15} strokeWidth={1.5} />} label="分割线" />
+            <SBtn onClick={insertLink} icon={<LinkIcon size={15} strokeWidth={1.5} />} label="链接" />
+            <SBtn
+              onClick={() => fileInputRef.current?.click()}
+              icon={<ImageIcon size={15} strokeWidth={1.5} />}
+              label="插入图片"
+            />
+            <SBtn
+              onClick={() => insert('\n```\n', '\n```\n', '代码')}
+              icon={<Code2 size={15} strokeWidth={1.5} />}
+              label="代码块"
+            />
+            <div className="w-px h-3.5 bg-bronze/20 mx-1 flex-shrink-0" />
+            <SBtn
+              onClick={() => setMode((m) => (m === 'edit' ? 'preview' : 'edit'))}
+              icon={mode_ === 'edit' ? <Eye size={15} strokeWidth={1.5} /> : <Edit3 size={15} strokeWidth={1.5} />}
+              label={mode_ === 'edit' ? '预览' : '编辑'}
+            />
+          </div>
         </div>
-        <div className="grid grid-cols-5 gap-1.5 mt-1.5">
-          <MBtn onClick={insertLink} icon={<LinkIcon size={18} />} label="链接" />
-          <MBtn onClick={() => insert('`', '`', 'code')} icon={<Code size={18} />} label="行内代码" />
-          <MBtn onClick={() => insert('> ', '', '引用')} icon={<Quote size={18} />} label="引用" />
-          <MBtn onClick={() => insert('1. ', '', '项目')} icon={<ListOrdered size={18} />} label="有序列表" />
-          <MBtn
-            onClick={() => setShowMore((s) => !s)}
-            icon={<Ellipsis size={18} />}
-            label="更多"
-            active={showMore}
-          />
+      )}
+
+      {/* 移动端预览模式：迷你「返回编辑」条（顶部切换在移动端隐藏，避免找不到返回入口） */}
+      {mode_ === 'preview' && (
+        <div
+          className="sm:hidden border-t border-bronze/10 px-1.5 py-0.5"
+          style={{ background: 'rgba(20, 18, 22, 0.6)' }}
+        >
+          <div className="flex items-center gap-0.5">
+            <SBtn
+              onClick={() => {
+                setMode('edit');
+                requestAnimationFrame(() => textareaRef.current?.focus());
+              }}
+              icon={<Edit3 size={15} strokeWidth={1.5} />}
+              label="返回编辑"
+            />
+            <span className="flex-1 text-right font-mono text-[10px] tracking-[0.2em] text-bronze-deep select-none">
+              预览
+            </span>
+          </div>
         </div>
-        {showMore && (
-          <>
-            <div className="grid grid-cols-6 gap-1.5 mt-1.5">
-              <MBtn onClick={() => insert('# ', '', '标题')} icon={<Heading1 size={17} />} label="标题 1" />
-              <MBtn onClick={() => insert('## ', '', '标题')} icon={<Heading2 size={17} />} label="标题 2" />
-              <MBtn
-                onClick={() => insert('\n```\n', '\n```\n', '代码')}
-                icon={<Code2 size={17} />}
-                label="代码块"
-              />
-              <MBtn onClick={() => insert('\n---\n', '', '')} icon={<Minus size={17} />} label="分割线" />
-              <MBtn onClick={() => insert('- [ ] ', '', '任务')} icon={<ListChecks size={17} />} label="待办" />
-              <MBtn
-                onClick={() => setMode((m) => (m === 'edit' ? 'preview' : 'edit'))}
-                icon={mode_ === 'edit' ? <Eye size={17} /> : <Edit3 size={17} />}
-                label={mode_ === 'edit' ? '预览' : '编辑'}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowMore(false)}
-              onMouseDown={(e) => e.preventDefault()}
-              className="w-full mt-1.5 h-10 flex items-center justify-center gap-1 text-[11px] tracking-widest text-bronze-deep hover:text-candle rounded-lg"
-            >
-              <ChevronUp size={14} strokeWidth={1.5} /> 收起
-            </button>
-          </>
-        )}
-      </div>
+      )}
 
       {/* 底部：图片画廊 + 字数 */}
       <div
@@ -662,8 +683,8 @@ function ToolbarBtn({
   );
 }
 
-/** 移动端大按钮：h-11 = 44px 触控目标 */
-function MBtn({
+/** 内联语法栏按钮：紧凑小尺寸、细线图标、低灰度半透明，点击才反馈 */
+function SBtn({
   onClick,
   icon,
   label,
@@ -682,10 +703,10 @@ function MBtn({
       title={label}
       onMouseDown={(e) => e.preventDefault()}
       className={clsx(
-        'h-11 min-w-0 flex items-center justify-center rounded-lg border transition-colors',
+        'w-8 h-8 min-w-0 flex items-center justify-center rounded-md transition-colors duration-150 active:scale-95',
         active
-          ? 'border-candle/60 text-candle bg-candle/10'
-          : 'border-bronze/15 text-bronze hover:text-candle active:bg-bronze/10',
+          ? 'text-candle bg-candle/10'
+          : 'text-bronze hover:text-candle active:bg-bronze/10 active:text-candle',
       )}
     >
       {icon}

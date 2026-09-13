@@ -599,6 +599,29 @@ textarea, input, [contenteditable] {
 .prose-vidaos em { color: var(--candle); }
 
 /* 工具：单行省略 */
+/* ── 全屏编辑器（editor-shell）：固定深色沉浸层 ──
+   日间主题下 --text-paper / --headline / --text-bronze* 均为墨褐深色，
+   落在 var(--ink) 深底上「深底深字」不可见；
+   仅在日间主题为此作用域切换为奶油亮色系（夜间不受影响） */
+:root[data-theme='day'] .editor-shell {
+  --text-paper: var(--text-moon);
+  --text-headline: var(--text-moon);
+  --headline: var(--text-moon);
+  --headline-rgb: var(--moon-rgb);
+  --text-bronze: rgb(var(--moon-rgb) / 0.78);
+  --text-bronze-deep: rgb(var(--moon-rgb) / 0.55);
+}
+/* 编辑器内的浅色玻璃浮层（合集下拉等）恢复主题原文字色 */
+:root[data-theme='day'] .editor-shell .glass-card {
+  --text-paper: var(--paper);
+  --text-headline: var(--paper);
+  --headline: var(--paper);
+  --headline-rgb: var(--paper-rgb);
+  --text-bronze: var(--bronze);
+  --text-bronze-deep: var(--bronze-deep);
+}
+
+/* 工具：单行省略 */
 .truncate-1 {
   overflow: hidden;
   text-overflow: ellipsis;
