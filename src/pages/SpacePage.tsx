@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, BookOpen, FolderPlus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, BookOpen, FolderPlus, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
@@ -8,18 +8,37 @@ import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { plainText, excerpt, relativeTime } from '@/lib/utils';
+import { usePageFind } from '@/components/search/usePageFind';
+import { PageFindBar } from '@/components/search/PageFindBar';
 
 export function SpacePage() {
   const navigate = useNavigate();
   const articles = useAppStore((s) => s.articles);
   const collections = useAppStore((s) => s.collections);
   const addCollection = useAppStore((s) => s.addCollection);
+  const updateArticle = useAppStore((s) => s.updateArticle);
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+
+  // ── 查找 / 替换（作用于文章标题 + 正文，替换写回 store） ──
+  const findTargets = useMemo(
+    () =>
+      articles.map((a) => ({
+        id: a.id,
+        title: a.title,
+        content: a.content,
+        replaceTitle: (next: string) => updateArticle(a.id, { title: next }),
+        replaceContent: (next: string) => updateArticle(a.id, { content: next }),
+      })),
+    [articles, updateArticle],
+  );
+  const find = usePageFind<HTMLUListElement>(findTargets, {
+    onToast: (msg) => showToast(msg, 'success'),
+  });
 
   const handleCreateCollection = () => {
     if (!newName.trim()) return;
@@ -47,7 +66,22 @@ export function SpacePage() {
           <button onClick={() => setCreating(true)} className="btn-ghost">
             <FolderPlus size={14} strokeWidth={1.5} /> 新建合集
           </button>
+          <div className="flex-1" />
+          {/* 页内查找替换入口（面板钉在顶栏下方） */}
+          <button
+            onClick={() => find.toggleOpen()}
+            aria-expanded={find.open}
+            className={`flex items-center gap-1.5 font-mono text-[11px] tracking-wider transition-colors ${
+              find.open ? 'text-amber' : 'text-bronze hover:text-candle'
+            }`}
+          >
+            <Search size={14} strokeWidth={1.6} />
+            查找替换
+          </button>
         </div>
+
+        {/* 页内查找替换面板：fixed 钉在顶栏下方，滚动/跳转不消失 */}
+        <PageFindBar find={find} activeClass="text-amber" />
 
         {creating && (
           <Card className="p-4 mb-4 animate-slide-up">
@@ -139,9 +173,9 @@ export function SpacePage() {
               }
             />
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-3" ref={find.listRef}>
               {articles.map((a) => (
-                <li key={a.id}>
+                <li key={a.id} {...find.findCardProps(a.id)}>
                   <Card
                     onClick={() => navigate(`/space/article/${a.id}`)}
                     className="p-4 sm:p-5 group hover:scale-[1.005] transition-transform"
@@ -153,12 +187,18 @@ export function SpacePage() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-serif text-headline text-lg leading-snug mb-1 truncate-2 group-hover:text-candle transition-colors">
-                          {a.title}
-                        </h3>
-                        <p className="font-serif text-bronze text-sm line-clamp-2 leading-relaxed">
-                          {excerpt(plainText(a.content), 100)}
-                        </p>
+                        <h3
+                          className="font-serif text-headline text-lg leading-snug mb-1 truncate-2 group-hover:text-candle transition-colors"
+                          dangerouslySetInnerHTML={{
+                            __html: find.hlText(a.title, a.id, 'title'),
+                          }}
+                        />
+                        <p
+                          className="font-serif text-bronze text-sm line-clamp-2 leading-relaxed"
+                          dangerouslySetInnerHTML={{
+                            __html: find.hlText(excerpt(plainText(a.content), 100), a.id, 'content'),
+                          }}
+                        />
                         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                           {a.collectionId &&
                             collections.find((c) => c.id === a.collectionId) && (

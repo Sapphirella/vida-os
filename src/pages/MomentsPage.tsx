@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Star, MessageCircle, Trash2, Send, Search, X, ChevronUp, ChevronDown, Edit2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, Star, MessageCircle, Trash2, Send, Search, Edit2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
@@ -8,6 +8,8 @@ import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { formatDate, relativeTime, todayKey } from '@/lib/utils';
 import { useGlobalFocus } from '@/lib/focusRequest';
+import { usePageFind } from '@/components/search/usePageFind';
+import { PageFindBar } from '@/components/search/PageFindBar';
 import type { Profile } from '@/types';
 
 /** 头像：有图用图，没有就用昵称首字 */
@@ -37,17 +39,6 @@ function Avatar({
   );
 }
 
-const escapeReg = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** 只在标签之外把命中词包成 <mark>，避免破坏 Markdown 生成的 HTML */
-function highlightHtml(html: string, query: string): string {
-  if (!query.trim()) return html;
-  const re = new RegExp(escapeReg(query.trim()), 'gi');
-  return html.replace(/>([^<]*)</g, (_m, text: string) =>
-    '>' + text.replace(re, (hit) => `<mark class="vd-mark">${hit}</mark>`) + '<',
-  );
-}
-
 /** 时间线用的日期标签 */
 function dateLabel(key: string): string {
   const today = todayKey();
@@ -74,79 +65,17 @@ export function MomentsPage() {
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  // ── 查找 / 替换 ──
-  const [findOpen, setFindOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [replaceWith, setReplaceWith] = useState('');
-  const [activeHit, setActiveHit] = useState(0);
-  const marksRef = useRef<HTMLElement[]>([]);
-  const listRef = useRef<HTMLDivElement>(null);
-
-  const matchCount = useMemo(() => {
-    const q = query.trim();
-    if (!q) return 0;
-    const re = new RegExp(escapeReg(q), 'gi');
-    return moments.reduce((n, m) => n + (m.content.match(re)?.length ?? 0), 0);
-  }, [moments, query]);
-
-  // 命中数变化时回到第一条
-  useEffect(() => {
-    setActiveHit(0);
-  }, [query]);
-
-  // 每次渲染后收集高亮节点，并把当前命中滚进视野 + 标记为「当前」
-  useEffect(() => {
-    if (!listRef.current) return;
-    marksRef.current = Array.from(listRef.current.querySelectorAll<HTMLElement>('mark.vd-mark'));
-    marksRef.current.forEach((el, i) => el.classList.toggle('vd-mark-active', i === activeHit));
-    const el = marksRef.current[activeHit];
-    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [activeHit, query, moments]);
-
-  const step = (dir: 1 | -1) => {
-    if (matchCount === 0) return;
-    setActiveHit((i) => (i + dir + matchCount) % matchCount);
-  };
-
-  /** 替换当前这一条命中（按动态内容顺序定位第 activeHit 个命中） */
-  const replaceCurrent = () => {
-    const q = query.trim();
-    if (!q || matchCount === 0) return;
-    const re = new RegExp(escapeReg(q), 'gi');
-    let seen = 0;
-    for (const m of moments) {
-      const hits = m.content.match(re)?.length ?? 0;
-      if (activeHit < seen + hits) {
-        const target = activeHit - seen;
-        let i = -1;
-        const next = m.content.replace(re, (hit) => {
-          i += 1;
-          return i === target ? replaceWith : hit;
-        });
-        updateMoment(m.id, { content: next });
-        showToast('已替换 1 处', 'success');
-        return;
-      }
-      seen += hits;
-    }
-  };
-
-  const replaceAll = () => {
-    const q = query.trim();
-    if (!q || matchCount === 0) return;
-    const re = new RegExp(escapeReg(q), 'gi');
-    let n = 0;
-    moments.forEach((m) => {
-      if (!re.test(m.content)) return;
-      re.lastIndex = 0;
-      const next = m.content.replace(re, () => {
-        n += 1;
-        return replaceWith;
-      });
-      updateMoment(m.id, { content: next });
-    });
-    showToast(`已替换 ${n} 处`, 'success');
-  };
+  // ── 查找 / 替换（页内，面板钉在顶栏下方） ──
+  const find = usePageFind(
+    moments.map((m) => ({
+      id: m.id,
+      title: '',
+      content: m.content,
+      replaceContent: (next) => updateMoment(m.id, { content: next }),
+    })),
+    { onToast: (msg) => showToast(msg, 'success') },
+  );
+  const { listRef } = find;
 
   const isFav = (id: string) => favorites.some((f) => f.refType === 'moment' && f.refId === id);
 
@@ -186,16 +115,16 @@ export function MomentsPage() {
   return (
     <div className="px-4 sm:px-6 view-enter">
       <div className="max-w-2xl mx-auto pb-6">
-        {/* 工具行：搜索 */}
+        {/* 工具行：搜索（面板钉在顶栏下方，见 PageFindBar） */}
         <div className="flex items-center justify-between mb-3">
           <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
             timeline · {moments.length} 条
           </p>
           <button
-            onClick={() => setFindOpen((v) => !v)}
-            aria-expanded={findOpen}
+            onClick={() => find.toggleOpen()}
+            aria-expanded={find.open}
             className={`flex items-center gap-1.5 font-mono text-[11px] tracking-wider transition-colors ${
-              findOpen ? 'text-amber' : 'text-bronze hover:text-candle'
+              find.open ? 'text-amber' : 'text-bronze hover:text-candle'
             }`}
           >
             <Search size={14} strokeWidth={1.6} />
@@ -203,56 +132,8 @@ export function MomentsPage() {
           </button>
         </div>
 
-        {/* 查找/替换条 */}
-        {findOpen && (
-          <Card className="p-3 mb-3">
-            <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    step(e.shiftKey ? -1 : 1);
-                  } else if (e.key === 'Escape') {
-                    setFindOpen(false);
-                  }
-                }}
-                placeholder="查找…"
-                className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none"
-                style={{ background: 'rgba(27,26,31,0.7)' }}
-              />
-              <span className="font-mono text-[10px] text-bronze-deep whitespace-nowrap">
-                {matchCount ? `${activeHit + 1} / ${matchCount}` : '0'}
-              </span>
-              <button onClick={() => step(-1)} aria-label="上一个" className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle">
-                <ChevronUp size={15} strokeWidth={1.6} />
-              </button>
-              <button onClick={() => step(1)} aria-label="下一个" className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle">
-                <ChevronDown size={15} strokeWidth={1.6} />
-              </button>
-              <button onClick={() => { setQuery(''); setReplaceWith(''); }} aria-label="清空" className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle">
-                <X size={14} strokeWidth={1.6} />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <input
-                value={replaceWith}
-                onChange={(e) => setReplaceWith(e.target.value)}
-                placeholder="替换为…"
-                className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none"
-                style={{ background: 'rgba(27,26,31,0.7)' }}
-              />
-              <button onClick={replaceCurrent} disabled={!matchCount} className="btn-ghost disabled:opacity-40">
-                替换
-              </button>
-              <button onClick={replaceAll} disabled={!matchCount} className="btn-primary disabled:opacity-40">
-                全部替换
-              </button>
-            </div>
-          </Card>
-        )}
+        {/* 页内查找替换：fixed 钉在顶栏下方，滚动/跳转不消失 */}
+        <PageFindBar find={find} activeClass="text-amber" />
 
         {moments.length === 0 ? (
           <EmptyState
@@ -344,7 +225,7 @@ export function MomentsPage() {
                             <MarkdownView
                               markdown={m.content}
                               className="prose-moment"
-                              htmlTransform={(h) => highlightHtml(h, query)}
+                              htmlTransform={(h) => find.hl(h, m.id)}
                             />
                           </div>
 
