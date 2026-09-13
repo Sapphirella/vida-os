@@ -34,7 +34,7 @@ export function SpacePage() {
     <div className="px-4 sm:px-6 view-enter">
       <div className="max-w-5xl mx-auto pb-6">
         {/* 操作行 */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mt-6 mb-4">
           <button
             onClick={() =>
               openEditor({ mode: 'article', open: true })

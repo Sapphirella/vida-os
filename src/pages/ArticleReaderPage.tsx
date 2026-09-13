@@ -62,6 +62,49 @@ export function ArticleReaderPage() {
               {formatDate(article.createdAt, 'YYYY 年 M 月 D 日')} · 周{chineseWeekday(article.createdAt)}
             </span>
           </div>
+
+          {/* 操作按钮：横排在标题下方，无需滚动到正文底部 */}
+          <div className="flex items-center justify-center gap-2 mt-5">
+            <button
+              onClick={() => toggleFavorite('article', article.id)}
+              className={clsx(
+                'btn-ghost',
+                isFavorited && 'tag-wine',
+              )}
+            >
+              <Star size={14} strokeWidth={1.5} fill={isFavorited ? 'currentColor' : 'none'} />
+              {isFavorited ? '已收藏' : '收藏'}
+            </button>
+            <button
+              onClick={() => {
+                openEditor({
+                  mode: 'article',
+                  editingId: article.id,
+                  initialTitle: article.title,
+                  initialContent: article.content,
+                  imageIds: article.imageIds,
+                  collectionId: article.collectionId,
+                  tags: article.tags,
+                  open: true,
+                });
+              }}
+              className="btn-ghost"
+            >
+              <Edit2 size={14} strokeWidth={1.5} /> 编辑
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('删除该文章？此操作无法撤销。')) {
+                  deleteArticle(article.id);
+                  navigate('/space');
+                  showToast('文章已删除', 'success');
+                }
+              }}
+              className="btn-ghost"
+            >
+              <Trash2 size={14} strokeWidth={1.5} /> 删除
+            </button>
+          </div>
         </header>
 
         {/* 正文（支持 fileRef: 内嵌本地图片） */}
@@ -95,49 +138,6 @@ export function ArticleReaderPage() {
             ))}
           </div>
         )}
-
-        {/* 操作栏 */}
-        <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-bronze/10">
-          <button
-            onClick={() => toggleFavorite('article', article.id)}
-            className={clsx(
-              'btn-ghost',
-              isFavorited && 'tag-wine',
-            )}
-          >
-            <Star size={14} strokeWidth={1.5} fill={isFavorited ? 'currentColor' : 'none'} />
-            {isFavorited ? '已收藏' : '收藏'}
-          </button>
-          <button
-            onClick={() => {
-              openEditor({
-                mode: 'article',
-                editingId: article.id,
-                initialTitle: article.title,
-                initialContent: article.content,
-                imageIds: article.imageIds,
-                collectionId: article.collectionId,
-                tags: article.tags,
-                open: true,
-              });
-            }}
-            className="btn-ghost"
-          >
-            <Edit2 size={14} strokeWidth={1.5} /> 编辑
-          </button>
-          <button
-            onClick={() => {
-              if (confirm('删除该文章？此操作无法撤销。')) {
-                deleteArticle(article.id);
-                navigate('/space');
-                showToast('文章已删除', 'success');
-              }
-            }}
-            className="btn-ghost"
-          >
-            <Trash2 size={14} strokeWidth={1.5} /> 删除
-          </button>
-        </div>
       </div>
     </article>
   );
