@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VidaOS · 白昼书房配色</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "EB Garamond", "Georgia", serif;
+      background:
+        radial-gradient(120% 40% at 50% -10%, rgba(232,195,158,.30), transparent 55%),
+        linear-gradient(180deg, #FFFCF6 0%, #F4ECDE 100%);
+      color: #4A3E36;
+      padding: 40px 34px;
+      line-height: 1.7;
+      overflow-y: auto;
+    }
+    h1 {
+      font-size: 26px; letter-spacing: 2px; font-weight: 500;
+      color: #2E2622; margin-bottom: 6px;
+    }
+    .sub {
+      color: #8A7A6C; font-size: 14px; letter-spacing: 1px;
+      margin-bottom: 30px;
+    }
+    .group { margin-bottom: 34px; }
+    .group-title {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 13px; letter-spacing: 2px; color: #6A080E;
+      margin-bottom: 14px;
+    }
+    .group-title::after {
+      content: ""; flex: 1; height: 1px;
+      background: linear-gradient(90deg, rgba(106,8,14,.28), transparent);
+    }
+    .swatches {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .swatch {
+      border: 1px solid rgba(106,8,14,.14);
+      border-radius: 16px; overflow: hidden;
+      background: #FFFFFF;
+      box-shadow: 0 2px 10px rgba(90,70,50,.06);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .swatch:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(90,70,50,.12); }
+    .chip {
+      height: 78px; display: flex; align-items: flex-end; padding: 8px;
+      font-size: 11px; letter-spacing: 1px; font-weight: 600;
+      border-bottom: 1px solid rgba(0,0,0,.05);
+    }
+    .meta { padding: 9px 11px; }
+    .name { font-size: 12px; color: #2E2622; letter-spacing: 1px; }
+    .hex { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #8A7A6C; }
+    .tagged { font-size: 10.5px; letter-spacing: 1px; }
+    .footer {
+      margin-top: 34px; padding-top: 16px; border-top: 1px dashed rgba(106,8,14,.22);
+      font-size: 12px; color: #8A7A6C; letter-spacing: .5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>VidaOS · 白昼书房配色</h1>
+  <div class="sub">暗夜皮肤的对应日间版 —— 温润纸面，强调色仍归酒红</div>
+
+  <!-- 日间主色 -->
+  <section class="group">
+    <div class="group-title">日间主色板</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip" style="background:#F7F1E6; color:#5A4A3E;">#F7F1E6</div>
+        <div class="meta"><div class="name">linen 亚麻米白</div><div class="hex">主背景</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#FFFCF6; color:#5A4A3E;">#FFFCF6</div>
+        <div class="meta"><div class="name">cream 奶油白</div><div class="hex">卡片底 · 抬升层</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#EBE1D0; color:#5A4A3E;">#EBE1D0</div>
+        <div class="meta"><div class="name">sand 沙米</div><div class="hex">副背景 / 分区底</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#2E2622; color:#F7F1E6;">#2E2622</div>
+        <div class="meta"><div class="name">ink 暖墨褐</div><div class="hex">主文字</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#7A6A5E; color:#FBF6EC;">#7A6A5E</div>
+        <div class="meta"><div class="name">taupe 暖灰褐</div><div class="hex">次要文字 · 辅助</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#6A080E; color:#F7E9DA;">#6A080E</div>
+        <div class="meta"><div class="name">wine 暗酒红</div><div class="hex">强调 · 沿用夜版</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 氛围扩展色 -->
+  <section class="group">
+    <div class="group-title">氛围扩展色</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip" style="background:#B8863F; color:#2E1E08;">#B8863F</div>
+        <div class="meta"><div class="name">amber 琥珀金</div><div class="hex">高亮 / 选中 / 星标</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#E8C39E; color:#4A3018;">#E8C39E</div>
+        <div class="meta"><div class="name">candle 烛光暖橘</div><div class="hex">装饰高光 · caret</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#C9B79A; color:#3A2C14;">#C9B79A</div>
+        <div class="meta"><div class="name">parchment 旧羊皮</div><div class="hex">引文 / 代码块底色</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#B7ADA0; color:#2E2622;">#B7ADA0</div>
+        <div class="meta"><div class="name">mist 雾灰</div><div class="hex">禁用 / 提示 / 元信息</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 边框 / 层级 -->
+  <section class="group">
+    <div class="group-title">边框 · 描边 · 层级</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip" style="background:#FFFFFF; color:#5A4A3E; border-bottom:1px solid #EDE3D2;">#FFFFFF</div>
+        <div class="meta"><div class="name">纯白 浮层</div><div class="hex">弹窗 / 悬浮卡 →</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#DED3C2; color:#5A4A3E;">#DED3C2</div>
+        <div class="meta"><div class="name">暖石灰 分隔线</div><div class="hex">卡片描边 / 边框</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:rgba(106,8,14,.10); color:#6A080E;">wine 10-16%</div>
+        <div class="meta"><div class="name">酒红 低透明</div><div class="hex">极细描边 · 选中态</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:rgba(232,195,158,.35); color:#4A3018;">candle 35%</div>
+        <div class="meta"><div class="name">烛光 低透明</div><div class="hex">顶部晨光 · 内侧高光</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    夜 → 日 映射：<strong>ink 底</strong>→<strong>linen 底</strong>，<strong>wood 卡底</strong>→<strong>cream 卡底</strong>，
+    <strong>paper 文字</strong>→<strong>ink 文字</strong>，<strong>bronze 次文</strong>→<strong>taupe 次文</strong>，强调 <strong style="color:#6A080E">wine</strong> 两版通用。
+    金色高亮日间统一到 <strong style="color:#B8863F">amber #B8863F</strong>，保证浅底上的可读性。
+  </div>
+</body>
+</html>

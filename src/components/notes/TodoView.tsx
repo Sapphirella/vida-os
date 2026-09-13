@@ -197,7 +197,7 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
             className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
               item.done
                 ? 'bg-wine/50 border-wine/60'
-                : 'border-bronze/60 hover:border-candle hover:bg-bronze/10'
+                : 'bg-bronze/10 border-candle/70 hover:border-candle hover:bg-bronze/20'
             }`}
           >
             {item.done && <Check size={14} strokeWidth={2.6} className="text-moon" />}
