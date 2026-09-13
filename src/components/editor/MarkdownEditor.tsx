@@ -1,15 +1,23 @@
 // 全屏 Markdown 编辑器
-import { useRef, useState, useCallback, useLayoutEffect } from 'react';
+import {
+  useRef,
+  useState,
+  useCallback,
+  useLayoutEffect,
+  useEffect,
+} from 'react';
 import {
   X,
   Bold,
   Italic,
+  Heading,
   Heading1,
   Heading2,
   List,
   ListOrdered,
   Quote,
   Code,
+  Code2,
   Link as LinkIcon,
   Image as ImageIcon,
   Minus,
@@ -20,6 +28,9 @@ import {
   Clock,
   CornerUpLeft,
   GripVertical,
+  ListChecks,
+  Ellipsis,
+  ChevronUp,
 } from 'lucide-react';
 import { plainText } from '@/lib/markdown';
 import { MarkdownView } from '@/components/common/MarkdownView';
@@ -77,8 +88,14 @@ export function MarkdownEditor({
   const [tagInput, setTagInput] = useState('');
   // 动态的发布时间：新建时默认当前时间，可往前调
   const [createdAt, setCreatedAt] = useState<number>(initialCreatedAt ?? Date.now());
-  /** 拖拽排序中的源下标 */
+  /** 拖拽排序中的源下标（桌面 HTML5 拖拽） */
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  /** 长按拖拽中当前持有的下标（触摸设备） */
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  /** 移动端「更多」工具栏抽屉 */
+  const [showMore, setShowMore] = useState(false);
+  /** 编辑区当前选区（非空时显示浮动格式条） */
+  const [selRange, setSelRange] = useState<{ start: number; end: number } | null>(null);
   /** 已经插进正文的图片（正文里用 fileRef:<id> 引用），缩略图上会打标记 */
   const inlineIds = new Set(
     Array.from(content.matchAll(/fileRef:([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
@@ -89,12 +106,19 @@ export function MarkdownEditor({
   /** 插入文本后要恢复到的光标位置（渲染完成后再设，避免跳到文首） */
   const caretRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** 长按计时器（触摸图片排序） */
+  const pressTimer = useRef<number | null>(null);
+  /** 缩略图元素引用（长按移动时计算目标下标） */
+  const thumbRefs = useRef<(HTMLDivElement | null)[]>([]);
   const collections = useAppStore((s) => s.collections);
   const isFavorited = useAppStore((s) =>
     favoriteId ? s.isFavorited(favoriteId.refType, favoriteId.refId) : false,
   );
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const showToast = useUIStore((s) => s.showToast);
+  /** 是否触屏设备（触摸上使用长按拖拽、插入不抢键盘）；
+   *  宽屏触屏（iPad）也走移动端交互，统一按指针类型划分 */
+  const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
   // 初值由 useState 初始化取得；父组件通过 key 变化触发重挂载，
   // 这里刻意不做「初值变化就重置」的副作用，避免覆盖用户正在输入的内容。
@@ -124,9 +148,31 @@ export function MarkdownEditor({
     caretRef.current = null;
     const ta = textareaRef.current;
     if (!ta) return;
-    ta.focus({ preventScroll: true });
     ta.setSelectionRange(pos, pos);
+    // 桌面：恢复键盘焦点，保持连续输入；触屏：不抢键盘——
+    // 手机/iPad 上点完格式按钮不该再次拉起键盘，用户点正文区时自然唤出。
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      ta.focus({ preventScroll: true });
+    }
   }, [content]);
+
+  // 跟踪文本选区：非空选中时在编辑区底部弹出浮动格式条
+  useEffect(() => {
+    const onSel = () => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      setSelRange((prev) => {
+        const next = start !== end ? { start, end } : null;
+        if (!next && !prev) return prev;
+        if (next && prev && next.start === prev.start && next.end === prev.end) return prev;
+        return next;
+      });
+    };
+    document.addEventListener('selectionchange', onSel);
+    return () => document.removeEventListener('selectionchange', onSel);
+  }, []);
 
   /** 在当前光标处插入一段文本 */
   const insertText = (text: string) => {
@@ -144,12 +190,48 @@ export function MarkdownEditor({
   /** 交换两张配图的位置（用于调整文章内图片顺序） */
   const moveImage = (from: number, to: number) => {
     setImageIds((prev) => {
-      if (to < 0 || to >= prev.length) return prev;
+      if (from === to || to < 0 || to >= prev.length) return prev;
       const next = [...prev];
       const [item] = next.splice(from, 1);
       next.splice(to, 0, item);
       return next;
     });
+  };
+
+  /** 触摸长按（350ms）进入拖拽模式；期间横向移动即与所指缩略图实时交换 */
+  const startLongPress = (i: number) => {
+    if (!isCoarse) return;
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    pressTimer.current = window.setTimeout(() => {
+      setDragFrom(null);
+      setDragIdx(i);
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* 无震动能力时忽略 */
+      }
+    }, 350);
+  };
+
+  const handleLongPressMove = (e: React.PointerEvent) => {
+    if (dragIdx === null) return;
+    const target = thumbRefs.current.findIndex((el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right;
+    });
+    if (target >= 0 && target !== dragIdx) {
+      moveImage(dragIdx, target);
+      setDragIdx(target);
+    }
+  };
+
+  const endLongPress = () => {
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    setDragIdx(null);
   };
 
   const handleSave = () => {
@@ -181,6 +263,11 @@ export function MarkdownEditor({
     }
     showToast(`已添加 ${files.length} 张图片`, 'success');
     e.target.value = '';
+  };
+
+  const insertLink = () => {
+    const url = prompt('链接 URL');
+    if (url) insert('[', `](${url})`, '文字');
   };
 
   if (!open) return null;
@@ -318,8 +405,8 @@ export function MarkdownEditor({
         </div>
       )}
 
-      {/* 工具栏 */}
-      <div className="px-3 sm:px-6 py-2 border-b border-bronze/10 flex items-center gap-1 overflow-x-auto">
+      {/* 桌面工具栏（≥sm 显示；移动端改用底部大按钮工具栏） */}
+      <div className="hidden sm:flex px-3 sm:px-6 py-2 border-b border-bronze/10 items-center gap-1 overflow-x-auto">
         <ToolbarBtn onClick={() => insert('**', '**', 'bold')} icon={<Bold size={14} />} title="粗体" />
         <ToolbarBtn onClick={() => insert('*', '*', 'italic')} icon={<Italic size={14} />} title="斜体" />
         <div className="w-px h-4 bg-bronze/20 mx-1" />
@@ -331,15 +418,8 @@ export function MarkdownEditor({
         <ToolbarBtn onClick={() => insert('> ', '', '引用')} icon={<Quote size={14} />} title="引用" />
         <div className="w-px h-4 bg-bronze/20 mx-1" />
         <ToolbarBtn onClick={() => insert('`', '`', 'code')} icon={<Code size={14} />} title="行内代码" />
-        <ToolbarBtn onClick={() => insert('\n```\n', '\n```\n', 'code block')} icon={<Code size={14} />} title="代码块" />
-        <ToolbarBtn
-          onClick={() => {
-            const url = prompt('链接 URL');
-            if (url) insert('[', `](${url})`, 'text');
-          }}
-          icon={<LinkIcon size={14} />}
-          title="链接"
-        />
+        <ToolbarBtn onClick={() => insert('\n```\n', '\n```\n', 'code block')} icon={<Code2 size={14} />} title="代码块" />
+        <ToolbarBtn onClick={insertLink} icon={<LinkIcon size={14} />} title="链接" />
         <ToolbarBtn
           onClick={() => fileInputRef.current?.click()}
           icon={<ImageIcon size={14} />}
@@ -372,7 +452,7 @@ export function MarkdownEditor({
       </div>
 
       {/* 编辑区 */}
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-hidden flex relative">
         {mode_ === 'edit' && (
           <div className="flex-1 overflow-y-auto">
             <textarea
@@ -380,8 +460,8 @@ export function MarkdownEditor({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder={mode === 'article' ? '开始书写...' : '说点什么...'}
-              className="w-full h-full bg-transparent px-4 sm:px-8 py-6 font-serif text-reading text-paper placeholder:text-bronze-deep outline-none resize-none max-w-3xl mx-auto"
-              style={{ lineHeight: 1.95, caretColor: 'var(--candle)' }}
+              className="w-full h-full bg-transparent px-4 sm:px-8 py-6 font-serif text-reading text-paper placeholder:text-bronze-deep outline-none resize-none max-w-3xl mx-auto leading-[1.7] sm:leading-[1.95]"
+              style={{ caretColor: 'var(--candle)' }}
               spellCheck={false}
             />
           </div>
@@ -394,6 +474,82 @@ export function MarkdownEditor({
               <p className="text-bronze-deep italic text-center mt-12">还没有内容</p>
             )}
           </div>
+        )}
+
+        {/* 选区浮动格式条：选中文字后浮于编辑区底部、工具栏上方 */}
+        {selRange && mode_ === 'edit' && (
+          <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none z-20">
+            <div
+              className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-bronze/25 bg-ink/90 backdrop-blur px-1.5 py-1"
+              style={{ boxShadow: '0 4px 18px rgba(0,0,0,0.4)' }}
+            >
+              <span className="font-mono text-[10px] text-bronze-deep px-1.5 select-none">
+                {selRange.end - selRange.start}
+              </span>
+              <FloatBtn onClick={() => insert('**', '**', '粗体')} icon={<Bold size={16} />} label="粗体" />
+              <FloatBtn onClick={() => insert('*', '*', '斜体')} icon={<Italic size={16} />} label="斜体" />
+              <FloatBtn onClick={insertLink} icon={<LinkIcon size={16} />} label="链接" />
+              <FloatBtn onClick={() => insert('> ', '', '引用')} icon={<Quote size={16} />} label="引用" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 移动端工具栏：底部双行大按钮（≥44px 触控目标）+ 更多折叠 */}
+      <div
+        className="sm:hidden border-t border-bronze/10 px-2 pt-2 pb-1.5"
+        style={{ background: 'rgba(20, 18, 22, 0.6)' }}
+      >
+        <div className="grid grid-cols-5 gap-1.5">
+          <MBtn onClick={() => insert('**', '**', '粗体')} icon={<Bold size={18} />} label="粗体" />
+          <MBtn onClick={() => insert('*', '*', '斜体')} icon={<Italic size={18} />} label="斜体" />
+          <MBtn onClick={() => insert('# ', '', '标题')} icon={<Heading size={18} />} label="标题" />
+          <MBtn onClick={() => insert('- ', '', '项目')} icon={<List size={18} />} label="无序列表" />
+          <MBtn
+            onClick={() => fileInputRef.current?.click()}
+            icon={<ImageIcon size={18} />}
+            label="插入图片"
+          />
+        </div>
+        <div className="grid grid-cols-5 gap-1.5 mt-1.5">
+          <MBtn onClick={insertLink} icon={<LinkIcon size={18} />} label="链接" />
+          <MBtn onClick={() => insert('`', '`', 'code')} icon={<Code size={18} />} label="行内代码" />
+          <MBtn onClick={() => insert('> ', '', '引用')} icon={<Quote size={18} />} label="引用" />
+          <MBtn onClick={() => insert('1. ', '', '项目')} icon={<ListOrdered size={18} />} label="有序列表" />
+          <MBtn
+            onClick={() => setShowMore((s) => !s)}
+            icon={<Ellipsis size={18} />}
+            label="更多"
+            active={showMore}
+          />
+        </div>
+        {showMore && (
+          <>
+            <div className="grid grid-cols-6 gap-1.5 mt-1.5">
+              <MBtn onClick={() => insert('# ', '', '标题')} icon={<Heading1 size={17} />} label="标题 1" />
+              <MBtn onClick={() => insert('## ', '', '标题')} icon={<Heading2 size={17} />} label="标题 2" />
+              <MBtn
+                onClick={() => insert('\n```\n', '\n```\n', '代码')}
+                icon={<Code2 size={17} />}
+                label="代码块"
+              />
+              <MBtn onClick={() => insert('\n---\n', '', '')} icon={<Minus size={17} />} label="分割线" />
+              <MBtn onClick={() => insert('- [ ] ', '', '任务')} icon={<ListChecks size={17} />} label="待办" />
+              <MBtn
+                onClick={() => setMode((m) => (m === 'edit' ? 'preview' : 'edit'))}
+                icon={mode_ === 'edit' ? <Eye size={17} /> : <Edit3 size={17} />}
+                label={mode_ === 'edit' ? '预览' : '编辑'}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowMore(false)}
+              onMouseDown={(e) => e.preventDefault()}
+              className="w-full mt-1.5 h-10 flex items-center justify-center gap-1 text-[11px] tracking-widest text-bronze-deep hover:text-candle rounded-lg"
+            >
+              <ChevronUp size={14} strokeWidth={1.5} /> 收起
+            </button>
+          </>
         )}
       </div>
 
@@ -409,7 +565,10 @@ export function MarkdownEditor({
               return (
                 <div
                   key={id}
-                  draggable
+                  ref={(el) => {
+                    thumbRefs.current[i] = el;
+                  }}
+                  draggable={!isCoarse}
                   onDragStart={() => setDragFrom(i)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
@@ -418,9 +577,18 @@ export function MarkdownEditor({
                     setDragFrom(null);
                   }}
                   onDragEnd={() => setDragFrom(null)}
+                  onPointerDown={() => startLongPress(i)}
+                  onPointerMove={handleLongPressMove}
+                  onPointerUp={endLongPress}
+                  onPointerCancel={endLongPress}
+                  onPointerLeave={endLongPress}
                   className={clsx(
-                    'relative w-14 h-14 rounded overflow-hidden border flex-shrink-0 group cursor-grab active:cursor-grabbing',
-                    dragFrom === i ? 'border-candle opacity-60' : 'border-bronze/20',
+                    'relative w-14 h-14 rounded overflow-hidden border flex-shrink-0 group cursor-grab active:cursor-grabbing transition-all',
+                    dragIdx === i
+                      ? 'border-candle opacity-70 scale-105 z-10 touch-none'
+                      : dragFrom === i
+                        ? 'border-candle opacity-60'
+                        : 'border-bronze/20',
                     inText && 'ring-1 ring-amber',
                   )}
                   title={inText ? '已插入正文' : '未插入正文（显示在文章下方）'}
@@ -452,7 +620,7 @@ export function MarkdownEditor({
                   >
                     <CornerUpLeft size={11} strokeWidth={1.8} />
                   </button>
-                  {/* 顺序靠拖动调整（缩略图整体可拖） */}
+                  {/* 顺序靠拖动调整（缩略图整体可拖：桌面直接拖，触摸长按 350ms 后拖动） */}
                 </div>
               );
             })}
@@ -485,8 +653,63 @@ function ToolbarBtn({
   return (
     <button
       onClick={onClick}
+      onMouseDown={(e) => e.preventDefault()}
       title={title}
       className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle rounded transition-colors"
+    >
+      {icon}
+    </button>
+  );
+}
+
+/** 移动端大按钮：h-11 = 44px 触控目标 */
+function MBtn({
+  onClick,
+  icon,
+  label,
+  active,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      onMouseDown={(e) => e.preventDefault()}
+      className={clsx(
+        'h-11 min-w-0 flex items-center justify-center rounded-lg border transition-colors',
+        active
+          ? 'border-candle/60 text-candle bg-candle/10'
+          : 'border-bronze/15 text-bronze hover:text-candle active:bg-bronze/10',
+      )}
+    >
+      {icon}
+    </button>
+  );
+}
+
+/** 选区浮动条按钮：44px 触控目标 */
+function FloatBtn({
+  onClick,
+  icon,
+  label,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      onMouseDown={(e) => e.preventDefault()}
+      className="w-11 h-11 flex items-center justify-center rounded-full text-bronze hover:text-candle hover:bg-bronze/10 transition-colors"
     >
       {icon}
     </button>

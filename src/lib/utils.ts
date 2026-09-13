@@ -113,15 +113,23 @@ export function base64ToBlob(dataUrl: string): Blob {
   return new Blob([arr], { type: mime });
 }
 
+// 是否 iOS 系浏览器（含 iPadOS Safari 桌面版 UA 伪装：Macintosh + 触摸屏）
+function isIOSBrowser(): boolean {
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
 /**
  * 保存/分享文件，按能力分级：
- *   1. 桌面端（Chromium File System Access API）：showSaveFilePicker 弹系统
- *      「另存为」对话框，用户可自选任意本地文件夹写入；
- *   2. 手机端（无 File System Access）：Web Share API「存储到文件」/保存/发网盘；
- *   3. 兜底：浏览器下载（a.download）。
+ *   1. 桌面 Chromium（File System Access API）：showSaveFilePicker 弹系统「另存为」对话框；
+ *   2. iOS（Safari / WebKit）：系统分享面板「存储到文件」（iOS 的 a.download 只会打开预览，
+ *      无法直接落「下载」文件夹，只能借分享面板让用户存储）；
+ *   3. 其他平台（Android Chrome / PWA / 桌面非 Chromium 等）：浏览器 a.download 直接下载——
+ *      Android Chrome（含 PWA standalone）会把文件自动存入系统「下载」文件夹，无需分享面板。
+ *      该机制与 Chambre「参考文件-IB机」的 downloadBlob 实现一致。
  */
 export async function saveBlob(blob: Blob, filename: string): Promise<void> {
-  // 1) 桌面端：系统「另存为」—— 用户可自由选择保存到本地文件夹
+  // 1) 桌面 Chromium：系统「另存为」—— 用户可自由选择保存到本地文件夹
   const picker = (window as Window & {
     showSaveFilePicker?: (opts?: {
       suggestedName?: string;
@@ -143,29 +151,32 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
     }
   }
 
-  // 2) 手机端：系统分享面板（可「存储到文件」/保存到下载/发到网盘）
-  const nav = navigator as Navigator & {
-    canShare?: (data: { files?: File[] }) => boolean;
-    share?: (data: { files?: File[]; title?: string }) => Promise<void>;
-  };
-  const file = new File([blob], filename, {
-    type: blob.type || 'application/octet-stream',
-  });
-  if (
-    typeof nav.share === 'function' &&
-    typeof nav.canShare === 'function' &&
-    nav.canShare({ files: [file] })
-  ) {
-    try {
-      await nav.share({ files: [file], title: filename });
-      return; // 已交给系统（可能已保存，用户也可能取消了分享）
-    } catch (err) {
-      // 用户主动取消分享面板时静默退出，其余错误继续走下载兜底
-      if ((err as Error)?.name === 'AbortError') return;
+  // 2) iOS（Safari / WebKit）：系统分享面板（可「存储到文件」/保存/发网盘）
+  if (isIOSBrowser()) {
+    const nav = navigator as Navigator & {
+      canShare?: (data: { files?: File[] }) => boolean;
+      share?: (data: { files?: File[]; title?: string }) => Promise<void>;
+    };
+    const file = new File([blob], filename, {
+      type: blob.type || 'application/octet-stream',
+    });
+    if (
+      typeof nav.share === 'function' &&
+      typeof nav.canShare === 'function' &&
+      nav.canShare({ files: [file] })
+    ) {
+      try {
+        await nav.share({ files: [file], title: filename });
+        return; // 已交给系统（可能已保存，用户也可能取消了分享）
+      } catch (err) {
+        // 用户主动取消分享面板时静默退出，其余错误继续走下载兜底
+        if ((err as Error)?.name === 'AbortError') return;
+      }
     }
   }
 
-  // 3) 兜底：浏览器下载
+  // 3) 浏览器直接下载：Android Chrome（含 PWA standalone）会自动存入系统「下载」文件夹，
+  //    桌面 Safari/Firefox 也会存入默认下载目录——即 Chambre downloadBlob 同款机制
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
