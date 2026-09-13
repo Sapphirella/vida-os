@@ -1,9 +1,10 @@
-// 全局查找替换面板（复刻 Nookery FindBar 思路，桌面首页入口）
+// 全局查找替换面板（复刻 Nookery FindBar 思路，桌面/移动两端全局可用）
 // - 全局搜索：文章 / 动态 / 信件（标题 + 正文），支持按范围筛选
 // - 结果列表：来源路径 + 命中摘要（<mark> 高亮），可勾选批量替换
 // - 上一个 / 下一个：在当前结果中移动高亮
 // - 输入即搜（250ms 防抖）+ Enter 触发；忽略大小写可切换
-import { useMemo, useRef, useState } from 'react';
+// - 以全屏覆盖层呈现：桌面居中卡片，移动端近全宽卡片，两条入口（TopBar 放大镜 / 快捷键）
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -67,6 +68,8 @@ interface EntryLike {
 
 export function GlobalFindReplaceCard() {
   const navigate = useNavigate();
+  const open = useUIStore((s) => s.findPanelOpen);
+  const close = useUIStore((s) => s.setFindPanelOpen);
   const articles = useAppStore((s) => s.articles);
   const moments = useAppStore((s) => s.moments);
   const letters = useAppStore((s) => s.letters);
@@ -75,7 +78,6 @@ export function GlobalFindReplaceCard() {
   const updateLetter = useAppStore((s) => s.updateLetter);
   const showToast = useUIStore((s) => s.showToast);
 
-  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [replaceWith, setReplaceWith] = useState('');
   const [ignoreCase, setIgnoreCase] = useState(true);
@@ -85,8 +87,30 @@ export function GlobalFindReplaceCard() {
   const [searched, setSearched] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // 打开时锁定背景滚动（移动端防止遮罩下方页面滑动）
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  // Esc 关闭
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, close]);
+
   // 全局内容构造搜索目标：标题（文章/信件）+ 正文
+  // 注意：useMemo 必须位于 early return 之前，保证 hooks 顺序稳定
   const targets = useMemo(() => {
+    if (!open) return [];
     const out: Target[] = [];
     const push = (kind: HitKind, items: EntryLike[]) => {
       for (const item of items) {
@@ -104,10 +128,10 @@ export function GlobalFindReplaceCard() {
     if (scope === 'all' || scope === 'moment') push('moment', moments);
     if (scope === 'all' || scope === 'letter') push('letter', letters);
     return out;
-  }, [articles, moments, letters, scope]);
+  }, [articles, moments, letters, scope, open]);
 
-  // 执行查找：对每个目标文档提取全部命中（限制单文档 200 条防爆）
   const hits = useMemo(() => {
+    if (!open) return [];
     const q = query.trim();
     if (!q) return [];
     const re = new RegExp(escapeReg(q), ignoreCase ? 'gi' : 'g');
@@ -142,7 +166,9 @@ export function GlobalFindReplaceCard() {
       }
     }
     return out;
-  }, [targets, query, ignoreCase]);
+  }, [targets, query, ignoreCase, open]);
+
+  if (!open) return null;
 
   const matchCount = hits.length;
 
@@ -167,6 +193,7 @@ export function GlobalFindReplaceCard() {
     if (h.kind === 'article') navigate(`/space/article/${h.id}`);
     else if (h.kind === 'letter') navigate(`/mailbox/letter/${h.id}`);
     else navigate('/moments');
+    close(false);
   };
 
   const setAllChecked = (on: boolean | 'toggle') => {
@@ -231,36 +258,40 @@ export function GlobalFindReplaceCard() {
   };
 
   return (
-    <section className="px-4 sm:px-6 pb-3">
-      <div className="max-w-5xl mx-auto">
-        {/* 面板标题行 */}
-        <div className="flex items-center gap-3 mb-3 px-1">
-          <button
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            className={clsx(
-              'flex items-center gap-1.5 font-mono text-[10px] tracking-[0.2em] uppercase transition-colors',
-              open ? 'text-amber' : 'text-bronze-deep hover:text-candle',
-            )}
-          >
-            <Search size={13} strokeWidth={1.6} />
-            查找替换
-            {matchCount > 0 && (
-              <span className="text-candle normal-case tracking-normal">
-                {matchCount} 处
-              </span>
-            )}
-            <ChevronDown
-              size={13}
-              strokeWidth={1.6}
-              className={clsx('transition-transform', open && 'rotate-180')}
-            />
-          </button>
-          <div className="flex-1 h-px bg-bronze/10" />
-        </div>
+    <div className="fixed inset-0 z-[60]">
+      {/* 遮罩 */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'rgba(15, 12, 14, 0.66)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+        }}
+        onClick={() => close(false)}
+      />
 
-        {open && (
-          <Card className="p-3 sm:p-4 mb-1 animate-slide-up">
+      {/* 面板：桌面居中卡片，移动端近全宽，内部结果区自适应滚动 */}
+      <div className="relative h-full flex items-start justify-center p-2 pt-[calc(56px+env(safe-area-inset-top)+12px)] sm:p-6 sm:pt-[calc(72px+env(safe-area-inset-top))]">
+        <Card className="w-full max-w-2xl max-h-[82dvh] flex flex-col animate-slide-up">
+          {/* 标题行 */}
+          <div className="flex items-center gap-3 px-4 pt-3 pb-2 border-b border-bronze/10">
+            <Search size={15} strokeWidth={1.6} className="text-amber flex-none" />
+            <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-headline flex-1 truncate">
+              全局查找替换
+            </span>
+            <span className="font-mono text-[10px] text-bronze-deep hidden sm:inline">
+              ⌘K / 顶栏搜索
+            </span>
+            <button
+              onClick={() => close(false)}
+              aria-label="关闭查找替换"
+              className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle transition-colors flex-none"
+            >
+              <X size={17} strokeWidth={1.5} />
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
             {/* 范围 + 忽略大小写 */}
             <div className="flex items-center gap-1 flex-wrap mb-2">
               {SCOPES.map((s) => (
@@ -299,6 +330,7 @@ export function GlobalFindReplaceCard() {
             {/* 查找行 */}
             <div className="flex items-center gap-2">
               <input
+                autoFocus
                 value={query}
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onKeyDown={(e) => {
@@ -307,7 +339,6 @@ export function GlobalFindReplaceCard() {
                     if (e.shiftKey) step(-1);
                     else step(1);
                   }
-                  if (e.key === 'Escape') setOpen(false);
                 }}
                 placeholder="查找全文（文章 / 动态 / 信件）…"
                 className="flex-1 min-w-0 px-3 py-2 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 transition-colors"
@@ -364,7 +395,7 @@ export function GlobalFindReplaceCard() {
               <button
                 onClick={doReplace}
                 disabled={!matchCount}
-                className="btn-primary disabled:opacity-40"
+                className="btn-primary disabled:opacity-40 flex-none"
                 style={{ padding: '8px 14px', fontSize: '0.8125rem' }}
               >
                 <Replace size={13} strokeWidth={1.6} /> 替换勾选
@@ -372,16 +403,16 @@ export function GlobalFindReplaceCard() {
               <button
                 onClick={() => setAllChecked('toggle')}
                 disabled={!matchCount}
-                className="btn-ghost disabled:opacity-40"
+                className="btn-ghost disabled:opacity-40 flex-none"
                 style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
                 title="全选 / 取消全选"
               >
-                <CheckSquare size={13} strokeWidth={1.6} /> 全选
+                <CheckSquare size={13} strokeWidth={1.6} />
               </button>
               <button
                 onClick={() => setAllChecked(false)}
                 disabled={!matchCount}
-                className="btn-ghost disabled:opacity-40"
+                className="btn-ghost disabled:opacity-40 hidden sm:flex"
                 style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
                 title="取消勾选"
               >
@@ -395,7 +426,7 @@ export function GlobalFindReplaceCard() {
             {/* 结果列表 */}
             <div
               ref={listRef}
-              className="mt-3 max-h-64 overflow-y-auto space-y-1 pr-1"
+              className="mt-3 max-h-72 overflow-y-auto space-y-1 pr-1"
               style={{ scrollbarWidth: 'thin' }}
             >
               {!searched ? (
@@ -467,9 +498,9 @@ export function GlobalFindReplaceCard() {
                 ))
               )}
             </div>
-          </Card>
-        )}
+          </div>
+        </Card>
       </div>
-    </section>
+    </div>
   );
 }

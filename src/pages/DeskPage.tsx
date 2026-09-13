@@ -3,16 +3,12 @@ import { FeatureGrid } from '@/components/home/FeatureGrid';
 import { CalendarCard } from '@/components/home/CalendarCard';
 import { DayScheduleCard } from '@/components/home/DayScheduleCard';
 import { MusicPlayerCard } from '@/components/home/MusicPlayerCard';
-import { GlobalFindReplaceCard } from '@/components/search/GlobalFindReplaceCard';
 
 export function DeskPage() {
   return (
     <div className="view-enter">
       <ClockHeader />
       <FeatureGrid />
-
-      {/* 全局查找替换（位于 navigate 横线下方） */}
-      <GlobalFindReplaceCard />
 
       {/* 日历 + 日程：双卡式 */}
       <section className="px-4 sm:px-6 pb-4">

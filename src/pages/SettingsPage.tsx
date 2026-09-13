@@ -10,7 +10,7 @@ import { PRESET_BACKGROUNDS, DEFAULT_BACKGROUND_PRESET, getBackgroundPreset } fr
 import { setThemeMode, readThemeMode, resolveTheme, type ThemeMode } from '@/lib/theme';
 
 const THEME_OPTIONS: { key: ThemeMode; label: string; hint: string }[] = [
-  { key: 'system', label: '跟随系统', hint: '随系统浅色 / 深色自动切换' },
+  { key: 'system', label: '跟随系统', hint: '随系统颜色自动切换' },
   { key: 'day', label: '日间', hint: '白昼书房 · 温润纸面' },
   { key: 'night', label: '夜间', hint: '暗夜书房 · 深夜紫黑' },
 ];

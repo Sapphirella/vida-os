@@ -41,6 +41,10 @@ interface UIStore {
   openEditor: (e: Partial<EditorState>) => void;
   closeEditor: () => void;
 
+  // 全局查找替换面板（桌面/移动两端共用入口）
+  findPanelOpen: boolean;
+  setFindPanelOpen: (v: boolean) => void;
+
   // Toast
   toasts: ToastItem[];
   showToast: (message: string, kind?: ToastItem['kind']) => void;
@@ -67,6 +71,9 @@ export const useUIStore = create<UIStore>((set) => ({
       editor: { ...s.editor, ...e, open: true },
     })),
   closeEditor: () => set({ editor: { open: false, mode: 'article' } }),
+
+  findPanelOpen: false,
+  setFindPanelOpen: (v) => set({ findPanelOpen: v }),
 
   toasts: [],
   showToast: (message, kind = 'info') => {
