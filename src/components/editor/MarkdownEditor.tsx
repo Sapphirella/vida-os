@@ -5,6 +5,7 @@ import {
   useCallback,
   useLayoutEffect,
   useEffect,
+  useMemo,
 } from 'react';
 import {
   X,
@@ -28,7 +29,6 @@ import {
   CornerUpLeft,
   GripVertical,
 } from 'lucide-react';
-import { plainText } from '@/lib/markdown';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { compressImage, uid, clsx, formatDate } from '@/lib/utils';
 import { useAppStore } from '@/stores/useAppStore';
@@ -121,7 +121,17 @@ export function MarkdownEditor({
   // 初值由 useState 初始化取得；父组件通过 key 变化触发重挂载，
   // 这里刻意不做「初值变化就重置」的副作用，避免覆盖用户正在输入的内容。
 
-  const wordCount = plainText(content).length;
+  // 字数：轻量过滤 markdown 符号即可，避免长文每次击键跑完整 markdown 解析（移动端卡顿主因）
+  const wordCount = useMemo(() => {
+    const t = content
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`[^`]*`/g, ' ')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\[[^\]]*\]\([^)]*\)/g, '$1')
+      .replace(/[#>*_~|-]/g, '')
+      .replace(/[ \t\r\n]+/g, '');
+    return t.length;
+  }, [content]);
 
   // 工具栏操作
   const insert = useCallback(
@@ -169,6 +179,16 @@ export function MarkdownEditor({
       ta.focus({ preventScroll: true });
     }
   }, [content]);
+
+  // textarea 高度自动撑开：由外层滚动容器统一滚动（标题/标签随之一起滚动），
+  // 避免移动端 textarea 自身滚动与页面滚动叠加造成的卡顿；
+  // 内容变长时高度=scrollHeight，编辑区永远可整段滚动，不出现「钉住」。
+  useLayoutEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta || mode_ !== 'edit') return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [content, mode_]);
 
   // 跟踪文本选区：非空选中时在编辑区底部弹出浮动格式条
   useEffect(() => {
@@ -288,28 +308,28 @@ export function MarkdownEditor({
   return (
     <div
       className="editor-shell fixed inset-0 z-50 flex flex-col animate-fade-in"
-      style={{ background: 'var(--ink)' }}
+      style={{ background: 'var(--editor-bg)' }}
     >
       {/* 顶部 */}
       <div
-        className="flex items-center gap-2 px-3 sm:px-6 py-3 border-b border-bronze/10"
-        style={{ background: 'rgba(20, 18, 22, 0.6)', backdropFilter: 'blur(20px)' }}
+        className="flex items-center gap-2 px-3 sm:px-6 py-2 sm:py-3 border-b border-bronze/10"
+        style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px)' }}
       >
         <button
           onClick={onClose}
-          className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
+          className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
           aria-label="关闭"
         >
-          <X size={20} strokeWidth={1.5} />
+          <X size={18} strokeWidth={1.5} />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
+          <p className="font-mono text-[9px] sm:text-[10px] tracking-[0.2em] text-bronze-deep uppercase truncate">
             {editorTitle}
           </p>
         </div>
         {mode === 'moment' && (
           <label className="flex items-center gap-1.5 mr-1" title="发布/记录时间">
-            <Clock size={13} strokeWidth={1.5} className="text-bronze-deep" />
+            <Clock size={13} strokeWidth={1.5} className="text-bronze-deep flex-none" />
             <input
               type="datetime-local"
               value={formatDate(createdAt, 'YYYY-MM-DDTHH:mm')}
@@ -317,8 +337,8 @@ export function MarkdownEditor({
                 const t = new Date(e.target.value).getTime();
                 if (!Number.isNaN(t)) setCreatedAt(t);
               }}
-              className="px-2 py-1 rounded-pill text-[11px] font-mono text-paper outline-none"
-              style={{ background: 'rgba(42,41,46,0.8)', colorScheme: 'dark' }}
+              className="editor-dt px-2 py-1 rounded-pill text-[11px] font-mono text-paper outline-none"
+              style={{ background: 'var(--editor-input-bg)' }}
             />
           </label>
         )}
@@ -326,97 +346,27 @@ export function MarkdownEditor({
           <button
             onClick={() => toggleFavorite(favoriteId.refType, favoriteId.refId)}
             className={clsx(
-              'w-9 h-9 flex items-center justify-center transition-colors',
+              'w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors',
               isFavorited ? 'text-candle' : 'text-bronze hover:text-candle',
             )}
             aria-label="收藏"
           >
-            <Star size={18} strokeWidth={1.5} fill={isFavorited ? 'currentColor' : 'none'} />
+            <Star size={17} strokeWidth={1.5} fill={isFavorited ? 'currentColor' : 'none'} />
           </button>
         )}
         <button
           onClick={handleSave}
-          className="btn-primary"
-          style={{ padding: '7px 14px', fontSize: '0.8125rem' }}
+          aria-label="保存"
+          className="btn-primary flex-none"
+          style={{ padding: '0 14px', height: '2.25rem', fontSize: '0.8125rem' }}
         >
-          <Save size={13} strokeWidth={1.6} /> 保存
+          <Save size={13} strokeWidth={1.6} />
+          <span className="hidden sm:inline">保存</span>
+          <span className="sm:hidden" aria-hidden aria-label="">
+            存
+          </span>
         </button>
       </div>
-
-      {/* 标题（文章与信件都需要；信件同样有 title 字段） */}
-      {(mode === 'article' || mode === 'letter') && (
-        <div className="px-4 sm:px-8 pt-4 pb-2 max-w-3xl w-full mx-auto">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="标题..."
-            className="w-full bg-transparent font-serif text-headline text-2xl sm:text-3xl placeholder:text-bronze-deep outline-none tracking-tight"
-            style={{ fontWeight: 500, lineHeight: 1.3 }}
-          />
-          {/* 标签 + 合集（仅文章） */}
-          {mode === 'article' && (
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            {tags.map((t) => (
-              <span
-                key={t}
-                onClick={() => setTags(tags.filter((x) => x !== t))}
-                className="tag tag-wine cursor-pointer"
-              >
-                #{t} ×
-              </span>
-            ))}
-            <input
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && tagInput.trim()) {
-                  const t = tagInput.trim().replace(/^#/, '');
-                  if (!tags.includes(t)) setTags([...tags, t]);
-                  setTagInput('');
-                }
-              }}
-              placeholder="添加标签..."
-              className="px-2 py-0.5 text-xs bg-bronze/10 rounded-pill text-paper placeholder:text-bronze-deep outline-none w-24"
-            />
-            <div className="relative">
-              <button
-                onClick={() => setShowCollections((s) => !s)}
-                className="tag hover:brightness-110"
-              >
-                {collectionId
-                  ? collections.find((c) => c.id === collectionId)?.name || '合集'
-                  : '+ 合集'}
-              </button>
-              {showCollections && (
-                <div className="absolute top-full mt-1 left-0 glass-card p-1 min-w-[140px] z-10">
-                  <button
-                    onClick={() => {
-                      setCollectionId(undefined);
-                      setShowCollections(false);
-                    }}
-                    className="block w-full text-left px-3 py-1.5 text-xs text-paper hover:bg-bronze/10 rounded"
-                  >
-                    不选
-                  </button>
-                  {collections.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => {
-                        setCollectionId(c.id);
-                        setShowCollections(false);
-                      }}
-                      className="block w-full text-left px-3 py-1.5 text-xs text-paper hover:bg-bronze/10 rounded"
-                    >
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          )}
-        </div>
-      )}
 
       {/* 桌面工具栏（≥sm 显示；移动端改用底部大按钮工具栏） */}
       <div className="hidden sm:flex px-3 sm:px-6 py-2 border-b border-bronze/10 items-center gap-1 overflow-x-auto">
@@ -464,25 +414,115 @@ export function MarkdownEditor({
         />
       </div>
 
-      {/* 编辑区 */}
+      {/* 编辑区：标题/标签与正文在同一滚动容器内，随内容一起滚动（移动端释放固定栏空间） */}
       <div className="flex-1 overflow-hidden flex relative">
         {mode_ === 'edit' && (
-          <div className="flex-1 overflow-y-auto">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onFocus={() => setEditing(true)}
-              onBlur={() => setEditing(false)}
-              placeholder={mode === 'article' ? '开始书写...' : '说点什么...'}
-              className="w-full h-full bg-transparent px-4 sm:px-8 py-6 font-serif text-reading text-paper placeholder:text-bronze-deep outline-none resize-none max-w-3xl mx-auto leading-[1.7] sm:leading-[1.95]"
-              style={{ caretColor: 'var(--candle)' }}
-              spellCheck={false}
-            />
+          <div className="flex-1 overflow-y-auto vd-editor-scroll">
+            <div className="max-w-3xl mx-auto w-full px-4 sm:px-8 py-4 sm:py-6">
+              {/* 标题（文章与信件都需要；信件同样有 title 字段）——随正文滚动 */}
+              {(mode === 'article' || mode === 'letter') && (
+                <>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="标题..."
+                    className="w-full bg-transparent font-serif text-headline text-2xl sm:text-3xl placeholder:text-bronze-deep outline-none tracking-tight"
+                    style={{ fontWeight: 500, lineHeight: 1.3 }}
+                  />
+                  {/* 标签 + 合集（仅文章） */}
+                  {mode === 'article' && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3 mb-2">
+                      {tags.map((t) => (
+                        <span
+                          key={t}
+                          onClick={() => setTags(tags.filter((x) => x !== t))}
+                          className="tag tag-wine cursor-pointer"
+                        >
+                          #{t} ×
+                        </span>
+                      ))}
+                      <input
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && tagInput.trim()) {
+                            const t = tagInput.trim().replace(/^#/, '');
+                            if (!tags.includes(t)) setTags([...tags, t]);
+                            setTagInput('');
+                          }
+                        }}
+                        placeholder="添加标签..."
+                        className="px-2 py-0.5 text-xs bg-bronze/10 rounded-pill text-paper placeholder:text-bronze-deep outline-none w-24"
+                      />
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowCollections((s) => !s)}
+                          className="tag hover:brightness-110"
+                        >
+                          {collectionId
+                            ? collections.find((c) => c.id === collectionId)?.name || '合集'
+                            : '+ 合集'}
+                        </button>
+                        {showCollections && (
+                          <div className="absolute top-full mt-1 left-0 glass-card p-1 min-w-[140px] z-10">
+                            <button
+                              onClick={() => {
+                                setCollectionId(undefined);
+                                setShowCollections(false);
+                              }}
+                              className="block w-full text-left px-3 py-1.5 text-xs text-paper hover:bg-bronze/10 rounded"
+                            >
+                              不选
+                            </button>
+                            {collections.map((c) => (
+                              <button
+                                key={c.id}
+                                onClick={() => {
+                                  setCollectionId(c.id);
+                                  setShowCollections(false);
+                                }}
+                                className="block w-full text-left px-3 py-1.5 text-xs text-paper hover:bg-bronze/10 rounded"
+                              >
+                                {c.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onFocus={() => setEditing(true)}
+                onBlur={() => setEditing(false)}
+                placeholder={mode === 'article' ? '开始书写...' : '说点什么...'}
+                className="block w-full min-h-[52vh] sm:min-h-[70vh] bg-transparent font-serif text-reading text-paper placeholder:text-bronze-deep outline-none resize-none leading-[1.7] sm:leading-[1.95]"
+                spellCheck={false}
+              />
+            </div>
           </div>
         )}
         {mode_ === 'preview' && (
-          <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 max-w-3xl mx-auto w-full">
+          <div className="flex-1 overflow-y-auto vd-editor-scroll px-4 sm:px-8 py-4 sm:py-6 max-w-3xl mx-auto w-full">
+            {/* 预览中的头部：标题随内容一起滚动（与编辑态布局一致） */}
+            {(mode === 'article' || mode === 'letter') && title.trim() && (
+              <h1 className="font-serif text-headline text-2xl sm:text-3xl mb-2" style={{ fontWeight: 500, lineHeight: 1.3 }}>
+                {title}
+              </h1>
+            )}
+            {mode === 'article' && tags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                {tags.map((t) => (
+                  <span key={t} className="tag tag-wine">
+                    #{t}
+                  </span>
+                ))}
+              </div>
+            )}
             {content.trim() ? (
               <MarkdownView markdown={content} />
             ) : (
@@ -495,8 +535,8 @@ export function MarkdownEditor({
         {selRange && mode_ === 'edit' && (
           <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none z-20">
             <div
-              className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-bronze/25 bg-ink/90 backdrop-blur px-1.5 py-1"
-              style={{ boxShadow: '0 4px 18px rgba(0,0,0,0.4)' }}
+              className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-bronze/25 backdrop-blur px-1.5 py-1"
+              style={{ background: 'var(--editor-float-bg)', boxShadow: '0 4px 18px rgba(0,0,0,0.4)' }}
             >
               <span className="font-mono text-[10px] text-bronze-deep px-1.5 select-none">
                 {selRange.end - selRange.start}
@@ -515,7 +555,7 @@ export function MarkdownEditor({
       {editing && mode_ === 'edit' && (
         <div
           className="sm:hidden border-t border-bronze/10 px-1.5 py-0.5"
-          style={{ background: 'rgba(20, 18, 22, 0.6)' }}
+          style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)' }}
         >
           <div className="flex items-center gap-0.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
             <SBtn
@@ -556,7 +596,7 @@ export function MarkdownEditor({
       {mode_ === 'preview' && (
         <div
           className="sm:hidden border-t border-bronze/10 px-1.5 py-0.5"
-          style={{ background: 'rgba(20, 18, 22, 0.6)' }}
+          style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)' }}
         >
           <div className="flex items-center gap-0.5">
             <SBtn
@@ -577,7 +617,7 @@ export function MarkdownEditor({
       {/* 底部：图片画廊 + 字数 */}
       <div
         className="border-t border-bronze/10 px-3 sm:px-6 py-2 flex items-center gap-3"
-        style={{ background: 'rgba(20, 18, 22, 0.6)' }}
+        style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)' }}
       >
         {imageIds.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-[62%] py-1">

@@ -113,6 +113,14 @@
   --focus-ring: rgb(var(--candle-rgb) / 0.4);
   --caret: var(--candle);
 
+  /* 全屏编辑器语义色（夜间默认值；日间在 data-theme='day' 覆盖） */
+  --editor-bg: var(--ink);                 /* 编辑区纸背景 */
+  --editor-bar-bg: rgba(20, 18, 22, 0.6);  /* 顶栏/工具栏/底栏 背景 */
+  --editor-input-bg: rgba(42, 41, 46, 0.8);/* 输入框（datetime）背景 */
+  --editor-float-bg: rgba(20, 18, 22, 0.9);/* 浮动格式条背景 */
+  --editor-scrollbar-thumb: rgb(var(--bronze-rgb) / 0.35);
+  --editor-scrollbar-track: transparent;
+
   /* 间距 */
   --space-page: 24px;
   --space-card: 20px;
@@ -222,6 +230,14 @@
   --selection-fg: #2E2622;
   --focus-ring: rgb(var(--amber-rgb) / 0.5);
   --caret: #B8863F;
+
+  /* 全屏编辑器：日间切换为「纸面」浅色（墨褐文字） */
+  --editor-bg: var(--wood);                /* 沙米纸面，减弱与页面背景的跳变 */
+  --editor-bar-bg: rgba(255, 252, 246, 0.6);
+  --editor-input-bg: rgba(46, 38, 34, 0.06);
+  --editor-float-bg: rgba(255, 252, 246, 0.94);
+  --editor-scrollbar-thumb: rgb(var(--bronze-rgb) / 0.4);
+  --editor-scrollbar-track: transparent;
 
   /* 分区滑块轨道：奶油玻璃（浅底可读） */
   --seg-track: rgba(255, 252, 246, 0.88);
@@ -619,29 +635,39 @@ textarea, input, [contenteditable] {
 .prose-vidaos em { color: var(--candle); }
 
 /* 工具：单行省略 */
-/* ── 全屏编辑器（editor-shell）：固定深色沉浸层 ──
-   日间主题下 --text-paper / --headline / --text-bronze* 均为墨褐深色，
-   落在 var(--ink) 深底上「深底深字」不可见；
-   仅在日间主题为此作用域切换为奶油亮色系（夜间不受影响） */
-:root[data-theme='day'] .editor-shell {
-  --text-paper: var(--text-moon);
-  --text-headline: var(--text-moon);
-  --headline: var(--text-moon);
-  --headline-rgb: var(--moon-rgb);
-  --text-bronze: rgb(var(--moon-rgb) / 0.78);
-  --text-bronze-deep: rgb(var(--moon-rgb) / 0.55);
-}
-/* 编辑器内的浅色玻璃浮层（合集下拉等）恢复主题原文字色 */
-:root[data-theme='day'] .editor-shell .glass-card {
-  --text-paper: var(--paper);
-  --text-headline: var(--paper);
-  --headline: var(--paper);
-  --headline-rgb: var(--paper-rgb);
-  --text-bronze: var(--bronze);
-  --text-bronze-deep: var(--bronze-deep);
-}
+/* ── 全屏编辑器（editor-shell） ──
+   组件背景/栏背景一律走语义变量（--editor-*），夜间为深色沉浸层；
+   日间主题由 globals.css 把 --editor-* 切为浅色纸面，文字层级沿用主题
+   （--text-paper / --headline / --text-bronze* 日间本就是墨褐深色，浅底上直接可读）。
 
-/* 工具：单行省略 */
+   滚动容器：iOS 惯性滚动 + 禁止滚动链穿透，提升移动端编辑滑动手感 */
+.vd-editor-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+}
+.vd-editor-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.vd-editor-scroll::-webkit-scrollbar-thumb {
+  background: var(--editor-scrollbar-thumb);
+  border-radius: 999px;
+}
+.vd-editor-scroll::-webkit-scrollbar-track {
+  background: var(--editor-scrollbar-track);
+}
+/* 编辑器内文本输入：光标色/选中色统一走主题 */
+.editor-shell textarea {
+  caret-color: var(--caret);
+  -webkit-tap-highlight-color: transparent;
+}
+/* datetime-local 内建控件的明暗跟随主题（组件内不再硬编码 colorScheme） */
+.editor-dt {
+  color-scheme: dark;
+}
+:root[data-theme='day'] .editor-dt {
+  color-scheme: light;
+}
 .truncate-1 {
   overflow: hidden;
   text-overflow: ellipsis;
