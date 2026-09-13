@@ -80,7 +80,7 @@ export function DayScheduleCard() {
               >
                 <button
                   onClick={() => toggleDone(it.id)}
-                  className={`mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                  className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded-full border border-solid flex items-center justify-center transition-all ${
                     it.done
                       ? 'bg-wine/40 border-wine/50'
                       : 'bg-bronze/10 border-candle/70 hover:border-candle'
