@@ -214,12 +214,12 @@ export function GlobalFindReplaceCard() {
     close(false);
   };
 
-  const setAllChecked = (on: boolean | 'toggle') => {
+  const setAllChecked = (on: boolean | 'invert') => {
     setChecked((prev) => {
       const next: Record<number, boolean> = {};
-      if (on === 'toggle') {
-        const allOn = hits.every((_, i) => prev[i]);
-        hits.forEach((_, i) => (next[i] = !allOn));
+      if (on === 'invert') {
+        // 反选：已勾选的取消，未勾选的全部勾上
+        hits.forEach((_, i) => (next[i] = !prev[i]));
         return next;
       }
       hits.forEach((_, i) => (next[i] = on));
@@ -428,11 +428,11 @@ export function GlobalFindReplaceCard() {
                 全选
               </button>
               <button
-                onClick={() => setAllChecked('toggle')}
+                onClick={() => setAllChecked('invert')}
                 disabled={!matchCount}
                 className="btn-ghost disabled:opacity-40 flex-none"
                 style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
-                title="反选"
+                title="反选：勾选取消勾选，其余全部勾选"
               >
                 反选
               </button>

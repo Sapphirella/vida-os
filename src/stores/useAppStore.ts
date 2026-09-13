@@ -84,6 +84,7 @@ interface Actions {
   updateTodo: (id: string, patch: Partial<TodoNote>) => void;
   deleteTodo: (id: string) => void;
   toggleTodo: (id: string) => void;
+  reorderTodo: (ids: string[]) => void;
 
   // 分类
   addCategory: (which: keyof Categories, name: string) => void;
@@ -445,6 +446,24 @@ export const useAppStore = create<Store>((set, get) => ({
         ),
       },
     }));
+    persist(get());
+  },
+  // 长按拖动排序：ids 为新的完整顺序（TODO 列表全量 id），未列出的保持不变并追加在后
+  reorderTodo: (ids) => {
+    set((s) => {
+      const byId = new Map(s.notes.todo.map((n) => [n.id, n]));
+      const ordered: TodoNote[] = [];
+      const seen = new Set<string>();
+      for (const id of ids) {
+        const it = byId.get(id);
+        if (it && !seen.has(id)) {
+          ordered.push(it);
+          seen.add(id);
+        }
+      }
+      const rest = s.notes.todo.filter((n) => !seen.has(n.id));
+      return { notes: { ...s.notes, todo: [...ordered, ...rest] } };
+    });
     persist(get());
   },
 

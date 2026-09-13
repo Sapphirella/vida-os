@@ -65,6 +65,25 @@ export function chineseWeekday(d: Date | number): string {
   return ['日', '一', '二', '三', '四', '五', '六'][date.getDay()];
 }
 
+/**
+ * 日程排序：未完成在前已完成在后；
+ * 有时间的按时间升序排在前面，无时间的按添加时间（createdAt 升序）排在当日其余日程之后。
+ */
+export function sortSchedules<T extends { time?: string; done?: boolean; createdAt: number }>(
+  items: T[],
+): T[] {
+  const arr = [...items];
+  arr.sort((a, b) => {
+    if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+    const aHas = !!a.time;
+    const bHas = !!b.time;
+    if (aHas !== bHas) return aHas ? -1 : 1;
+    if (aHas && bHas) return (a.time || '').localeCompare(b.time || '');
+    return a.createdAt - b.createdAt;
+  });
+  return arr;
+}
+
 export function chineseDate(d: Date | number): string {
   const date = typeof d === 'number' ? new Date(d) : d;
   return `${date.getMonth() + 1}月${date.getDate()}日`;

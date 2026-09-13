@@ -92,6 +92,8 @@
   /* 页面与栏 */
   --bg-base: #1B1A1F;
   --bar-bg: rgba(27, 26, 31, 0.6);
+  /* 页内查找替换输入框背景（日间在 data-theme='day' 覆盖为白色） */
+  --search-input-bg: rgba(27, 26, 31, 0.55);
 
   /* 阴影（tailwind boxShadow 引用整串变量） */
   --shadow-rgb: 0 0 0;
@@ -210,6 +212,8 @@
   /* 页面与栏 */
   --bg-base: #F7F1E6;
   --bar-bg: rgba(255, 252, 246, 0.72);
+  /* 页内查找替换输入框背景：日间为白色 */
+  --search-input-bg: rgba(255, 255, 255, 0.92);
 
   /* 阴影：柔和暖褐 */
   --shadow-rgb: 90 70 50;
@@ -758,6 +762,27 @@ mark.vd-focus-flash {
   box-shadow: 0 0 0 4px var(--mark-active-bg);
   animation: vd-focus-pulse 1s ease-in-out 3;
   transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* ===== 待办长按拖拽排序（TodoView）===== */
+/* 插入指示线：高亮细线，日间/夜间均清晰可见 */
+li.vd-sort-indicator {
+  list-style: none;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--candle);
+  box-shadow: 0 0 0 1px rgb(var(--wine-rgb) / 0.35), 0 0 10px 0 rgb(var(--candle-rgb) / 0.55);
+  margin: 4px 0;
+  padding: 0;
+}
+/* 拖拽中的行：轻微抬起 + 阴影，跟随手指平移由 JS 控制 */
+li.vd-dragging {
+  opacity: 0.9;
+  transform: scale(0.99);
+  box-shadow: var(--shadow-card-elevated);
+  z-index: 30;
+  position: relative;
+  touch-action: none;
 }
 
 /* 顶栏 / 底栏颜色由背景预设驱动（见 src/lib/backgrounds.ts 的 bar 字段）。

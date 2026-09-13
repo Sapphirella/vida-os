@@ -7,7 +7,7 @@ import { CategoryChips } from './CategoryChips';
 import { ScheduleEditor, type ScheduleDraft } from './ScheduleEditor';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { todayKey } from '@/lib/utils';
+import { todayKey, sortSchedules } from '@/lib/utils';
 import type { ScheduleNote } from '@/types';
 
 export function ScheduleView() {
@@ -25,11 +25,14 @@ export function ScheduleView() {
     ? schedule.filter((s) => s.category === selectedCat)
     : schedule;
 
-  // 按日期分组
+  // 按日期分组（组内按时间排序：有时间在前升序，无时间按添加时间排后）
   const grouped = filtered.reduce<Record<string, ScheduleNote[]>>((acc, it) => {
     (acc[it.date] = acc[it.date] || []).push(it);
     return acc;
   }, {});
+  for (const k of Object.keys(grouped)) {
+    grouped[k] = sortSchedules(grouped[k]);
+  }
   const sortedDates = Object.keys(grouped).sort();
   const today = todayKey();
   const futureDates = sortedDates.filter((d) => d >= today);

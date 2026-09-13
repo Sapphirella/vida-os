@@ -54,7 +54,7 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
             }}
             placeholder="查找…"
             className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 transition-colors"
-            style={{ background: 'rgba(27,26,31,0.55)' }}
+            style={{ background: 'var(--search-input-bg)' }}
           />
           <span
             className={`shrink-0 font-mono text-[10px] whitespace-nowrap ${
@@ -103,7 +103,7 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
             }}
             placeholder="替换为…"
             className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 transition-colors"
-            style={{ background: 'rgba(27,26,31,0.55)' }}
+            style={{ background: 'var(--search-input-bg)' }}
           />
           <button
             type="button"

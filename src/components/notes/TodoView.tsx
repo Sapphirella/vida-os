@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Check, Trash2, Edit2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
@@ -14,11 +14,13 @@ export function TodoView() {
   const updateTodo = useAppStore((s) => s.updateTodo);
   const deleteTodo = useAppStore((s) => s.deleteTodo);
   const toggleTodo = useAppStore((s) => s.toggleTodo);
+  const reorderTodo = useAppStore((s) => s.reorderTodo);
   const showToast = useUIStore((s) => s.showToast);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [composing, setComposing] = useState<{ content: string; category: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(true);
+  const listRef = useRef<HTMLUListElement>(null);
 
   // 统计与列表共用同一分类范围，否则过滤后会出现「列表为空却显示 0 / 5 项待办」
   const scoped = selectedCat ? todo.filter((t) => t.category === selectedCat) : todo;
@@ -26,6 +28,145 @@ export function TodoView() {
   const filtered = scoped
     .filter((t) => showCompleted || !t.done)
     .sort((a, b) => Number(a.done) - Number(b.done));
+
+  // ===== 长按拖动排序（参照 Nookery 排序模式）=====
+  // 250ms 长按判定；>10px 位移取消；拖动中行跟手 + 显示插入指示线；松手落位写回 store
+  const dragState = useRef<{
+    id: string;
+    row: HTMLLIElement;
+    startY: number;
+    held: boolean;
+    timer: number;
+    indicator: HTMLLIElement | null;
+  } | null>(null);
+  const pendingCleanup = useRef<(() => void) | null>(null);
+
+  const clearDrag = () => {
+    pendingCleanup.current?.();
+    pendingCleanup.current = null;
+    dragState.current = null;
+  };
+
+  // 组件卸载时清理拖拽产生的临时监听（防泄漏）
+  useEffect(() => {
+    return () => clearDrag();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLUListElement>) => {
+    const target = e.target as HTMLElement;
+    // 按钮 / 编辑态 / 非行元素不触发
+    if (target.closest('button')) return;
+    const row = target.closest('li[data-todo-id]') as HTMLLIElement | null;
+    if (!row) return;
+
+    const id = row.dataset.todoId!;
+    const startY = e.clientY;
+    let held = false;
+    let finished = false;
+
+    const placeIndicator = (y: number) => {
+      const root = listRef.current;
+      if (!root) return;
+      const ds = dragState.current;
+      if (!ds) return;
+      let target: HTMLLIElement | null = null;
+      root.querySelectorAll<HTMLLIElement>('li[data-todo-id]:not(.vd-dragging)').forEach((r) => {
+        const rect = r.getBoundingClientRect();
+        if (!target && y < rect.top + rect.height / 2) target = r;
+      });
+      let ind = ds.indicator;
+      if (!ind) {
+        ind = document.createElement('li');
+        ind.className = 'vd-sort-indicator';
+        ind.setAttribute('aria-hidden', 'true');
+        ind.style.pointerEvents = 'none';
+        ds.indicator = ind;
+      }
+      if (target) root.insertBefore(ind, target);
+      else root.appendChild(ind);
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      const ds = dragState.current;
+      if (!ds || finished) return;
+      if (!held) {
+        if (Math.abs(ev.clientY - startY) > 10) {
+          clearTimeout(ds.timer);
+          clearDrag();
+        }
+        return;
+      }
+      ev.preventDefault();
+      const dy = ev.clientY - startY;
+      ds.row.style.transform = `translateY(${dy}px)`;
+      placeIndicator(ev.clientY);
+    };
+
+    const onUp = () => {
+      const ds = dragState.current;
+      if (finished) return;
+      finished = true;
+      if (ds) clearTimeout(ds.timer);
+      if (held && ds) {
+        // 落位：根据指示线当前 DOM 位置计算目标索引
+        const root = listRef.current;
+        const ind = ds.indicator;
+        let to = -1;
+        if (root && ind && ind.isConnected) {
+          const rows = Array.from(root.querySelectorAll<HTMLLIElement>('li[data-todo-id]'));
+          const prev = ind.previousElementSibling as HTMLElement | null;
+          if (prev && prev.hasAttribute('data-todo-id')) {
+            const i = rows.indexOf(prev as HTMLLIElement);
+            to = i >= 0 ? i + 1 : rows.length;
+          } else {
+            to = 0;
+          }
+        }
+        const ids = filtered.map((t) => t.id);
+        const from = ids.indexOf(ds.id);
+        if (from >= 0 && to >= 0) {
+          ids.splice(from, 1);
+          let insert = to;
+          if (to > from) insert = to - 1;
+          ids.splice(insert, 0, ds.id);
+          reorderTodo(ids);
+        }
+      }
+      clearDrag();
+    };
+
+    const cleanup = () => {
+      const ds = dragState.current;
+      if (!ds) return;
+      if (ds.indicator) ds.indicator.remove();
+      ds.row.style.transform = '';
+      ds.row.style.touchAction = '';
+      ds.row.classList.remove('vd-dragging');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    pendingCleanup.current = cleanup;
+    dragState.current = {
+      id,
+      row,
+      startY,
+      held: false,
+      timer: window.setTimeout(() => {
+        const ds = dragState.current;
+        if (!ds || finished) return;
+        held = true;
+        ds.held = true;
+        // 移动端长按时锁定该行的触摸滚动，避免拖拽与滚动手势打架
+        ds.row.style.touchAction = 'none';
+        ds.row.classList.add('vd-dragging');
+      }, 250),
+      indicator: null,
+    };
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+  };
 
   const remaining = scoped.filter((t) => !t.done).length;
   const total = scoped.length;
@@ -108,7 +249,7 @@ export function TodoView() {
           }
         />
       ) : (
-        <ul className="space-y-2">
+        <ul ref={listRef} className="space-y-2" onPointerDown={onPointerDown}>
           {filtered.map((t) => (
             <TodoItem
               key={t.id}
@@ -190,7 +331,7 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
   }
 
   return (
-    <li>
+    <li data-todo-id={item.id}>
       <Card className="p-3.5 sm:p-4 group hover:scale-[1.005] transition-transform">
         <div className="flex items-center gap-3">
           <button
