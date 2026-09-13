@@ -56,6 +56,17 @@ export function CalendarCard() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => {
+              const d = new Date();
+              setView({ year: d.getFullYear(), month: d.getMonth() });
+              setSelected(todayKey());
+            }}
+            className="h-7 px-2.5 rounded-full font-mono text-[11px] tracking-widest text-bronze hover:text-candle hover:bg-bronze/10 transition-colors"
+            aria-label="回到今天"
+          >
+            今
+          </button>
+          <button
+            onClick={() => {
               const d = new Date(view.year, view.month - 1, 1);
               setView({ year: d.getFullYear(), month: d.getMonth() });
             }}

@@ -341,35 +341,32 @@ textarea, input, [contenteditable] {
 /* ============================================================
    触屏设备滚动性能（hover: none ≈ 手机/平板）：
    backdrop-filter 会在滚动时对每张卡片逐帧重采样背景，是移动端
-   滚动卡顿的主因；这里整体禁用，用更不透明的卡片底补偿玻璃透感。
-   桌面（hover: hover）保持毛玻璃，观感不回退。
+   滚动卡顿的主因。这里仅对**夜间主题**整体禁用，用更不透明的
+   卡片底补偿玻璃透感；日间主题（白昼书房）保留毛玻璃观感
+   （用户明确要求），其滚动代价由日间卡片底色/栏色本身承担。
+   桌面（hover: hover）始终保持毛玻璃，观感不回退。
    ============================================================ */
 @media (hover: none) {
-  .glass-card,
-  header,
-  nav {
+  /* 仅夜间禁用毛玻璃 */
+  :root:not([data-theme='day']) .glass-card,
+  :root:not([data-theme='day']) header,
+  :root:not([data-theme='day']) nav {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
 
-  /* 无 blur 时提升底不透明度，避免内容透得过于杂乱 */
+  /* 夜间无 blur 时提升底不透明度，避免内容透得过于杂乱；
+     日间保持 :root[data-theme='day'] 里定义好的半透明玻璃底（0.78/0.92） */
   :root {
     --card-bg: rgba(42, 41, 46, 0.9);
     --card-bg-elevated: rgba(56, 54, 60, 0.94);
   }
-  :root[data-theme='day'] {
-    --card-bg: rgba(255, 252, 246, 0.94);
-    --card-bg-elevated: rgba(255, 255, 255, 0.97);
-  }
 
-  /* 顶栏/底栏：无模糊时用实底覆盖半透明 --bar-bg，滚动时内容不再透到栏后 */
-  header,
-  nav {
+  /* 夜间顶栏/底栏：无模糊时用实底覆盖半透明 --bar-bg，滚动时内容不再透到栏后；
+     日间保留奶油玻璃 --bar-bg + blur */
+  :root:not([data-theme='day']) header,
+  :root:not([data-theme='day']) nav {
     background: rgba(27, 26, 31, 0.94) !important;
-  }
-  :root[data-theme='day'] header,
-  :root[data-theme='day'] nav {
-    background: rgba(255, 252, 246, 0.96) !important;
   }
 }
 
@@ -818,16 +815,13 @@ input, textarea, select {
 }
 
 /* ============================================================
-   触屏滚动性能：顶栏/底栏在无 backdrop-filter 时改用实底，
+   触屏滚动性能：**夜间**顶栏/底栏在无 backdrop-filter 时改用实底，
    滚动时内容不再透到栏后（需放在上方 header/nav 规则之后覆盖）。
+   日间主题保留奶油玻璃毛玻璃（--bar-bg rgba(255,252,246,0.72) + blur）。
    ============================================================ */
 @media (hover: none) {
-  header,
-  nav {
+  :root:not([data-theme='day']) header,
+  :root:not([data-theme='day']) nav {
     background: rgba(27, 26, 31, 0.94) !important;
-  }
-  :root[data-theme='day'] header,
-  :root[data-theme='day'] nav {
-    background: rgba(255, 252, 246, 0.96) !important;
   }
 }
