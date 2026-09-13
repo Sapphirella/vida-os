@@ -267,46 +267,12 @@ html, body {
 }
 
 body {
-  /* 烛光环境：底部暖色光晕 + 顶部一层极淡的紫灰，让画面不至于整片发褐 */
-  background:
-    radial-gradient(
-      ellipse 80% 50% at 50% 110%,
-      rgba(232, 195, 158, 0.1) 0%,
-      rgba(232, 195, 158, 0.035) 30%,
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 60% 40% at 20% 0%,
-      rgba(106, 8, 14, 0.08) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse 70% 45% at 80% 0%,
-      rgba(92, 107, 140, 0.07) 0%,
-      transparent 55%
-    ),
-    linear-gradient(180deg, #1B1A1F 0%, #241920 100%);
-  background-attachment: fixed;
+  /* 滚动性能：body 不再承担多层渐变背景（background-attachment:fixed 在移动端
+     每次滚动都整页重绘，是卡顿主因）。氛围渐变/光晕统一由 Background 层
+     （fixed -z-10，不随滚动重绘）承载，body 只铺纯色底。 */
+  background: var(--bg-base);
   min-height: 100vh;
   min-height: 100dvh;
-}
-
-/* 白昼书房：晨光纸面（顶部烛光晨光 + 米白纸底） */
-:root[data-theme='day'] body {
-  background:
-    radial-gradient(
-      ellipse 80% 45% at 50% -5%,
-      rgba(232, 195, 158, 0.3) 0%,
-      rgba(232, 195, 158, 0.08) 45%,
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse 70% 40% at 12% 0%,
-      rgba(106, 8, 14, 0.05) 0%,
-      transparent 50%
-    ),
-    linear-gradient(180deg, #FFFCF6 0%, #F4ECDE 100%);
-  background-attachment: fixed;
 }
 
 #root {
@@ -370,6 +336,41 @@ textarea, input, [contenteditable] {
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   position: relative;
   overflow: hidden;
+}
+
+/* ============================================================
+   触屏设备滚动性能（hover: none ≈ 手机/平板）：
+   backdrop-filter 会在滚动时对每张卡片逐帧重采样背景，是移动端
+   滚动卡顿的主因；这里整体禁用，用更不透明的卡片底补偿玻璃透感。
+   桌面（hover: hover）保持毛玻璃，观感不回退。
+   ============================================================ */
+@media (hover: none) {
+  .glass-card,
+  header,
+  nav {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* 无 blur 时提升底不透明度，避免内容透得过于杂乱 */
+  :root {
+    --card-bg: rgba(42, 41, 46, 0.9);
+    --card-bg-elevated: rgba(56, 54, 60, 0.94);
+  }
+  :root[data-theme='day'] {
+    --card-bg: rgba(255, 252, 246, 0.94);
+    --card-bg-elevated: rgba(255, 255, 255, 0.97);
+  }
+
+  /* 顶栏/底栏：无模糊时用实底覆盖半透明 --bar-bg，滚动时内容不再透到栏后 */
+  header,
+  nav {
+    background: rgba(27, 26, 31, 0.94) !important;
+  }
+  :root[data-theme='day'] header,
+  :root[data-theme='day'] nav {
+    background: rgba(255, 252, 246, 0.96) !important;
+  }
 }
 
 /* 玻璃卡片-高光边缘 */
@@ -509,6 +510,18 @@ textarea, input, [contenteditable] {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* 背景烛光呼吸（装饰层）：触屏下由滚动性能块停用动画 */
+.vd-ambient-breathe {
+  animation: breathe 6s ease-in-out infinite;
+}
+
+/* 必须在 .vd-ambient-breathe 全局规则之后声明，同特异性后者胜 */
+@media (hover: none) {
+  .vd-ambient-breathe {
+    animation: none;
   }
 }
 
@@ -802,4 +815,19 @@ input, textarea, select {
   background: transparent;
   border: none;
   outline: none;
+}
+
+/* ============================================================
+   触屏滚动性能：顶栏/底栏在无 backdrop-filter 时改用实底，
+   滚动时内容不再透到栏后（需放在上方 header/nav 规则之后覆盖）。
+   ============================================================ */
+@media (hover: none) {
+  header,
+  nav {
+    background: rgba(27, 26, 31, 0.94) !important;
+  }
+  :root[data-theme='day'] header,
+  :root[data-theme='day'] nav {
+    background: rgba(255, 252, 246, 0.96) !important;
+  }
 }

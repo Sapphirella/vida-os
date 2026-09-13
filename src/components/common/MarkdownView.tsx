@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { fileURL } from '@/lib/fileUrl';
 import { renderMarkdown } from '@/lib/markdown';
 import { clsx } from '@/lib/utils';
@@ -26,7 +26,8 @@ interface MarkdownViewProps {
 export function MarkdownView({ markdown, className, htmlTransform }: MarkdownViewProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  const rawHtml = renderMarkdown(markdown);
+  // 解析结果按 markdown 缓存：输入评论/重渲染时不会对每条动态重复整段 markdown 解析
+  const rawHtml = useMemo(() => renderMarkdown(markdown), [markdown]);
   const html = htmlTransform ? htmlTransform(rawHtml) : rawHtml;
 
   useEffect(() => {

@@ -45,6 +45,10 @@ interface UIStore {
   findPanelOpen: boolean;
   setFindPanelOpen: (v: boolean) => void;
 
+  // 评价输入聚焦中（动态页评论输入框）：聚焦期间隐藏底部 Tab 栏与 FAB，避免键盘弹出时遮挡
+  commentInputFocused: boolean;
+  setCommentInputFocused: (v: boolean) => void;
+
   // 全局查找「跳转到命中处」：目标页挂载后读取并定位/高亮
   focusRequest: {
     kind: 'article' | 'moment' | 'letter';
@@ -88,6 +92,9 @@ export const useUIStore = create<UIStore>((set) => ({
 
   findPanelOpen: false,
   setFindPanelOpen: (v) => set({ findPanelOpen: v }),
+
+  commentInputFocused: false,
+  setCommentInputFocused: (v) => set({ commentInputFocused: v }),
 
   focusRequest: null,
   setFocusRequest: (r) => set({ focusRequest: r }),

@@ -37,6 +37,8 @@ export function MediaImage({ fileId, alt, className }: MediaImageProps) {
     <img
       src={url}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       onLoad={() => setLoaded(true)}
       className={clsx('transition-opacity duration-500', loaded ? 'opacity-100' : 'opacity-0', className)}
     />

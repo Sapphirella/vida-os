@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Star, MessageCircle, Trash2, Send, Search, Edit2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -61,20 +61,39 @@ export function MomentsPage() {
   const deleteMomentComment = useAppStore((s) => s.deleteMomentComment);
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
+  const setCommentInputFocused = useUIStore((s) => s.setCommentInputFocused);
 
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const anyCommentsOpen = Object.values(openComments).some(Boolean);
+
+  // 评论区展开（或输入聚焦）时隐藏右下 FAB，避免钉住遮挡评论区/键盘
+  const fabHidden = anyCommentsOpen;
+
+  // 评论区全部收起 / 离开页面时，清除评论输入聚焦状态（防止底栏一直隐藏）
+  useEffect(() => {
+    if (!anyCommentsOpen) setCommentInputFocused(false);
+  }, [anyCommentsOpen, setCommentInputFocused]);
+  useEffect(() => {
+    return () => setCommentInputFocused(false);
+  }, [setCommentInputFocused]);
 
   // ── 查找 / 替换（页内，面板钉在顶栏下方） ──
-  const find = usePageFind(
-    moments.map((m) => ({
-      id: m.id,
-      title: '',
-      content: m.content,
-      replaceContent: (next) => updateMoment(m.id, { content: next }),
-    })),
-    { onToast: (msg) => showToast(msg, 'success') },
+  // targets 数组要按 moments 缓存，否则评论输入等任意重渲染都会重建数组，
+  // 触发 usePageFind 的 mark 重扫与 scrollIntoView（输入时页面跳动）。
+  const findTargets = useMemo(
+    () =>
+      moments.map((m) => ({
+        id: m.id,
+        title: '',
+        content: m.content,
+        replaceContent: (next: string) => updateMoment(m.id, { content: next }),
+      })),
+    [moments, updateMoment],
   );
+  const find = usePageFind(findTargets, {
+    onToast: (msg) => showToast(msg, 'success'),
+  });
   const { listRef } = find;
 
   const isFav = (id: string) => favorites.some((f) => f.refType === 'moment' && f.refId === id);
@@ -315,6 +334,8 @@ export function MomentsPage() {
                                 <input
                                   value={drafts[m.id] ?? ''}
                                   onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
+                                  onFocus={() => setCommentInputFocused(true)}
+                                  onBlur={() => setCommentInputFocused(false)}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.preventDefault();
@@ -348,7 +369,13 @@ export function MomentsPage() {
 
         <button
           onClick={() => openEditor({ mode: 'moment', open: true })}
-          className="fixed right-5 bottom-24 z-30 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+          aria-hidden={fabHidden}
+          tabIndex={fabHidden ? -1 : 0}
+          className={`fixed right-5 bottom-24 z-30 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+            fabHidden
+              ? 'opacity-0 pointer-events-none translate-y-2 scale-90'
+              : 'opacity-100 translate-y-0 scale-100 hover:scale-110 active:scale-95'
+          }`}
           style={{ background: 'var(--wine)', boxShadow: '0 4px 20px rgba(106, 8, 14, 0.5)' }}
           aria-label="写动态"
         >

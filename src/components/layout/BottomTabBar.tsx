@@ -13,12 +13,16 @@ const TABS: { key: TabKey; label: string; icon: typeof Home; path: string }[] = 
 
 export function BottomTabBar() {
   const setTab = useUIStore((s) => s.setTab);
+  const commentInputFocused = useUIStore((s) => s.commentInputFocused);
   const navigate = useNavigate();
   const location = useLocation();
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 safe-bottom"
+      aria-hidden={commentInputFocused}
+      className={`fixed bottom-0 left-0 right-0 z-40 safe-bottom transition-transform duration-300 ease-out ${
+        commentInputFocused ? 'translate-y-full' : 'translate-y-0'
+      }`}
       style={{
         backdropFilter: 'blur(20px) saturate(140%)',
         WebkitBackdropFilter: 'blur(20px) saturate(140%)',

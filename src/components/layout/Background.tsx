@@ -72,8 +72,9 @@ export function Background() {
 
       {/* 烛光晕染：左下 */}
       <div
-        className="absolute bottom-0 left-0 w-[60vw] h-[60vh] opacity-60 animate-breathe"
+        className="absolute bottom-0 left-0 w-[60vw] h-[60vh] opacity-60 vd-ambient-breathe"
         style={{
+
           background:
             'radial-gradient(ellipse at bottom left, rgba(232, 195, 158, 0.10) 0%, rgba(232, 195, 158, 0.03) 30%, transparent 60%)',
           filter: 'blur(40px)',
