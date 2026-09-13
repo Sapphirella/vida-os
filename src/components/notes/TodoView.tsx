@@ -136,7 +136,7 @@ export function TodoView() {
           }}
           aria-label="新建待办"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-headline" />
+          <Plus size={22} strokeWidth={1.6} className="text-moon" />
         </button>
       )}
     </div>
@@ -192,13 +192,15 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
         <div className="flex items-center gap-3">
           <button
             onClick={onToggle}
-            className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-all ${
+            aria-label={item.done ? '标记为未完成' : '标记完成'}
+            title={item.done ? '标记为未完成' : '标记完成'}
+            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
               item.done
-                ? 'bg-wine/40 border-wine/50'
-                : 'border-bronze/40 hover:border-candle'
+                ? 'bg-wine/50 border-wine/60'
+                : 'border-bronze/60 hover:border-candle hover:bg-bronze/10'
             }`}
           >
-            {item.done && <Check size={12} strokeWidth={2.4} className="text-headline" />}
+            {item.done && <Check size={14} strokeWidth={2.6} className="text-moon" />}
           </button>
           <p
             className={`flex-1 font-serif text-paper ${
@@ -208,7 +210,7 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
             {item.content}
           </p>
           <Tag>{item.category}</Tag>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button
               onClick={onEdit}
               className="w-6 h-6 flex items-center justify-center text-bronze hover:text-candle"

@@ -108,6 +108,9 @@
   --font-serif: "EB Garamond", "Lora", Georgia, serif;
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* 分区滑块轨道（SegmentedControl 容器底） */
+  --seg-track: rgba(20, 18, 22, 0.5);
 }
 
 /* ============================================================
@@ -199,6 +202,9 @@
   --selection-fg: #2E2622;
   --focus-ring: rgb(var(--amber-rgb) / 0.5);
   --caret: #B8863F;
+
+  /* 分区滑块轨道：奶油玻璃（浅底可读） */
+  --seg-track: rgba(255, 252, 246, 0.88);
 }
 
 * {
@@ -672,6 +678,14 @@ nav {
 }
 :root[data-theme='day'] .glow-top {
   background: radial-gradient(ellipse at top, rgba(232, 195, 158, 0.4) 0%, transparent 60%) !important;
+}
+
+/* 白昼书房：分区滑块未激活文字加深（bronze → bronze-deep），浅底轨道上才清晰 */
+:root[data-theme='day'] .seg-tab.text-bronze {
+  color: var(--text-bronze-deep);
+}
+:root[data-theme='day'] .seg-tab.text-bronze:hover {
+  color: var(--text-paper);
 }
 
 /* 链接默认样式 */

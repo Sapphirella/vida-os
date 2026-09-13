@@ -126,7 +126,7 @@ export function InspirationView() {
           }}
           aria-label="新增灵感"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-headline" />
+          <Plus size={22} strokeWidth={1.6} className="text-moon" />
         </button>
       )}
     </div>

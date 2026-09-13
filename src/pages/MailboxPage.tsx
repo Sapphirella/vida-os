@@ -126,7 +126,7 @@ export function MailboxPage() {
           }}
           aria-label="写信"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-headline" />
+          <Plus size={22} strokeWidth={1.6} className="text-moon" />
         </button>
       </div>
     </div>

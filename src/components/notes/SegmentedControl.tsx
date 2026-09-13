@@ -67,7 +67,7 @@ export function SegmentedControl() {
         <div
           ref={containerRef}
           className="relative flex items-center gap-0 p-1 rounded-pill glass-card"
-          style={{ background: 'rgba(20, 18, 22, 0.5)' }}
+          style={{ background: 'var(--seg-track, rgba(20, 18, 22, 0.5))' }}
         >
           {/* 滑块指示器 */}
           <div
@@ -89,7 +89,7 @@ export function SegmentedControl() {
                 onClick={() => setTab(t.key)}
                 className={clsx(
                   'relative z-10 flex-1 px-4 py-2.5 rounded-pill font-serif text-sm transition-colors flex items-center justify-center gap-2',
-                  active ? 'text-moon' : 'text-bronze hover:text-paper',
+                  active ? 'text-moon' : 'seg-tab text-bronze hover:text-paper',
                 )}
               >
                 <span>{t.label}</span>

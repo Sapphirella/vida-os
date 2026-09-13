@@ -83,11 +83,11 @@ export function DayScheduleCard() {
                   className={`mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
                     it.done
                       ? 'bg-wine/40 border-wine/50'
-                      : 'border-bronze/40 hover:border-candle'
+                      : 'border-bronze/60 hover:border-candle'
                   }`}
                   aria-label="完成"
                 >
-                  {it.done && <Check size={12} strokeWidth={2.4} className="text-headline" />}
+                  {it.done && <Check size={12} strokeWidth={2.4} className="text-moon" />}
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">
@@ -117,7 +117,7 @@ export function DayScheduleCard() {
                   onClick={() => {
                     if (confirm('确认删除该日程？')) del(it.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-bronze hover:text-wine-light transition-all"
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-bronze hover:text-wine-light transition-all"
                   aria-label="删除"
                 >
                   <Trash2 size={12} strokeWidth={1.4} />

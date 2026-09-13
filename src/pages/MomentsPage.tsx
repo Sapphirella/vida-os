@@ -433,7 +433,7 @@ export function MomentsPage() {
                                   className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                                   style={{ background: 'var(--wine)' }}
                                 >
-                                  <Send size={13} strokeWidth={1.6} className="text-headline" />
+                                  <Send size={13} strokeWidth={1.6} className="text-moon" />
                                 </button>
                               </div>
                             </div>
@@ -454,7 +454,7 @@ export function MomentsPage() {
           style={{ background: 'var(--wine)', boxShadow: '0 4px 20px rgba(106, 8, 14, 0.5)' }}
           aria-label="写动态"
         >
-          <Plus size={22} strokeWidth={1.6} className="text-headline" />
+          <Plus size={22} strokeWidth={1.6} className="text-moon" />
         </button>
       </div>
     </div>
