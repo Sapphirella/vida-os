@@ -18,11 +18,14 @@ export function TodoView() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [composing, setComposing] = useState<{ content: string; category: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(true);
 
   // 统计与列表共用同一分类范围，否则过滤后会出现「列表为空却显示 0 / 5 项待办」
   const scoped = selectedCat ? todo.filter((t) => t.category === selectedCat) : todo;
-  const filtered = scoped.filter((t) => showCompleted || !t.done);
+  // 已完成自动置底：稳定排序保证未完成保持原相对顺序，取消完成即可按原顺序恢复原位
+  const filtered = scoped
+    .filter((t) => showCompleted || !t.done)
+    .sort((a, b) => Number(a.done) - Number(b.done));
 
   const remaining = scoped.filter((t) => !t.done).length;
   const total = scoped.length;
