@@ -11,9 +11,6 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  CheckSquare,
-  Square,
-  Replace,
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
@@ -398,29 +395,29 @@ export function GlobalFindReplaceCard() {
                 className="btn-primary disabled:opacity-40 flex-none"
                 style={{ padding: '8px 14px', fontSize: '0.8125rem' }}
               >
-                <Replace size={13} strokeWidth={1.6} /> 替换勾选
+                替换
+              </button>
+              <button
+                onClick={() => setAllChecked(true)}
+                disabled={!matchCount}
+                className="btn-ghost disabled:opacity-40 flex-none"
+                style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
+                title="全选"
+              >
+                全选
               </button>
               <button
                 onClick={() => setAllChecked('toggle')}
                 disabled={!matchCount}
                 className="btn-ghost disabled:opacity-40 flex-none"
                 style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
-                title="全选 / 取消全选"
+                title="反选"
               >
-                <CheckSquare size={13} strokeWidth={1.6} />
-              </button>
-              <button
-                onClick={() => setAllChecked(false)}
-                disabled={!matchCount}
-                className="btn-ghost disabled:opacity-40 hidden sm:flex"
-                style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
-                title="取消勾选"
-              >
-                <Square size={13} strokeWidth={1.6} />
+                反选
               </button>
             </div>
             <p className="font-mono text-[10px] text-bronze-deep/70 mt-1.5 px-1">
-              勾选结果后点「替换勾选」批量替换；点击结果行可跳转到对应内容。
+              勾选结果后点「替换」批量替换；「全选/反选」可快速调整勾选；点击结果行可跳转到对应内容。
             </p>
 
             {/* 结果列表 */}
