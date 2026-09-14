@@ -55,7 +55,7 @@ export function Background() {
 
   return (
     <div className="fixed inset-0 pointer-events-none -z-10">
-      {/* 基底：自定义图优先，否则用预设渐变（默认「夜半」） */}
+      {/* 基底：自定义图优先，否则用预设渐变（默认「深紫」） */}
       {hasCustomImage ? (
         <>
           <div

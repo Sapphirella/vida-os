@@ -1,5 +1,7 @@
 // 背景预设（设置页与全局背景层共用，避免两处各写一份）
 // 色值取自 tailwind.config.js 的暗夜书房色板
+// 2026-09-14：仅保留「深紫」——它是「猩红书房」外观方案的固有配方，
+// 其余 夜半/酒红/旧纸/烛光 按用户要求移除
 
 export interface BackgroundPreset {
   key: string;
@@ -10,33 +12,9 @@ export interface BackgroundPreset {
   bar: string;
 }
 
-export const DEFAULT_BACKGROUND_PRESET = 'midnight';
+export const DEFAULT_BACKGROUND_PRESET = 'deep';
 
 export const PRESET_BACKGROUNDS: BackgroundPreset[] = [
-  {
-    key: 'midnight',
-    name: '夜半',
-    gradient: 'linear-gradient(135deg, #1B1A1F 0%, #341915 100%)',
-    bar: 'rgba(27, 26, 31, 0.92)',
-  },
-  {
-    key: 'wine',
-    name: '酒红',
-    gradient: 'linear-gradient(135deg, #1B1A1F 0%, #6A080E 100%)',
-    bar: 'rgba(74, 12, 18, 0.92)',
-  },
-  {
-    key: 'paper',
-    name: '旧纸',
-    gradient: 'linear-gradient(135deg, #947D75 0%, #BCAEAA 100%)',
-    bar: 'rgba(90, 80, 74, 0.92)',
-  },
-  {
-    key: 'candle',
-    name: '烛光',
-    gradient: 'linear-gradient(135deg, #341915 0%, #E8C39E 100%)',
-    bar: 'rgba(96, 72, 48, 0.92)',
-  },
   {
     key: 'deep',
     name: '深紫',

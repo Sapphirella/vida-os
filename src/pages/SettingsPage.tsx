@@ -25,11 +25,24 @@ export function SettingsPage() {
   const [signature, setSignature] = useState(profile.signature);
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => readThemeMode());
 
+  // 猩红书房：夜间主题 × 深紫背景（且未叠加自定义图片）的珍藏配方
+  const isScarletStudy =
+    resolveTheme(themeMode) === 'night' &&
+    !profile.backgroundFileId &&
+    profile.backgroundPreset === 'deep';
+
   const handleTheme = (mode: ThemeMode) => {
     setThemeMode(mode);
     setThemeModeState(mode);
     const label = THEME_OPTIONS.find((o) => o.key === mode)?.label ?? '';
     showToast(`已切换：${label}`, 'success');
+  };
+
+  const applyScarletStudy = () => {
+    setThemeMode('night');
+    setThemeModeState('night');
+    updateProfile({ backgroundPreset: 'deep', backgroundFileId: undefined });
+    showToast('已切换：猩红书房', 'success');
   };
 
   const handleAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,7 +191,7 @@ export function SettingsPage() {
                 : `预览：${activePreset.name}`}
             </span>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+          <div className="grid grid-cols-1 gap-2 mb-3">
             {PRESET_BACKGROUNDS.map((bg) => {
               const active = profile.backgroundPreset === bg.key && !profile.backgroundFileId;
               return (
@@ -222,7 +235,11 @@ export function SettingsPage() {
           <p className="font-sans text-bronze text-xs mb-3">
             主题皮肤。当前：
             <span className="text-amber">
-              {resolveTheme(themeMode) === 'day' ? '白昼书房' : '暗夜书房'}
+              {isScarletStudy
+                ? '猩红书房'
+                : resolveTheme(themeMode) === 'day'
+                  ? '白昼书房'
+                  : '暗夜书房'}
             </span>
           </p>
           <div className="grid grid-cols-3 gap-2">
@@ -259,6 +276,31 @@ export function SettingsPage() {
               );
             })}
           </div>
+          {/* 猩红书房：夜间主题 + 深紫背景的珍藏配方 */}
+          <button
+            onClick={applyScarletStudy}
+            aria-pressed={isScarletStudy}
+            className={`relative w-full h-20 rounded-card overflow-hidden border-2 transition-all mt-2 ${
+              isScarletStudy ? 'border-candle scale-[0.99]' : 'border-bronze/15 hover:border-bronze/30'
+            }`}
+          >
+            <span
+              className="absolute inset-x-0 top-0 h-10"
+              style={{ background: 'linear-gradient(135deg, #0F0A14 0%, #341915 70%, #6A080E 100%)' }}
+            />
+            <span className="absolute inset-x-0 top-10 px-3 pt-1.5 pb-1 text-[10px] font-mono tracking-widest uppercase text-bronze-deep">
+              猩红书房 · scarlet study
+            </span>
+            <span className="absolute inset-x-0 bottom-0 px-3 pb-1 text-[9px] leading-tight text-bronze-deep/80">
+              夜间主题 × 深紫背景 · 珍藏配方
+            </span>
+            <span
+              className="absolute top-2 right-3 font-serif text-sm"
+              style={{ color: '#F2EBE0' }}
+            >
+              猩红书房
+            </span>
+          </button>
         </Card>
 
         {/* 关于 */}

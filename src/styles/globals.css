@@ -347,35 +347,11 @@ textarea, input, [contenteditable] {
 
 /* ============================================================
    触屏设备滚动性能（hover: none ≈ 手机/平板）：
-   backdrop-filter 会在滚动时对每张卡片逐帧重采样背景，是移动端
-   滚动卡顿的主因。这里仅对**夜间主题**整体禁用，用更不透明的
-   卡片底补偿玻璃透感；日间主题（白昼书房）保留毛玻璃观感
-   （用户明确要求），其滚动代价由日间卡片底色/栏色本身承担。
-   桌面（hover: hover）始终保持毛玻璃，观感不回退。
+   backdrop-filter 会在滚动时对每张卡片逐帧重采样背景，移动端
+   滚动代价高于桌面。2026-09-14 起按用户要求**恢复夜间毛玻璃**
+   ——夜间与日间、触屏与桌面观感统一，不再禁用 backdrop-filter；
+   滚动性能由 body 渐变层移除、背景层单层渲染等既有优化承担。
    ============================================================ */
-@media (hover: none) {
-  /* 仅夜间禁用毛玻璃 */
-  :root:not([data-theme='day']) .glass-card,
-  :root:not([data-theme='day']) header,
-  :root:not([data-theme='day']) nav {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  /* 夜间无 blur 时提升底不透明度，避免内容透得过于杂乱；
-     日间保持 :root[data-theme='day'] 里定义好的半透明玻璃底（0.78/0.92） */
-  :root {
-    --card-bg: rgba(42, 41, 46, 0.9);
-    --card-bg-elevated: rgba(56, 54, 60, 0.94);
-  }
-
-  /* 夜间顶栏/底栏：无模糊时用实底覆盖半透明 --bar-bg，滚动时内容不再透到栏后；
-     日间保留奶油玻璃 --bar-bg + blur */
-  :root:not([data-theme='day']) header,
-  :root:not([data-theme='day']) nav {
-    background: rgba(27, 26, 31, 0.94) !important;
-  }
-}
 
 /* 玻璃卡片-高光边缘 */
 .glass-card::before {
@@ -840,18 +816,4 @@ input, textarea, select {
   background: transparent;
   border: none;
   outline: none;
-}
-
-/* ============================================================
-   触屏滚动性能：**夜间**顶栏/底栏在无 backdrop-filter 时改用实底，
-   滚动时内容不再透到栏后（需放在上方 header/nav 规则之后覆盖）。
-   日间主题保留奶油玻璃毛玻璃（--bar-bg rgba(255,252,246,0.72) + blur）。
-   重要：实底跟随 --bar-bg（背景预设驱动）而不是钉死固定色，
-   否则手机上切换背景时栏色毫无反应。
-   ============================================================ */
-@media (hover: none) {
-  :root:not([data-theme='day']) header,
-  :root:not([data-theme='day']) nav {
-    background: var(--bar-bg, rgba(27, 26, 31, 0.6)) !important;
-  }
 }
