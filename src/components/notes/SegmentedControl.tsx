@@ -69,15 +69,14 @@ export function SegmentedControl() {
           className="relative flex items-center gap-0 p-1 rounded-pill glass-card"
           style={{ background: 'var(--seg-track, rgba(20, 18, 22, 0.5))' }}
         >
-          {/* 滑块指示器 */}
+          {/* 滑块指示器：去渐变，用主题强调色实色（跟随 --wine 主题变量） */}
           <div
-            className="absolute top-1 bottom-1 rounded-pill transition-all duration-300 ease-out"
+            className="absolute top-1 bottom-1 rounded-pill transition-all duration-300 ease-out seg-indicator"
             style={{
               left: indicator.left,
               width: indicator.width,
-              background:
-                'linear-gradient(135deg, rgba(106, 8, 14, 0.7), rgba(106, 8, 14, 0.5))',
-              boxShadow: '0 0 16px rgba(106, 8, 14, 0.3)',
+              background: 'var(--wine)',
+              boxShadow: '0 0 16px rgb(var(--wine-rgb) / 0.3)',
             }}
           />
           {TABS.map((t) => {

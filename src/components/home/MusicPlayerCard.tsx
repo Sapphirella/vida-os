@@ -177,7 +177,7 @@ export function MusicPlayerCard() {
         </button>
         <button
           onClick={handlePlay}
-          className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
+          className="w-12 h-12 rounded-full flex items-center justify-center transition-all music-play-btn"
           style={{
             background: 'var(--wine)',
             boxShadow: '0 0 20px rgba(106, 8, 14, 0.4)',
@@ -217,7 +217,7 @@ export function MusicPlayerCard() {
       {/* 歌曲列表入口 */}
       <button
         onClick={openList}
-        className="mt-auto w-full flex items-center justify-center gap-2 rounded-md border border-line/60 bg-black/20 px-3 py-2.5 text-bronze hover:text-candle hover:border-bronze/60 transition-colors"
+        className="music-player-list-btn mt-auto w-full flex items-center justify-center gap-2 rounded-md border border-line/60 bg-ink/20 px-3 py-2.5 text-bronze hover:text-candle hover:border-bronze/60 transition-colors"
       >
         <ListMusic size={15} strokeWidth={1.5} />
         <span className="font-mono text-[11px] tracking-widest uppercase">
@@ -274,7 +274,7 @@ function TrackListPanel({
         </div>
       ) : (
         <>
-          <ul className="max-h-[46vh] overflow-y-auto rounded-card border border-line/50 bg-black/15 divide-y divide-line/30">
+          <ul className="max-h-[46vh] overflow-y-auto rounded-card border border-line/50 bg-ink/15 divide-y divide-line/30">
             {tracks.map((t) => {
               const active = t.id === currentTrackId;
               return (

@@ -30,96 +30,103 @@
    ============================================================ */
 
 :root {
+  /* ============================================================
+     暗夜书房（night，默认）
+     色卡：#171A1B 炭黑底 / #32302B 暖炭卡 / #7D484C 暗酒红强调
+            #A8767D 玫瑰木 / #BAA6AD 淡玫瑰
+     设计：去掉所有渐变，纯实色 + 半透明玻璃叠层
+     ============================================================ */
   /* ---- 色板 rgb 三元组（tailwind 引用，alpha 语法靠它生效） ---- */
-  --ink-rgb: 27 26 31;
-  --charcoal-rgb: 42 41 46;
-  --elevated-rgb: 56 54 60;
-  --wood-rgb: 52 25 21;
-  --wine-rgb: 106 8 14;
-  --wine-light-rgb: 139 26 31;
-  --wine-deep-rgb: 74 6 8;
-  --wine-bright-rgb: 140 17 23;
-  --bronze-rgb: 148 125 117;
-  --bronze-light-rgb: 168 146 137;
-  --bronze-deep-rgb: 122 103 95;
-  --paper-rgb: 188 174 170;
-  --paper-dim-rgb: 154 142 137;
-  --candle-rgb: 232 195 158;
-  --moon-rgb: 242 235 224;
-  --headline-rgb: 242 235 224;
-  --parchment-rgb: 216 195 168;
-  --amber-rgb: 201 160 99;
-  --ash-rgb: 138 133 140;
-  --olive-rgb: 110 115 85;
-  --sapphire-rgb: 92 107 140;
-  --line-rgb: 74 63 60;
+  --ink-rgb: 23 26 27;            /* #171A1B 炭黑：压暗层 / 页面底 */
+  --charcoal-rgb: 50 48 43;       /* #32302B 暖炭灰：卡面 */
+  --elevated-rgb: 60 57 51;       /* 比卡面再亮一档：浮层 */
+  --wood-rgb: 50 48 43;           /* 副背景 = 卡面同色 */
+  --wine-rgb: 125 72 76;          /* #7D484C 暗酒红：主强调 */
+  --wine-light-rgb: 168 118 125;  /* #A8767D 玫瑰木：强调 hover */
+  --wine-deep-rgb: 91 53 56;      /* 更深酒红：强调按下 */
+  --wine-bright-rgb: 168 118 125; /* 危险 / 删除：复用玫瑰木（更柔） */
+  --bronze-rgb: 168 118 125;      /* #A8767D 玫瑰木：次要 */
+  --bronze-light-rgb: 186 166 173;/* #BAA6AD 淡玫瑰：次要 hover */
+  --bronze-deep-rgb: 125 72 76;   /* 强烈次要：暗酒红 */
+  --paper-rgb: 186 166 173;       /* #BAA6AD 淡玫瑰：主文字 */
+  --paper-dim-rgb: 168 118 125;   /* #A8767D 主文字次要 */
+  --candle-rgb: 168 118 125;      /* #A8767D 装饰光（去渐变后改实色） */
+  --moon-rgb: 186 166 173;        /* 强调底上的亮字 */
+  --headline-rgb: 186 166 173;    /* 标题：淡玫瑰 */
+  --parchment-rgb: 50 48 43;      /* 引文 / 代码底：卡面同色 */
+  --amber-rgb: 168 118 125;       /* 高亮 / 星标 / 选中：玫瑰木 */
+  --ash-rgb: 125 72 76;           /* 禁用 / 元信息：暗酒红 */
+  --olive-rgb: 168 118 125;       /* 成功：玫瑰木 */
+  --sapphire-rgb: 125 72 76;      /* 信息 / 链接：暗酒红（去蓝） */
+  --line-rgb: 125 72 76;          /* 描边 / 分隔线：暗酒红淡 */
 
   /* ---- 色板 hex（内联样式 var() 与静态 CSS 规则使用） ---- */
-  --ink: #1B1A1F;
-  --charcoal: #2A292E;      /* 上层卡：比 ink 亮一档，做层级 */
-  --wood: #341915;
-  --wine: #6A080E;
-  --wine-light: #8B1A1F;
-  --wine-deep: #4A0608;
-  --wine-bright: #8C1117;   /* 危险 / 删除 */
-  --bronze: #947D75;
-  --bronze-light: #A89289;
-  --paper: #BCAEAA;
-  --paper-dim: #9A8E89;
-  --candle: #E8C39E;
-  --moon: #F2EBE0;
-  --headline: #F2EBE0;      /* 标题 / 强调文字 */
-  --parchment: #D8C3A8;     /* 引文 / 代码底色 */
-  --amber: #C9A063;         /* 高亮 / 星标 / 选中 */
-  --ash: #8A858C;           /* 禁用 / 元信息 */
-  --olive: #6E7355;         /* 成功 */
-  --sapphire: #5C6B8C;      /* 信息 / 链接 */
-  --line: #4A3F3C;          /* 描边 / 分隔线 */
+  --ink: #171A1B;
+  --charcoal: #32302B;            /* 上层卡：暖炭灰，做层级 */
+  --wood: #32302B;
+  --wine: #7D484C;
+  --wine-light: #A8767D;
+  --wine-deep: #5B3538;
+  --wine-bright: #A8767D;         /* 危险 / 删除（柔化） */
+  --bronze: #A8767D;
+  --bronze-light: #BAA6AD;
+  --bronze-deep: #7D484C;
+  --paper: #BAA6AD;
+  --paper-dim: #A8767D;
+  --candle: #A8767D;              /* 装饰光（去渐变后改实色） */
+  --moon: #BAA6AD;
+  --headline: #BAA6AD;            /* 标题 / 强调文字 */
+  --parchment: #32302B;           /* 引文 / 代码底：卡面同色 */
+  --amber: #A8767D;               /* 高亮 / 星标 / 选中 */
+  --ash: #7D484C;                 /* 禁用 / 元信息 */
+  --olive: #A8767D;               /* 成功 */
+  --sapphire: #7D484C;            /* 信息 / 链接（去蓝） */
+  --line: #7D484C;                /* 描边 / 分隔线 */
 
   /* 文字层级 */
-  --text-moon: #F2EBE0;         /* 强调底上的亮字 */
-  --text-paper: #BCAEAA;        /* 正文 */
-  --text-bronze: #947D75;       /* 次要 */
-  --text-bronze-deep: #7A675F;  /* 强烈次要 */
-  --text-ash: #8A858C;
+  --text-moon: #BAA6AD;           /* 强调底上的亮字 */
+  --text-paper: #BAA6AD;          /* 正文 */
+  --text-bronze: #A8767D;         /* 次要 */
+  --text-bronze-deep: #7D484C;    /* 强烈次要 */
+  --text-ash: #7D484C;
 
-  /* 卡片：中性炭黑打底 */
-  --card-bg: rgba(42, 41, 46, 0.72);
-  --card-bg-elevated: rgba(56, 54, 60, 0.82);
-  --card-border: rgba(74, 63, 60, 0.55);
-  --card-glow: rgba(232, 195, 158, 0.1);
+  /* 卡片：暖炭灰实色玻璃 */
+  --card-bg: rgba(50, 48, 43, 0.85);
+  --card-bg-elevated: rgba(50, 48, 43, 0.95);
+  --card-border: rgba(125, 72, 76, 0.4);
+  --card-glow: rgba(168, 118, 125, 0.06);
 
   /* 页面与栏 */
-  --bg-base: #1B1A1F;
-  --bar-bg: rgba(27, 26, 31, 0.6);
-  /* 页内查找替换输入框背景（日间在 data-theme='day' 覆盖为白色） */
-  --search-input-bg: rgba(27, 26, 31, 0.55);
+  --bg-base: #171A1B;
+  --bar-bg: rgba(23, 26, 27, 0.6);
+  /* 页内查找替换输入框背景 */
+  --search-input-bg: rgba(50, 48, 43, 0.7);
 
   /* 阴影（tailwind boxShadow 引用整串变量） */
   --shadow-rgb: 0 0 0;
-  --shadow-card: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.04), 0 1px 12px 0 rgb(var(--shadow-rgb) / 0.4);
-  --shadow-card-elevated: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.06), 0 8px 32px 0 rgb(var(--shadow-rgb) / 0.5);
-  --shadow-wine-glow: 0 0 24px 0 rgb(var(--wine-rgb) / 0.18);
-  --shadow-candle-glow: 0 0 32px 0 rgb(var(--candle-rgb) / 0.12);
-  --shadow-inner-glow: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.06), inset 0 0 0 1px rgb(var(--bronze-rgb) / 0.05);
+  --shadow-card: inset 0 1px 0 0 rgb(var(--paper-rgb) / 0.04), 0 1px 12px 0 rgb(var(--shadow-rgb) / 0.5);
+  --shadow-card-elevated: inset 0 1px 0 0 rgb(var(--paper-rgb) / 0.06), 0 8px 32px 0 rgb(var(--shadow-rgb) / 0.6);
+  --shadow-wine-glow: 0 0 24px 0 rgb(var(--wine-rgb) / 0.22);
+  --shadow-candle-glow: 0 0 32px 0 rgb(var(--candle-rgb) / 0.14);
+  --shadow-inner-glow: inset 0 1px 0 0 rgb(var(--paper-rgb) / 0.05), inset 0 0 0 1px rgb(var(--bronze-rgb) / 0.05);
 
   /* 语义组件色 */
-  --code-bg: rgba(20, 18, 22, 0.7);
-  --quote-bg: linear-gradient(90deg, rgb(var(--wine-rgb) / 0.06), transparent 50%);
-  --mark-bg: rgb(var(--amber-rgb) / 0.45);
+  --code-bg: rgba(50, 48, 43, 0.7);
+  --quote-bg: rgb(var(--wine-rgb) / 0.08);   /* 去渐变：实色微透 */
+  --mark-bg: rgb(var(--amber-rgb) / 0.3);
   --mark-fg: var(--moon);
   --mark-active-bg: var(--amber);
   --mark-active-fg: var(--ink);
-  --selection-bg: rgba(106, 8, 14, 0.4);
+  --selection-bg: rgba(125, 72, 76, 0.4);
   --selection-fg: var(--moon);
   --focus-ring: rgb(var(--candle-rgb) / 0.4);
   --caret: var(--candle);
 
   /* 全屏编辑器语义色（夜间默认值；日间在 data-theme='day' 覆盖） */
-  --editor-bg: var(--ink);                 /* 编辑区纸背景 */
-  --editor-bar-bg: rgba(20, 18, 22, 0.6);  /* 顶栏/工具栏/底栏 背景 */
-  --editor-input-bg: rgba(42, 41, 46, 0.8);/* 输入框（datetime）背景 */
-  --editor-float-bg: rgba(20, 18, 22, 0.9);/* 浮动格式条背景 */
+  --editor-bg: var(--ink);                 /* 编辑区纸背景：与页面同色，沉浸 */
+  --editor-bar-bg: rgba(23, 26, 27, 0.7);  /* 顶栏/工具栏/底栏 背景 */
+  --editor-input-bg: rgba(50, 48, 43, 0.8);/* 输入框（datetime）背景 */
+  --editor-float-bg: rgba(23, 26, 27, 0.92);/* 浮动格式条背景 */
   --editor-scrollbar-thumb: rgb(var(--bronze-rgb) / 0.35);
   --editor-scrollbar-track: transparent;
 
@@ -140,111 +147,114 @@
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* 分区滑块轨道（SegmentedControl 容器底） */
-  --seg-track: rgba(20, 18, 22, 0.5);
+  --seg-track: rgba(23, 26, 27, 0.5);
 }
 
 /* ============================================================
-   白昼书房（日间主题）——依据 palette-day 色卡：
-   ink 底→linen 底，wood 卡底→cream 卡底，paper 文字→ink 文字，
-   bronze 次文→taupe 次文，wine 两版通用，金色高亮统一 amber #B8863F。
+   白昼书房（日间主题）——依据用户提供色卡：
+   #DDD3C9 米色纸面 / #ECC4C3 柔粉卡面 / #B97D7B 玫瑰豆沙强调
+   #928E5E 橄榄次文 / #575527 深橄榄主文
+   全部实色，去渐变
    ============================================================ */
 :root[data-theme='day'] {
   /* rgb 三元组 */
-  --ink-rgb: 46 38 34;            /* ink 暖墨褐：压暗层 */
-  --charcoal-rgb: 255 252 246;    /* cream 奶油白：卡片底 */
-  --elevated-rgb: 255 255 255;    /* 纯白：浮层 / 弹窗 */
-  --wood-rgb: 235 225 208;        /* sand 沙米：副背景 */
-  --wine-rgb: 106 8 14;           /* wine 沿用 */
-  --wine-light-rgb: 139 26 31;
-  --wine-deep-rgb: 74 6 8;
-  --wine-bright-rgb: 140 17 23;
-  --bronze-rgb: 122 106 94;       /* taupe 暖灰褐：次要文字 */
-  --bronze-light-rgb: 154 138 124;
-  --bronze-deep-rgb: 102 87 76;
-  --paper-rgb: 46 38 34;          /* ink 暖墨褐：主文字 */
-  --paper-dim-rgb: 109 95 83;
-  --candle-rgb: 184 134 63;       /* amber 琥珀金：高亮 / 装饰（浅底可读） */
-  --moon-rgb: 251 246 236;        /* 奶油白：强调底上的亮字 */
-  --headline-rgb: 46 38 34;       /* 标题：墨褐 */
-  --parchment-rgb: 201 183 154;   /* 旧羊皮：引文 / 代码底色 */
-  --amber-rgb: 184 134 63;        /* amber 琥珀金 */
-  --ash-rgb: 183 173 160;         /* mist 雾灰：禁用 */
-  --olive-rgb: 110 115 85;
-  --sapphire-rgb: 92 107 140;
-  --line-rgb: 222 211 194;        /* 暖石灰：分隔线 / 描边 */
+  --ink-rgb: 87 85 39;             /* #575527 深橄榄：压暗层 / 主文字 */
+  --charcoal-rgb: 236 196 195;     /* #ECC4C3 柔粉：卡面 */
+  --elevated-rgb: 245 230 222;     /* 比卡面再亮一档：浮层 */
+  --wood-rgb: 221 211 201;         /* #DDD3C9 米色：副背景 / 页面底 */
+  --wine-rgb: 185 125 123;         /* #B97D7B 玫瑰豆沙：主强调 */
+  --wine-light-rgb: 144 81 78;     /* 深玫瑰：强调 hover / 日历周末（浅底可读 4.7:1） */
+  --wine-deep-rgb: 102 98 38;      /* 深橄榄：按下（去红） */
+  --wine-bright-rgb: 102 98 38;    /* 危险 / 删除：用深橄榄替代酒红，浅底可读 */
+  --bronze-rgb: 102 98 38;         /* 深橄榄：次要文字（浅底 5.9:1，修对比度） */
+  --bronze-light-rgb: 143 91 87;   /* 深玫瑰：次要 hover（浅底 5.2:1） */
+  --bronze-deep-rgb: 87 85 39;     /* 深橄榄：强烈次要 */
+  --paper-rgb: 87 85 39;           /* #575527 深橄榄：主文字 */
+  --paper-dim-rgb: 102 98 38;      /* 深橄榄：主文字次要 */
+  --candle-rgb: 144 81 78;         /* 深玫瑰：强调 / 链接文字（浅底 5.6:1，修 prose 可读性） */
+  --moon-rgb: 221 211 201;         /* #DDD3C9 米色：强调底上的亮字 */
+  --headline-rgb: 87 85 39;        /* 标题：深橄榄 */
+  --parchment-rgb: 236 196 195;    /* 引文 / 代码底：柔粉 */
+  --amber-rgb: 102 98 38;          /* 深橄榄：高亮 / 星标 / 选中（浅底可读） */
+  --ash-rgb: 143 91 87;            /* 深玫瑰：禁用 / 元信息（浅底 5.2:1） */
+  --olive-rgb: 102 98 38;          /* 成功：深橄榄 */
+  --sapphire-rgb: 87 85 39;        /* 信息 / 链接：深橄榄（去蓝） */
+  --line-rgb: 143 91 87;           /* 描边 / 分隔线：深玫瑰 */
 
   /* hex */
-  --ink: #2E2622;
-  --charcoal: #FFFCF6;
-  --wood: #EBE1D0;
-  --wine: #6A080E;
-  --wine-light: #8B1A1F;
-  --wine-deep: #4A0608;
-  --wine-bright: #8C1117;
-  --bronze: #7A6A5E;
-  --bronze-light: #9A8A7C;
-  --bronze-deep: #66574C;
-  --paper: #2E2622;
-  --paper-dim: #6D5F53;
-  --candle: #B8863F;              /* 日间统一琥珀金 */
-  --moon: #FBF6EC;
-  --headline: #2E2622;
-  --parchment: #C9B79A;
-  --amber: #B8863F;
-  --ash: #B7ADA0;
-  --olive: #6E7355;
-  --sapphire: #5C6B8C;
-  --line: #DED3C2;
+  --ink: #575527;
+  --charcoal: #ECC4C3;             /* 上层卡：柔粉（与米色区分） */
+  --wood: #DDD3C9;                 /* 副背景：米色 */
+  --wine: #B97D7B;                 /* 强调：玫瑰豆沙（柔和的酒红替代） */
+  --wine-light: #90514E;
+  --wine-deep: #666226;            /* 强调按下：深橄榄（浅底可读） */
+  --wine-bright: #666226;          /* 危险 / 删除：深橄榄（浅底可读的警示） */
+  --bronze: #666226;
+  --bronze-light: #8F5B57;
+  --bronze-deep: #575527;
+  --paper: #575527;                /* 主文字：深橄榄（柔和且高对比） */
+  --paper-dim: #666226;
+  --candle: #90514E;               /* 强调 / 链接：深玫瑰（浅底可读，替代柔粉装饰光） */
+  --moon: #DDD3C9;                 /* 强调底上的亮字：米色 */
+  --headline: #575527;             /* 标题：深橄榄 */
+  --parchment: #ECC4C3;            /* 引文 / 代码底：柔粉 */
+  --amber: #666226;                /* 高亮：深橄榄 */
+  --ash: #8F5B57;                  /* 禁用 / 元信息：深玫瑰 */
+  --olive: #666226;                /* 成功：深橄榄 */
+  --sapphire: #575527;             /* 信息 / 链接：深橄榄（去蓝） */
+  --line: #8F5B57;                 /* 描边 / 分隔线：深玫瑰 */
 
   /* 文字层级 */
-  --text-moon: #FBF6EC;
-  --text-paper: #2E2622;
-  --text-bronze: #7A6A5E;
-  --text-bronze-deep: #66574C;
-  --text-ash: #B7ADA0;
+  --text-moon: #DDD3C9;            /* 强调底上的亮字：米色 */
+  --text-paper: #575527;           /* 正文：深橄榄 */
+  --text-bronze: #666226;          /* 次要：深橄榄（浅底 5.9:1） */
+  --text-bronze-deep: #575527;     /* 强烈次要：深橄榄 */
+  --text-ash: #8F5B57;
 
-  /* 卡片：奶油玻璃 */
-  --card-bg: rgba(255, 252, 246, 0.78);
-  --card-bg-elevated: rgba(255, 255, 255, 0.92);
-  --card-border: rgba(222, 211, 194, 0.95);
-  --card-glow: rgba(184, 134, 63, 0.16);
+  /* 卡片：米色实色玻璃 + 玫瑰边框
+     注意：与 #F5F9E5 页面底拉开层次——卡面略偏深米 (#EBE1D0 → 0.9 透明)
+     配合较深的玫瑰边框，在浅底上依然能"浮起来" */
+  --card-bg: rgba(235, 225, 208, 0.92);
+  --card-bg-elevated: rgba(245, 230, 222, 0.96);
+  --card-border: rgba(185, 125, 123, 0.5);
+  --card-glow: rgba(185, 125, 123, 0.1);
 
   /* 页面与栏 */
-  --bg-base: #F7F1E6;
-  --bar-bg: rgba(255, 252, 246, 0.72);
-  /* 页内查找替换输入框背景：日间为白色 */
-  --search-input-bg: rgba(255, 255, 255, 0.92);
+  --bg-base: #F5F9E5;
+  --bar-bg: rgba(245, 249, 229, 0.82);
+  /* 页内查找替换输入框背景：日间为浅米绿 */
+  --search-input-bg: rgba(255, 255, 255, 0.85);
 
-  /* 阴影：柔和暖褐 */
-  --shadow-rgb: 90 70 50;
-  --shadow-card: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.12), 0 1px 12px 0 rgb(var(--shadow-rgb) / 0.16);
-  --shadow-card-elevated: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.16), 0 8px 32px 0 rgb(var(--shadow-rgb) / 0.2);
-  --shadow-wine-glow: 0 0 24px 0 rgb(var(--wine-rgb) / 0.16);
-  --shadow-candle-glow: 0 0 32px 0 rgb(var(--candle-rgb) / 0.18);
-  --shadow-inner-glow: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.14), inset 0 0 0 1px rgb(var(--bronze-rgb) / 0.08);
+  /* 阴影：深橄榄阴影色（柔和暖褐，呼应色板） */
+  --shadow-rgb: 87 85 39;
+  --shadow-card: inset 0 1px 0 0 rgb(var(--paper-rgb) / 0.05), 0 1px 12px 0 rgb(var(--shadow-rgb) / 0.14);
+  --shadow-card-elevated: inset 0 1px 0 0 rgb(var(--paper-rgb) / 0.08), 0 8px 32px 0 rgb(var(--shadow-rgb) / 0.18);
+  --shadow-wine-glow: 0 0 24px 0 rgb(var(--wine-rgb) / 0.2);
+  --shadow-candle-glow: 0 0 32px 0 rgb(var(--candle-rgb) / 0.2);
+  --shadow-inner-glow: inset 0 1px 0 0 rgb(var(--paper-rgb) / 0.06), inset 0 0 0 1px rgb(var(--bronze-rgb) / 0.08);
 
   /* 语义组件色 */
-  --code-bg: rgba(201, 183, 154, 0.3);
-  --quote-bg: linear-gradient(90deg, rgb(var(--wine-rgb) / 0.08), transparent 60%);
-  --mark-bg: rgb(var(--amber-rgb) / 0.32);
-  --mark-fg: #2E2622;
+  --code-bg: rgba(146, 142, 94, 0.18);
+  --quote-bg: rgb(var(--wine-rgb) / 0.1);   /* 去渐变：实色微透 */
+  --mark-bg: rgb(var(--amber-rgb) / 0.3);
+  --mark-fg: #575527;
   --mark-active-bg: var(--amber);
-  --mark-active-fg: #2E1E08;
-  --selection-bg: rgba(106, 8, 14, 0.16);
-  --selection-fg: #2E2622;
+  --mark-active-fg: #DDD3C9;
+  --selection-bg: rgba(185, 125, 123, 0.3);
+  --selection-fg: #575527;
   --focus-ring: rgb(var(--amber-rgb) / 0.5);
-  --caret: #B8863F;
+  --caret: #B97D7B;
 
-  /* 全屏编辑器：日间切换为「纸面」浅色（墨褐文字） */
-  --editor-bg: var(--wood);                /* 沙米纸面，减弱与页面背景的跳变 */
-  --editor-bar-bg: rgba(255, 252, 246, 0.6);
-  --editor-input-bg: rgba(46, 38, 34, 0.06);
-  --editor-float-bg: rgba(255, 252, 246, 0.94);
+  /* 全屏编辑器：日间切换为「米色纸面」（深橄榄文字） */
+  --editor-bg: #DDD3C9;
+  --editor-bar-bg: rgba(221, 211, 201, 0.7);
+  --editor-input-bg: rgba(185, 125, 123, 0.18);
+  --editor-float-bg: rgba(245, 230, 222, 0.94);
   --editor-scrollbar-thumb: rgb(var(--bronze-rgb) / 0.4);
   --editor-scrollbar-track: transparent;
 
-  /* 分区滑块轨道：奶油玻璃（浅底可读） */
-  --seg-track: rgba(255, 252, 246, 0.88);
+  /* 分区滑块轨道：米色玻璃（浅底可读） */
+  --seg-track: rgba(221, 211, 201, 0.85);
 }
 
 * {
@@ -353,25 +363,15 @@ textarea, input, [contenteditable] {
    滚动性能由 body 渐变层移除、背景层单层渲染等既有优化承担。
    ============================================================ */
 
-/* 玻璃卡片-高光边缘 */
+/* 玻璃卡片-高光边缘（去渐变：实色顶部亮线 + 实色边框，阴影承担质感） */
 .glass-card::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgb(var(--candle-rgb) / 0.14) 0%,
-    transparent 30%,
-    transparent 70%,
-    rgb(var(--wine-rgb) / 0.1) 100%
-  );
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
   pointer-events: none;
-  opacity: 0.5;
+  /* 顶部一条实色亮线：日间=柔粉 / 夜间=玫瑰木。强度极低，仅作"被打磨过的纸边"提示 */
+  box-shadow: inset 0 1px 0 0 rgb(var(--candle-rgb) / 0.08);
 }
 
 .glass-card-elevated {
@@ -437,6 +437,111 @@ textarea, input, [contenteditable] {
   background: var(--wine-deep);
 }
 
+/* ============================================================
+   白昼书房 · 按钮对比度修复（2026-09-14）
+   浅米绿背景（#F5F9E5）下，原 .btn-primary 用 --moon 米色文字
+   在 #B97D7B 玫瑰豆沙底上对比度仅 ~2.3:1，看不清。
+   日间改用"深橄榄底 + 米色亮字"：base（#575527 底）5.3:1、
+   hover（#666226 底）4.3:1、active（更深）——三个状态都清晰可读。
+   （原本的深度盖深字方案 hover 态仅 1.2:1，已废弃）
+   ============================================================ */
+:root[data-theme='day'] .btn-primary {
+  /* 文字：米色亮字，深橄榄底上对比度高 */
+  color: var(--moon);
+  background: var(--ink);  /* #575527 深橄榄 */
+  border-color: rgb(var(--moon-rgb) / 0.18);
+}
+:root[data-theme='day'] .btn-primary:hover {
+  /* hover：换 #666226 深橄榄，仍保持米色亮字 */
+  background: var(--wine-deep);
+  color: var(--moon);
+  box-shadow: 0 0 20px 0 rgb(var(--wine-rgb) / 0.35);
+}
+:root[data-theme='day'] .btn-primary:active {
+  background: #4A4817;  /* 更深的橄榄，按下"陷下去" */
+  color: var(--moon);
+}
+
+/* 日间 .btn-ghost hover 加深（默认 hover 时边框/底色太淡） */
+:root[data-theme='day'] .btn-ghost {
+  border-color: rgb(var(--paper-rgb) / 0.22);
+}
+:root[data-theme='day'] .btn-ghost:hover {
+  border-color: rgb(var(--paper-rgb) / 0.45);
+}
+
+/* 设置页主题卡 hint：夜间用淡玫瑰亮字（≈5.5:1），日间用深橄榄（高对比） */
+.settings-hint {
+  color: var(--text-bronze-light, var(--bronze-light));
+}
+:root[data-theme='day'] .settings-hint {
+  color: var(--text-bronze-deep);  /* #575527 深橄榄 */
+}
+
+/* 音乐卡歌曲列表按钮：昼夜双主题——日间深橄榄（浅底可读），夜间保留玫瑰木原色 */
+:root[data-theme='day'] .music-player-list-btn {
+  color: var(--text-bronze-deep) !important;  /* #575527 */
+}
+:root[data-theme='day'] .btn-ghost:hover {
+  border-color: rgb(var(--paper-rgb) / 0.45);
+  background: rgb(var(--paper-rgb) / 0.08);
+  color: var(--paper);
+}
+
+/* 日间 .btn-text：用主文字色，hover 用强调玫瑰豆沙 */
+:root[data-theme='day'] .btn-text {
+  color: rgb(var(--paper-rgb) / 0.75);
+}
+:root[data-theme='day'] .btn-text:hover { color: var(--wine); }
+:root[data-theme='day'] .btn-text.wine { color: var(--wine); }
+:root[data-theme='day'] .btn-text.wine:hover { color: var(--wine-deep); }
+
+/* ============================================================
+   主题切换按钮 · 激活态强化（两个主题都受益）
+   设置页的 跟随系统 / 日间 / 夜间 + 猩红书房 切换按钮。
+   原版用 border-candle（柔粉）在日间浅底上几乎看不到激活，
+   这里加 ring + bg 让"当前选中"在两个主题都一眼可辨。
+   ============================================================ */
+/* 默认（未激活）状态：仍要可见的描边。两个主题都加深到 25-30% */
+.theme-toggle {
+  border-color: rgb(var(--paper-rgb) / 0.25) !important;
+}
+.theme-toggle[aria-pressed='true'] {
+  /* 暗夜：暗酒红边 + 玫瑰木 ring + 暗酒红淡底 */
+  border-color: var(--wine) !important;
+  box-shadow:
+    0 0 0 2px rgb(var(--candle-rgb) / 0.4),
+    inset 0 0 0 1px rgb(var(--candle-rgb) / 0.2);
+  background-color: rgb(var(--candle-rgb) / 0.08);
+}
+:root[data-theme='day'] .theme-toggle[aria-pressed='true'] {
+  /* 日间：深橄榄边 + 橄榄 ring + 橄榄淡底（对比度强，不靠柔粉） */
+  border-color: var(--ink) !important;
+  box-shadow:
+    0 0 0 2px rgb(var(--amber-rgb) / 0.5),
+    inset 0 0 0 1px rgb(var(--paper-rgb) / 0.15);
+  background-color: rgb(var(--amber-rgb) / 0.12);
+}
+/* hover 时让默认（未激活）按钮也有更明显的描边反馈 */
+.theme-toggle:hover {
+  border-color: rgb(var(--paper-rgb) / 0.5) !important;
+}
+:root[data-theme='day'] .theme-toggle:hover {
+  border-color: rgb(var(--paper-rgb) / 0.6) !important;
+}
+
+/* 日间：分段滑块指示器用深橄榄实底（原 --wine 豆沙在浅底上对比弱，米色字不清） */
+:root[data-theme='day'] .seg-indicator {
+  background: var(--wine-deep) !important;  /* #666226 深橄榄 */
+  box-shadow: 0 0 16px rgb(var(--wine-deep-rgb) / 0.35) !important;
+}
+
+/* 日间：日历选中日实色深橄榄底 + 米色字（原 bg-wine/30 太淡，选中不可辨） */
+:root[data-theme='day'] .cal-selected {
+  background: var(--ink) !important;  /* #575527 更深，米字对比 ≥4.5 */
+  color: var(--moon) !important;
+}
+
 /* 文字按钮 */
 .btn-text {
   display: inline-flex;
@@ -493,17 +598,8 @@ textarea, input, [contenteditable] {
   }
 }
 
-/* 背景烛光呼吸（装饰层）：触屏下由滚动性能块停用动画 */
-.vd-ambient-breathe {
-  animation: breathe 6s ease-in-out infinite;
-}
-
-/* 必须在 .vd-ambient-breathe 全局规则之后声明，同特异性后者胜 */
-@media (hover: none) {
-  .vd-ambient-breathe {
-    animation: none;
-  }
-}
+/* 背景烛光呼吸（装饰层）：已随实色装饰块移除（2026-09-14 反馈：浅色遮罩）
+   不再保留 .vd-ambient-breathe 规则。 */
 
 /* 焦点环（键盘可访问性） */
 *:focus-visible {
@@ -596,7 +692,8 @@ textarea, input, [contenteditable] {
 .prose-vidaos hr {
   border: none;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--card-border), transparent);
+  background: var(--line);   /* 去渐变：实色分隔线 */
+  opacity: 0.55;
   margin: 2em 0;
 }
 .prose-vidaos img {
@@ -775,15 +872,12 @@ nav {
 /* 白昼书房：全局背景层适配（见 src/components/layout/Background.tsx）
    - 预设深色渐变减淡，露出晨光纸面
    - 自定义图片上的暗色蒙版减淡
-   - 顶部"木色光"换成顶部晨光 */
+   （装饰层顶部柔色横带已随实色装饰块一并移除，无此规则） */
 :root[data-theme='day'] .bg-preset {
   opacity: 0.55;
 }
 :root[data-theme='day'] .bg-mask {
   background: rgba(46, 38, 34, 0.28) !important;
-}
-:root[data-theme='day'] .glow-top {
-  background: radial-gradient(ellipse at top, rgba(232, 195, 158, 0.4) 0%, transparent 60%) !important;
 }
 
 /* 白昼书房：分区滑块未激活文字加深（bronze → bronze-deep），浅底轨道上才清晰 */

@@ -23,7 +23,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#1B1A1F" />
+    <meta name="theme-color" content="#171A1B" />
     <meta name="color-scheme" content="dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -49,22 +49,22 @@
             var d = document.createElement('div');
             d.id = 'vidaos-fallback';
             d.style.cssText =
-              'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#1B1A1F;color:#EDE3D2;font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;padding:24px;box-sizing:border-box';
+              'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#171A1B;color:#BAA6AD;font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;padding:24px;box-sizing:border-box';
             var li1 = quark
               ? '<li>打开夸克「设置 → 通用」，关闭「云加速 / 智能转码」，再刷新</li><li>或点击地址栏的「云」图标，选择「解除加速」</li><li>或在夸克「设置 → 浏览器UA」中切到电脑模式后重试</li>'
               : '<li>请检查网络后刷新重试</li><li>或复制链接用系统浏览器（Safari / Chrome / 百度）打开</li>';
             d.innerHTML =
               '<div style="max-width:420px">' +
-              '<p style="font-size:15px;font-weight:600;color:#C9A227;margin:0 0 10px">页面没能正常加载</p>' +
-              '<p style="font-size:13px;margin:0 0 14px;color:#B8ACA0;line-height:1.7">' +
+              '<p style="font-size:15px;font-weight:600;color:#A8767D;margin:0 0 10px">页面没能正常加载</p>' +
+              '<p style="font-size:13px;margin:0 0 14px;color:#A8767D;line-height:1.7">' +
               (quark
                 ? '你正在使用夸克浏览器。夸克的「云加速/智能转码」或旧版内核可能导致本应用无法渲染。'
                 : '页面脚本未能正常执行。') +
               '</p>' +
-              '<ul style="font-size:12.5px;color:#8F8378;margin:0 0 16px;padding-left:18px;line-height:1.9">' +
+              '<ul style="font-size:12.5px;color:#7D484C;margin:0 0 16px;padding-left:18px;line-height:1.9">' +
               li1 +
               '<li>也可以稍等片刻后点下方按钮重试</li></ul>' +
-              '<button onclick="location.reload()" style="background:#6A080E;color:#F5ECD9;border:none;border-radius:16px;padding:8px 22px;font-size:13px">重新加载</button>' +
+              '<button onclick="location.reload()" style="background:#7D484C;color:#BAA6AD;border:none;border-radius:16px;padding:8px 22px;font-size:13px">重新加载</button>' +
               '</div>';
             document.body.appendChild(d);
           } catch (e) {

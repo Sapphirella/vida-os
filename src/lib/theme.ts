@@ -9,8 +9,8 @@ export type ResolvedTheme = 'day' | 'night';
 const STORAGE_KEY = 'vidaos-theme';
 
 const META_THEME_COLOR: Record<ResolvedTheme, string> = {
-  day: '#FFFCF6',
-  night: '#1B1A1F',
+  day: '#DDD3C9',
+  night: '#171A1B',
 };
 
 const DOC_TITLES: Record<ResolvedTheme, string> = {

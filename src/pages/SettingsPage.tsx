@@ -10,9 +10,57 @@ import { setThemeMode, readThemeMode, resolveTheme, type ThemeMode } from '@/lib
 
 const THEME_OPTIONS: { key: ThemeMode; label: string; hint: string }[] = [
   { key: 'system', label: '跟随系统', hint: '随系统颜色自动切换' },
-  { key: 'day', label: '日间', hint: '白昼书房 · 温润纸面' },
-  { key: 'night', label: '夜间', hint: '暗夜书房 · 深夜紫黑' },
+  { key: 'day', label: '日间', hint: '白昼书房 · 晨光米面' },
+  { key: 'night', label: '夜间', hint: '暗夜书房 · 暖炭墨色' },
 ];
+
+// 主题皮肤预览色：用真实主题色（页面底 + 卡面），色块区纯色展示，
+// 与下方文字区分离——文字永远落在当前主题实色卡面上，不叠色块
+const PREVIEW_COLORS: Record<'day' | 'night', { bg: string; card: string }> = {
+  day:  { bg: '#F5F9E5', card: '#EBE1D0' },   // 真实页面底 / 真实卡面
+  night: { bg: '#171A1B', card: '#32302B' },
+};
+
+/** 主题预览卡：上部色块区（页面底 | 卡面）+ 下部文字区（当前主题实色底，永不叠色块） */
+function ThemePreviewCard({
+  label,
+  hint,
+  active,
+  onClick,
+  swatches,
+}: {
+  label: string;
+  hint: string;
+  active: boolean;
+  onClick: () => void;
+  /** 色块区内容（任意 JSX，如 双色 / 四色 / 渐变） */
+  swatches: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`theme-toggle text-left rounded-card overflow-hidden border-2 transition-all ${
+        active ? 'scale-[0.97]' : 'border-bronze/15'
+      }`}
+    >
+      {/* 色块预览区：固定在顶部，纯色展示主题层次 */}
+      <div className="h-12 flex overflow-hidden">{swatches}</div>
+      {/* 文字区：当前主题实色卡面底 + 主题文字色，保证任何主题下都清晰可读 */}
+      <div className="px-2.5 py-1.5 border-t border-bronze/10" style={{ background: 'var(--card-bg)' }}>
+        <div
+          className="font-mono text-[10px] tracking-wider uppercase font-semibold leading-tight"
+          style={{ color: 'var(--paper)' }}
+        >
+          {label}
+        </div>
+        <div className="settings-hint text-[9px] leading-tight mt-0.5">
+          {hint}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 export function SettingsPage() {
   const profile = useAppStore((s) => s.profile);
@@ -32,6 +80,10 @@ export function SettingsPage() {
   const handleTheme = (mode: ThemeMode) => {
     setThemeMode(mode);
     setThemeModeState(mode);
+    // 主动退出「猩红书房」：日间 / 夜间 / 跟随系统 走新实色方案，不再叠加深紫
+    if (profile.backgroundPreset === 'deep') {
+      updateProfile({ backgroundPreset: 'none' });
+    }
     const label = THEME_OPTIONS.find((o) => o.key === mode)?.label ?? '';
     showToast(`已切换：${label}`, 'success');
   };
@@ -152,9 +204,16 @@ export function SettingsPage() {
         {/* 外观 */}
         <Card className="p-5 sm:p-6">
           <h3 className="font-serif text-headline text-lg mb-1">外观</h3>
-          <p className="font-sans text-bronze text-xs mb-3">
-            主题皮肤。当前：
-            <span className="text-amber">
+          <p className="font-sans text-bronze-deep text-xs mb-3 flex items-center flex-wrap gap-1.5">
+            <span>主题皮肤。当前：</span>
+            <span
+              className="font-serif font-medium px-2 py-0.5 rounded-pill"
+              style={{
+                color: 'var(--paper)',
+                background: 'rgb(var(--amber-rgb) / 0.18)',
+                border: '1px solid rgb(var(--amber-rgb) / 0.4)',
+              }}
+            >
               {isScarletStudy
                 ? '猩红书房'
                 : resolveTheme(themeMode) === 'day'
@@ -166,61 +225,63 @@ export function SettingsPage() {
             {THEME_OPTIONS.map((opt) => {
               const active = themeMode === opt.key;
               return (
-                <button
+                <ThemePreviewCard
                   key={opt.key}
+                  label={opt.label}
+                  hint={opt.hint}
+                  active={active}
                   onClick={() => handleTheme(opt.key)}
-                  aria-pressed={active}
-                  className={`relative h-20 rounded-card overflow-hidden border-2 transition-all ${
-                    active ? 'border-candle scale-[0.97]' : 'border-bronze/15 hover:border-bronze/30'
-                  }`}
-                >
-                  {/* 皮肤预览条 */}
-                  <span
-                    className="absolute inset-x-0 top-0 h-10"
-                    style={{
-                      background:
-                        opt.key === 'day'
-                          ? 'linear-gradient(180deg, #FFFCF6, #F4ECDE)'
-                          : opt.key === 'night'
-                            ? 'linear-gradient(180deg, #1B1A1F, #241920)'
-                            : 'linear-gradient(90deg, #1B1A1F 0%, #241920 50%, #FFFCF6 50%, #F4ECDE 100%)',
-                    }}
-                  />
-                  <span className="absolute inset-x-0 top-10 px-2 pt-1.5 pb-1 text-[10px] font-mono tracking-wider uppercase">
-                    {opt.label}
-                  </span>
-                  <span className="absolute inset-x-0 bottom-0 px-2 pb-1 text-[9px] leading-tight text-bronze-deep/80">
-                    {opt.hint}
-                  </span>
-                </button>
+                  swatches={
+                    opt.key === 'system' ? (
+                      // 跟随系统：左半暗夜书房（bg | card）、右半白昼书房（bg | card）
+                      <>
+                        <span className="flex-1" style={{ background: PREVIEW_COLORS.night.bg }} />
+                        <span
+                          className="flex-1"
+                          style={{ background: PREVIEW_COLORS.night.card, borderLeft: '1px solid rgba(255,255,255,0.08)' }}
+                        />
+                        <span
+                          className="flex-1"
+                          style={{ background: PREVIEW_COLORS.day.bg, borderLeft: '1px solid rgba(87,85,39,0.12)' }}
+                        />
+                        <span
+                          className="flex-1"
+                          style={{ background: PREVIEW_COLORS.day.card, borderLeft: '1px solid rgba(87,85,39,0.12)' }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1" style={{ background: PREVIEW_COLORS[opt.key].bg }} />
+                        <span
+                          className="flex-1"
+                          style={{
+                            background: PREVIEW_COLORS[opt.key].card,
+                            borderLeft:
+                              opt.key === 'day'
+                                ? '1px solid rgba(87,85,39,0.12)'
+                                : '1px solid rgba(255,255,255,0.08)',
+                          }}
+                        />
+                      </>
+                    )
+                  }
+                />
               );
             })}
           </div>
           {/* 猩红书房：夜间主题 + 深紫背景的珍藏配方 */}
-          <button
+          <ThemePreviewCard
+            label="猩红书房 · scarlet study"
+            hint="夜间主题 × 深紫背景 · 珍藏配方"
+            active={isScarletStudy}
             onClick={applyScarletStudy}
-            aria-pressed={isScarletStudy}
-            className={`relative w-full h-20 rounded-card overflow-hidden border-2 transition-all mt-2 ${
-              isScarletStudy ? 'border-candle scale-[0.99]' : 'border-bronze/15 hover:border-bronze/30'
-            }`}
-          >
-            <span
-              className="absolute inset-x-0 top-0 h-10"
-              style={{ background: 'linear-gradient(135deg, #0F0A14 0%, #341915 70%, #6A080E 100%)' }}
-            />
-            <span className="absolute inset-x-0 top-10 px-3 pt-1.5 pb-1 text-[10px] font-mono tracking-widest uppercase text-bronze-deep">
-              猩红书房 · scarlet study
-            </span>
-            <span className="absolute inset-x-0 bottom-0 px-3 pb-1 text-[9px] leading-tight text-bronze-deep/80">
-              夜间主题 × 深紫背景 · 珍藏配方
-            </span>
-            <span
-              className="absolute top-2 right-3 font-serif text-sm"
-              style={{ color: '#F2EBE0' }}
-            >
-              猩红书房
-            </span>
-          </button>
+            swatches={
+              <span
+                className="flex-1"
+                style={{ background: 'linear-gradient(135deg, #0F0A14 0%, #341915 70%, #6A080E 100%)' }}
+              />
+            }
+          />
         </Card>
 
         {/* 关于 */}

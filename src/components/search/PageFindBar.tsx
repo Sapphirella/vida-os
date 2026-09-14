@@ -34,7 +34,10 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
       style={{ top: 'calc(56px + env(safe-area-inset-top) + 8px)' }}
       data-testid="page-find-bar"
     >
-      <div className="mx-auto max-w-2xl rounded-card border border-bronze/15 bg-charcoal/95 px-3 py-2.5 shadow-card-elevated backdrop-blur-glass">
+      <div
+        className="mx-auto max-w-2xl rounded-card border border-bronze/15 px-3 py-2.5 shadow-card-elevated backdrop-blur-glass"
+        style={{ background: 'var(--card-bg-elevated)' }}
+      >
         {/* 查找行 */}
         <div className="flex items-center gap-2">
           <input
