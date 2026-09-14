@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react';
-import { User, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { User, Image as ImageIcon } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MediaImage } from '@/components/common/MediaImage';
 import { putFile, deleteFile } from '@/lib/db';
 import { uid, compressImage } from '@/lib/utils';
-import { PRESET_BACKGROUNDS, DEFAULT_BACKGROUND_PRESET, getBackgroundPreset } from '@/lib/backgrounds';
 import { setThemeMode, readThemeMode, resolveTheme, type ThemeMode } from '@/lib/theme';
 
 const THEME_OPTIONS: { key: ThemeMode; label: string; hint: string }[] = [
@@ -20,7 +19,6 @@ export function SettingsPage() {
   const updateProfile = useAppStore((s) => s.updateProfile);
   const showToast = useUIStore((s) => s.showToast);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const activePreset = getBackgroundPreset(profile.backgroundPreset);
   const [name, setName] = useState(profile.name);
   const [signature, setSignature] = useState(profile.signature);
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => readThemeMode());
@@ -148,84 +146,6 @@ export function SettingsPage() {
                 保存
               </button>
             </div>
-          </div>
-        </Card>
-
-        {/* 背景 */}
-        <Card className="p-5 sm:p-6">
-          <h3 className="font-serif text-headline text-lg mb-1">背景</h3>
-          <p className="font-sans text-bronze text-xs mb-3">
-            页面底层的背景。当前：
-            <span className="text-amber">
-              {profile.backgroundFileId ? '自定义图片' : `「${activePreset.name}」`}
-            </span>
-          </p>
-          <p className="font-sans text-bronze/60 text-[10px] -mt-2 mb-3">
-            仅暗夜模式下生效
-          </p>
-          {/* 大预览：让「换背景」这件事一眼可见（卡片会遮住大部分真实背景） */}
-          <div
-            className="h-24 rounded-card overflow-hidden border border-line/60 mb-3 relative"
-            style={{
-              background: profile.backgroundFileId
-                ? 'rgba(42,41,46,0.7)'
-                : activePreset.gradient,
-            }}
-          >
-            <div
-              className="absolute inset-x-0 bottom-0 h-1/2"
-              style={{
-                background:
-                  'radial-gradient(ellipse 80% 90% at 50% 120%, rgba(232,195,158,0.28), transparent 70%)',
-              }}
-            />
-            <span className="absolute top-2 left-3 font-mono text-[10px] tracking-[0.2em] uppercase text-moon/85">
-              preview
-            </span>
-            <span
-              className="absolute bottom-2 left-3 font-serif text-sm"
-              style={{ color: profile.backgroundFileId ? '#F2EBE0' : '#3A2A1A' }}
-            >
-              {profile.backgroundFileId
-                ? '自定义图片（已设置）'
-                : `预览：${activePreset.name}`}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-2 mb-3">
-            {PRESET_BACKGROUNDS.map((bg) => {
-              const active = profile.backgroundPreset === bg.key && !profile.backgroundFileId;
-              return (
-                <button
-                  key={bg.key}
-                  onClick={() => {
-                    updateProfile({ backgroundPreset: bg.key, backgroundFileId: undefined });
-                    showToast('已应用', 'success');
-                  }}
-                  className={`relative h-16 rounded-card overflow-hidden border-2 transition-all ${
-                    active ? 'border-candle scale-95' : 'border-bronze/15 hover:border-bronze/30'
-                  }`}
-                  style={{ background: bg.gradient }}
-                >
-                  <span className="absolute inset-0 flex items-end justify-center pb-1.5 text-[10px] font-mono tracking-widest text-moon/80 uppercase">
-                    {bg.name}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            {profile.backgroundFileId && (
-              <button
-                onClick={async () => {
-                  if (profile.backgroundFileId) await deleteFile(profile.backgroundFileId);
-                  updateProfile({ backgroundFileId: undefined, backgroundPreset: DEFAULT_BACKGROUND_PRESET });
-                  showToast('已移除自定义背景', 'success');
-                }}
-                className="btn-text wine"
-              >
-                <Trash2 size={11} strokeWidth={1.5} /> 移除
-              </button>
-            )}
           </div>
         </Card>
 
