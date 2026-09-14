@@ -933,3 +933,15 @@ input, textarea, select {
   border: none;
   outline: none;
 }
+
+/* 移动端输入防护（iOS Safari / 部分安卓内核）：
+   - 祖先若存在 user-select:none / touch-callout:none（按钮、装饰元素等），
+     iOS WebKit 会拒绝输入框取词与软键盘文本合成，导致「点得进、打不出字」。
+     这里对全部表单控件与 contenteditable 显式放行文本选择与取词。
+   - touch-action: manipulation 排除双击缩放延时干扰，不阻断输入。 */
+input, textarea, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: manipulation;
+}

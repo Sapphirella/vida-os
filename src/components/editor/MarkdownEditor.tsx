@@ -186,8 +186,12 @@ export function MarkdownEditor({
   useLayoutEffect(() => {
     const ta = textareaRef.current;
     if (!ta || mode_ !== 'edit') return;
+    const prev = ta.style.height;
     ta.style.height = 'auto';
-    ta.style.height = `${ta.scrollHeight}px`;
+    const sh = ta.scrollHeight;
+    // 高度未变化时还原原值：避免每次击键都改写 style.height 触发 iOS WebKit
+    // 布局抖动（光标跳动 / 输入合成被中断），仅内容换行时才调整。
+    ta.style.height = Math.abs(ta.offsetHeight - sh) > 2 ? `${sh}px` : prev;
   }, [content, mode_]);
 
   // 跟踪文本选区：非空选中时在编辑区底部弹出浮动格式条

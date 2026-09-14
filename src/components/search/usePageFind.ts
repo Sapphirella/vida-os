@@ -6,6 +6,46 @@ import { useEffect, useRef, useState } from 'react';
 export const escapeRegPageFind = (s: string) =>
   String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * 把元素滚动到可视区域垂直居中。
+ * 不用 scrollIntoView：真机（iOS Safari / 夸克）与部分 Chromium 移动仿真下
+ * 它对已部分可见的元素经常不产生滚动（尤其嵌套容器时），且 smooth 动画
+ * 在输入合成期间会打断键盘，这里统一改为手算滚动位置，行为可预期。
+ */
+export function scrollElIntoCenter(el: HTMLElement) {
+  const r = el.getBoundingClientRect();
+  let parent: HTMLElement | null = el.parentElement;
+  let scroller: HTMLElement | null = null;
+  while (parent) {
+    const cs = getComputedStyle(parent);
+    if (
+      parent.scrollHeight > parent.clientHeight + 2 &&
+      /(auto|scroll|overlay)/.test(cs.overflowY)
+    ) {
+      scroller = parent;
+      break;
+    }
+    parent = parent.parentElement;
+  }
+  if (!scroller) {
+    const vh = window.innerHeight;
+    // 元素中心对齐视口中心：元素在视口中心下方 → 向下滚（scrollY 增大）
+    const top = window.scrollY + (r.top + r.height / 2) - vh / 2;
+    window.scrollTo({
+      top: Math.max(0, Math.min(top, document.documentElement.scrollHeight - vh)),
+      behavior: 'smooth',
+    });
+  } else {
+    const pr = scroller.getBoundingClientRect();
+    const top =
+      scroller.scrollTop + (r.top + r.height / 2) - (pr.top + scroller.clientHeight / 2);
+    scroller.scrollTo({
+      top: Math.max(0, Math.min(top, scroller.scrollHeight - scroller.clientHeight)),
+      behavior: 'smooth',
+    });
+  }
+}
+
 const escText = (s: string) =>
   String(s)
     .replace(/&/g, '&amp;')
@@ -42,28 +82,36 @@ export function usePageFind<T extends HTMLElement = HTMLDivElement>(
   const listRef = useRef<T | null>(null);
   const marksRef = useRef<HTMLElement[]>([]);
 
-  // 渲染后收集 mark，标记当前命中并滚入视野
+  // 收集 mark 并刷新计数：query 每次击键都会触发。
+  // 刻意不在此滚动页面——真机（尤其 iOS）输入过程中页面被 smooth
+  // scrollIntoView 持续滚动会打断输入合成/闪烁键盘，导致「查找框打不进字」。
   useEffect(() => {
     if (!open || !listRef.current) return;
-    const marks = Array.from(
+    marksRef.current = Array.from(
       listRef.current.querySelectorAll<HTMLElement>('mark.vd-mark'),
     );
-    marksRef.current = marks;
-    setMatchCount(marks.length);
+    setMatchCount(marksRef.current.length);
+  }, [query, open, targets]);
+
+  // 仅当跳转命中（activeHit 变化）或打开面板时才滚动定位，输入过程中不打扰
+  useEffect(() => {
+    if (!open) return;
+    const marks = marksRef.current;
     marks.forEach((el, i) => el.classList.toggle('vd-mark-active', i === activeHit));
     const el = marks[activeHit];
     if (el) {
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      scrollElIntoCenter(el);
     } else if (marks.length > 0) {
       // 当前命中不可见（可能被摘要截断），滚到所属卡片
       const id = marks[Math.min(activeHit, marks.length - 1)].dataset.findTarget;
       if (id) {
-        listRef.current
-          .querySelector<HTMLElement>(`[data-find-card="${id}"]`)
-          ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const card = listRef.current?.querySelector<HTMLElement>(
+          `[data-find-card="${id}"]`,
+        );
+        if (card) scrollElIntoCenter(card);
       }
     }
-  }, [activeHit, query, targets, open]);
+  }, [activeHit, open, targets]);
 
   const close = () => {
     setOpen(false);
