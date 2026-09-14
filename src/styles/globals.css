@@ -406,14 +406,15 @@ textarea, input, [contenteditable] {
 /* ============================================================
    猩红书房 · 液态玻璃卡片（2026-09-14）
    - 参考 rdev/liquid-glass-react 的核心观感：更透的 frosted 底 +
-     边缘折射亮边（跟随光照方向）+ 内部水光 + 弹性形变。
+      边缘折射亮边（跟随光照方向）+ 内部水光 + 弹性形变。
    - 不改页面背景与栏色（渐变背景层见 Background.tsx，栏色仍为 --bar-bg）。
-   - --mx/--my 由 src/lib/liquidGlass.ts 的 document 级 pointermove 写入（px），
-     径向渐变以指针为光源锚点；未移动时回落默认 50%/30%。
+   - 水光/液态环锚点固定（50% 30% / 50% 40%，左上光源方向感）：
+     2026-09-14 用户要求移除指针跟随光效，光效固定卡片原位。
    - 文字对比度：backdrop blur+saturate+brightness(0.85) 压暗透底，
      米色（--text-paper #BAA6AD）与玫瑰木（--text-bronze #A8767D）文字
      在暗红玻璃上保持 8:1+ / 4.5:1+（见验证采样）。
-   - 回退：删除本块 + src/lib/liquidGlass.ts + main.tsx 中 initLiquidGlass() 调用。
+   - 回退：删除本块 + 恢复 src/lib/liquidGlass.ts 与 main.tsx 中 initLiquidGlass() 调用，
+     并将两处固定锚点改回 var(--mx, …) / var(--my, …)。
    ============================================================ */
 :root[data-theme='scarlet'] {
   /* 更透的深紫玻璃底（原 rgba(50,48,43,.85) 暖炭 → 深紫半透明）
@@ -434,7 +435,7 @@ textarea, input, [contenteditable] {
   /* 内部水光收敛为单层低强度：跟随指针的湿润感，但提亮不得超过
      文字对比度底线（光照中心 ≈5:1，无光处 ≈6.2:1，见 liquid-glass-probe 采样） */
   background:
-    radial-gradient(90% 110% at var(--mx, 50%) var(--my, 30%), rgba(255, 214, 233, 0.085), rgba(255, 214, 233, 0.02) 42%, transparent 70%),
+    radial-gradient(90% 110% at 50% 30%, rgba(255, 214, 233, 0.085), rgba(255, 214, 233, 0.02) 42%, transparent 70%),
     var(--card-bg);
   border-color: transparent; /* 边框描边改由 ::after 液态环承担 */
   box-shadow: var(--liquid-shadow);
@@ -458,7 +459,7 @@ textarea, input, [contenteditable] {
   border-radius: inherit;
   padding: 1px;
   background:
-    radial-gradient(120% 100% at var(--mx, 50%) var(--my, 40%),
+    radial-gradient(120% 100% at 50% 40%,
       var(--liquid-edge-hi), var(--liquid-edge-mid) 38%, var(--liquid-edge-dim) 62%, transparent 82%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
