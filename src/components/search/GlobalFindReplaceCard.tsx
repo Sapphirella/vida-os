@@ -85,15 +85,18 @@ export function GlobalFindReplaceCard() {
   const [searched, setSearched] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // 打开时锁定背景滚动（移动端防止遮罩下方页面滑动）
+  // 打开时锁定背景滚动（移动端防止遮罩下方页面滑动）；
+  // iOS 上 body overflow:hidden 与软键盘弹出存在合成冲突（键盘被顶起/输入框不可聚焦），
+  // 因此输入框聚焦期间临时释放锁定，失焦后恢复。
+  const [inputFocused, setInputFocused] = useState(false);
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = inputFocused ? '' : 'hidden';
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, inputFocused]);
 
   // Esc 关闭
   useEffect(() => {
@@ -351,6 +354,8 @@ export function GlobalFindReplaceCard() {
                 autoFocus
                 value={query}
                 onChange={(e) => handleQueryChange(e.target.value)}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -401,6 +406,8 @@ export function GlobalFindReplaceCard() {
               <input
                 value={replaceWith}
                 onChange={(e) => setReplaceWith(e.target.value)}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();

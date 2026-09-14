@@ -55,7 +55,8 @@ export function TopBar() {
       style={{
         backdropFilter: 'blur(20px) saturate(140%)',
         WebkitBackdropFilter: 'blur(20px) saturate(140%)',
-        background: 'rgba(27, 26, 31, 0.6)',
+        background: 'var(--bar-bg)',
+        willChange: 'backdrop-filter',
         borderBottom: '1px solid rgba(148, 125, 117, 0.08)',
       }}
     >

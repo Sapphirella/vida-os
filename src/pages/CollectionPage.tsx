@@ -17,6 +17,7 @@ export function CollectionPage() {
   const updateCollection = useAppStore((s) => s.updateCollection);
   const deleteCollection = useAppStore((s) => s.deleteCollection);
   const showToast = useUIStore((s) => s.showToast);
+  const showModal = useUIStore((s) => s.showModal);
   const openEditor = useUIStore((s) => s.openEditor);
 
   if (!collection) {
@@ -63,11 +64,20 @@ export function CollectionPage() {
               </button>
               <button
                 onClick={() => {
-                  const name = prompt('新名称', collection.name);
-                  if (name && name.trim()) {
-                    updateCollection(collection.id, { name: name.trim() });
-                    showToast('已重命名', 'success');
-                  }
+                  showModal({
+                    title: '重命名合集',
+                    inputMode: {
+                      placeholder: '输入新的合集名称',
+                      initialValue: collection.name,
+                    },
+                    onInputConfirm: (name) => {
+                      const v = name.trim();
+                      if (v && v !== collection.name) {
+                        updateCollection(collection.id, { name: v });
+                        showToast('已重命名', 'success');
+                      }
+                    },
+                  });
                 }}
                 className="btn-text"
               >

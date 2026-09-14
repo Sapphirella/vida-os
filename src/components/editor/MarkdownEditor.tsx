@@ -317,7 +317,7 @@ export function MarkdownEditor({
       {/* 顶部 */}
       <div
         className="flex items-center gap-2 px-3 sm:px-6 py-2 sm:py-3 border-b border-bronze/10"
-        style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px)' }}
+        style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px)', willChange: 'backdrop-filter' }}
       >
         <button
           onClick={onClose}
@@ -559,7 +559,7 @@ export function MarkdownEditor({
       {editing && mode_ === 'edit' && (
         <div
           className="sm:hidden border-t border-bronze/10 px-1.5 py-0.5"
-          style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)' }}
+          style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)', willChange: 'backdrop-filter' }}
         >
           <div className="flex items-center gap-0.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
             <SBtn
@@ -600,7 +600,7 @@ export function MarkdownEditor({
       {mode_ === 'preview' && (
         <div
           className="sm:hidden border-t border-bronze/10 px-1.5 py-0.5"
-          style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)' }}
+          style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)', willChange: 'backdrop-filter' }}
         >
           <div className="flex items-center gap-0.5">
             <SBtn
@@ -621,7 +621,7 @@ export function MarkdownEditor({
       {/* 底部：图片画廊 + 字数 */}
       <div
         className="border-t border-bronze/10 px-3 sm:px-6 py-2 flex items-center gap-3"
-        style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)' }}
+        style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(16px)', willChange: 'backdrop-filter' }}
       >
         {imageIds.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-[62%] py-1">

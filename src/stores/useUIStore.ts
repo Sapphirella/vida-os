@@ -68,7 +68,15 @@ interface UIStore {
   showToast: (message: string, kind?: ToastItem['kind']) => void;
 
   // Modal
-  modal: { open: boolean; title?: string; content?: ReactNode; onConfirm?: () => void };
+  modal: {
+    open: boolean;
+    title?: string;
+    content?: ReactNode;
+    onConfirm?: () => void;
+    /** 输入模式：渲染带输入框的确认框，确认时将输入值回传 */
+    inputMode?: { placeholder?: string; initialValue?: string };
+    onInputConfirm?: (value: string) => void;
+  };
   showModal: (m: Partial<UIStore['modal']>) => void;
   closeModal: () => void;
 }

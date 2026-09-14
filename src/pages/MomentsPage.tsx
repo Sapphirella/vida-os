@@ -344,7 +344,7 @@ export function MomentsPage() {
                                   }}
                                   placeholder="写一条评论…"
                                   className="flex-1 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none"
-                                  style={{ background: 'rgba(27,26,31,0.7)' }}
+                                  style={{ background: 'var(--bar-bg, rgba(27,26,31,0.7))' }}
                                 />
                                 <button
                                   onClick={() => submitComment(m.id)}
