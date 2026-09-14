@@ -1,20 +1,25 @@
 // 全局背景层（实色方案 2026-09-14）：
 //   - 自定义图：原逻辑保留（蒙版 / 不蒙版）
-//   - 预设：仅「猩红书房」（夜间 + 深紫预设 + 无自定义图）才显示深紫渐变
+//   - 猩红书房（独立主题 scarlet，或旧数据的「夜间 + 深紫预设 + 无自定义图」配方）
+//     显示深紫渐变
 //   - 普通日间 / 夜间：完全不渲染背景渐变，页面直接是 --bg-base 实色
 //   - 装饰层：仅保留极淡噪点纹理（实色微透装饰块已按反馈移除，避免浅色遮罩）
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/useAppStore';
 import { fileURL } from '@/lib/fileUrl';
-import { getBackgroundPreset } from '@/lib/backgrounds';
 import { resolveTheme, readThemeMode, type ResolvedTheme } from '@/lib/theme';
+
+// 「猩红书房」专属渐变与栏色：独立主题不再依赖 backgrounds.ts 的 deep 预设，
+// 固定内联这两处，保证 scarlet / 旧配方（night+deep）观感一致
+const SCARLET_GRADIENT = 'linear-gradient(135deg, #0F0A14 0%, #341915 70%, #6A080E 100%)';
+const SCARLET_BAR = 'rgba(44, 18, 30, 0.92)';
 
 export function Background() {
   const backgroundFileId = useAppStore((s) => s.profile.backgroundFileId);
   const backgroundPreset = useAppStore((s) => s.profile.backgroundPreset);
   const [customUrl, setCustomUrl] = useState<string | null>(null);
 
-  // 主题跟随：当前解析后的主题（day / night），用于判断是否猩红书房
+  // 主题跟随：当前解析后的主题（day / night / scarlet）
   const [theme, setTheme] = useState<ResolvedTheme>(() => resolveTheme(readThemeMode()));
   useEffect(() => {
     const sync = () => setTheme(resolveTheme(readThemeMode()));
@@ -38,25 +43,24 @@ export function Background() {
     };
   }, [backgroundFileId]);
 
-  const preset = getBackgroundPreset(backgroundPreset);
   const hasCustomImage = Boolean(backgroundFileId && customUrl);
 
-  // 「猩红书房」= 夜间 + 深紫预设 + 无自定义图；这是唯一保留渐变的场景
+  // 「猩红书房」= 独立主题 scarlet；兼容旧数据：夜间 + 深紫预设 + 无自定义图
   const isScarletStudy =
-    theme === 'night' && !hasCustomImage && backgroundPreset === 'deep';
+    theme === 'scarlet' ||
+    (theme === 'night' && !hasCustomImage && backgroundPreset === 'deep');
 
-  // 顶栏/底栏跟着背景预设走：仅当猩红书房时用深紫栏色；
-  // 其余情况（日间/夜间实色）由 globals.css 的 --bar-bg（按主题）兜底
+  // 顶栏/底栏颜色：仅猩红书房用深紫栏色；其余由 globals.css 的 --bar-bg（按主题）兜底
   useEffect(() => {
-    if (isScarletStudy && preset.bar) {
-      document.documentElement.style.setProperty('--bar-bg', preset.bar);
+    if (isScarletStudy) {
+      document.documentElement.style.setProperty('--bar-bg', SCARLET_BAR);
     } else {
       document.documentElement.style.removeProperty('--bar-bg');
     }
     return () => {
       document.documentElement.style.removeProperty('--bar-bg');
     };
-  }, [preset.bar, isScarletStudy]);
+  }, [isScarletStudy]);
 
   return (
     <div className="fixed inset-0 pointer-events-none -z-10">
@@ -71,8 +75,8 @@ export function Background() {
           <div className="absolute inset-0 bg-mask" style={{ background: 'rgba(27, 26, 31, 0.62)' }} />
         </>
       ) : isScarletStudy ? (
-        // 「猩红书房」专属深紫渐变（保留，珍藏配方）
-        <div className="absolute inset-0 bg-preset" style={{ background: preset.gradient }} />
+        // 「猩红书房」专属深紫渐变（独立主题固定常量）
+        <div className="absolute inset-0 bg-preset" style={{ background: SCARLET_GRADIENT }} />
       ) : null}
 
       {/* 极淡噪点纹理（增加质感） */}

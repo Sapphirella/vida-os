@@ -148,7 +148,7 @@ export function FavoritesPage() {
               </button>
             </div>
             {/* 页内查找替换面板：fixed 钉在顶栏下方，滚动/跳转不消失 */}
-            <PageFindBar find={find} activeClass="text-amber" />
+            <PageFindBar find={find} activeClass="text-[color:var(--find-fg)]" />
             <ul className="space-y-3" ref={find.listRef}>
               {grouped.map((g) => {
                 const Icon =

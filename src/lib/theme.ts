@@ -1,33 +1,37 @@
-// 主题皮肤控制：暗夜书房（night，默认） / 白昼书房（day）
+// 主题皮肤控制：暗夜书房（night，默认） / 白昼书房（day） / 猩红书房（scarlet）
 // 存储：localStorage（同步读取，避免刷新时先渲染默认主题再跳变）
 // 初始化顺序：index.html 内联脚本（最早设置 data-theme，防白屏闪烁）
 //            → main.tsx 调用 initTheme()（校正 + 跟随系统监听）
 
-export type ThemeMode = 'system' | 'day' | 'night';
-export type ResolvedTheme = 'day' | 'night';
+export type ThemeMode = 'system' | 'day' | 'night' | 'scarlet';
+export type ResolvedTheme = 'day' | 'night' | 'scarlet';
 
 const STORAGE_KEY = 'vidaos-theme';
 
 const META_THEME_COLOR: Record<ResolvedTheme, string> = {
   day: '#DDD3C9',
   night: '#171A1B',
+  scarlet: '#17121A',
 };
 
 const DOC_TITLES: Record<ResolvedTheme, string> = {
   day: 'VidaOS · 白昼书房',
   night: 'VidaOS · 暗夜书房',
+  scarlet: 'VidaOS · 猩红书房',
 };
 
 /** 读取持久化的主题模式，非法值回退到「跟随系统」 */
 export function readThemeMode(): ThemeMode {
   if (typeof localStorage === 'undefined') return 'system';
   const v = localStorage.getItem(STORAGE_KEY);
-  return v === 'day' || v === 'night' || v === 'system' ? v : 'system';
+  return v === 'day' || v === 'night' || v === 'system' || v === 'scarlet'
+    ? v
+    : 'system';
 }
 
-/** 把模式解析成最终皮肤：system 跟随操作系统浅色/深色偏好 */
+/** 把模式解析成最终皮肤：system 跟随操作系统浅色/深色偏好；scarlet 为独立主题 */
 export function resolveTheme(mode: ThemeMode): ResolvedTheme {
-  if (mode === 'day' || mode === 'night') return mode;
+  if (mode === 'day' || mode === 'night' || mode === 'scarlet') return mode;
   if (typeof window !== 'undefined' && window.matchMedia) {
     return window.matchMedia('(prefers-color-scheme: light)').matches ? 'day' : 'night';
   }
@@ -41,8 +45,9 @@ function applyTheme(theme: ResolvedTheme) {
   // 同步浏览器 UI（地址栏 / 状态栏底色、color-scheme、文档标题）
   const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (themeColor) themeColor.content = META_THEME_COLOR[theme];
+  // color-scheme 只有 light / dark 两个合法值：猩红书房归入 dark
   const colorScheme = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
-  if (colorScheme) colorScheme.content = theme;
+  if (colorScheme) colorScheme.content = theme === 'day' ? 'light' : 'dark';
   document.title = DOC_TITLES[theme];
 }
 

@@ -81,7 +81,7 @@ export function SpacePage() {
         </div>
 
         {/* 页内查找替换面板：fixed 钉在顶栏下方，滚动/跳转不消失 */}
-        <PageFindBar find={find} activeClass="text-amber" />
+        <PageFindBar find={find} activeClass="text-[color:var(--find-fg)]" />
 
         {creating && (
           <Card className="p-4 mb-4 animate-slide-up">

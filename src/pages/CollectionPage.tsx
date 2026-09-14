@@ -33,23 +33,25 @@ export function CollectionPage() {
     <div className="px-4 sm:px-6 view-enter">
       <div className="max-w-5xl mx-auto pb-6">
         {/* 合集头部 */}
-        <div className="mb-6">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1">
-              <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase mb-1">
-                collection
-              </p>
-              <h2 className="font-serif text-headline text-huge">{collection.name}</h2>
-              {collection.desc && (
-                <p className="font-serif italic text-bronze mt-2 leading-relaxed">
-                  {collection.desc}
+<div className="mb-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase mb-1">
+                  collection
                 </p>
-              )}
-              <p className="font-mono text-[10px] text-bronze-deep mt-2">
-                {articles.length} 篇 · 创建于 {new Date(collection.createdAt).toLocaleDateString('zh-CN')}
-              </p>
+                <h2 className="font-serif text-headline text-huge">{collection.name}</h2>
+                {collection.desc && (
+                  <p className="font-serif italic text-bronze mt-2 leading-relaxed">
+                    {collection.desc}
+                  </p>
+                )}
+                <p className="font-mono text-[10px] text-bronze-deep mt-2">
+                  {articles.length} 篇 · 创建于 {new Date(collection.createdAt).toLocaleDateString('zh-CN')}
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
+            {/* 合集操作按钮：标题栏下方横向排列 */}
+            <div className="flex flex-wrap items-center gap-2 mt-4">
               <button
                 onClick={() =>
                   openEditor({ mode: 'article', collectionId: collection.id })
@@ -89,7 +91,6 @@ export function CollectionPage() {
               </button>
             </div>
           </div>
-        </div>
 
         {articles.length === 0 ? (
           <EmptyState

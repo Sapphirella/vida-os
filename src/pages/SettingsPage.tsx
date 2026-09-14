@@ -16,9 +16,10 @@ const THEME_OPTIONS: { key: ThemeMode; label: string; hint: string }[] = [
 
 // 主题皮肤预览色：用真实主题色（页面底 + 卡面），色块区纯色展示，
 // 与下方文字区分离——文字永远落在当前主题实色卡面上，不叠色块
-const PREVIEW_COLORS: Record<'day' | 'night', { bg: string; card: string }> = {
+const PREVIEW_COLORS: Record<'day' | 'night' | 'scarlet', { bg: string; card: string }> = {
   day:  { bg: '#F5F9E5', card: '#EBE1D0' },   // 真实页面底 / 真实卡面
   night: { bg: '#171A1B', card: '#32302B' },
+  scarlet: { bg: '#17121A', card: '#312B2F' }, // 猩红书房独立主题的底色 / 紫调卡面
 };
 
 /** 主题预览卡：上部色块区（页面底 | 卡面）+ 下部文字区（当前主题实色底，永不叠色块） */
@@ -71,16 +72,17 @@ export function SettingsPage() {
   const [signature, setSignature] = useState(profile.signature);
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => readThemeMode());
 
-  // 猩红书房：夜间主题 × 深紫背景（且未叠加自定义图片）的珍藏配方
+  // 猩红书房：独立外观主题（scarlet）；兼容旧数据（夜间 × 深紫预设 × 无自定义图）
   const isScarletStudy =
-    resolveTheme(themeMode) === 'night' &&
-    !profile.backgroundFileId &&
-    profile.backgroundPreset === 'deep';
+    themeMode === 'scarlet' ||
+    (resolveTheme(themeMode) === 'night' &&
+      !profile.backgroundFileId &&
+      profile.backgroundPreset === 'deep');
 
   const handleTheme = (mode: ThemeMode) => {
     setThemeMode(mode);
     setThemeModeState(mode);
-    // 主动退出「猩红书房」：日间 / 夜间 / 跟随系统 走新实色方案，不再叠加深紫
+    // 退出「猩红书房」：旧数据的深紫预设一并清掉，回到按主题实色方案
     if (profile.backgroundPreset === 'deep') {
       updateProfile({ backgroundPreset: 'none' });
     }
@@ -89,10 +91,11 @@ export function SettingsPage() {
   };
 
   const applyScarletStudy = () => {
-    setThemeMode('night');
-    setThemeModeState('night');
-    updateProfile({ backgroundPreset: 'deep', backgroundFileId: undefined });
-    showToast('已切换：猩红书房', 'success');
+    // 猩红书房是独立主题：不再依赖「夜间 × 深紫预设」组合配方
+    setThemeMode('scarlet');
+    setThemeModeState('scarlet');
+    updateProfile({ backgroundPreset: 'none', backgroundFileId: undefined });
+    showToast('已切换：猩红书房 · 特殊书房主题', 'success');
   };
 
   const handleAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -269,10 +272,10 @@ export function SettingsPage() {
               );
             })}
           </div>
-          {/* 猩红书房：夜间主题 + 深紫背景的珍藏配方 */}
+          {/* 猩红书房：独立外观主题（不限于夜间） */}
           <ThemePreviewCard
             label="猩红书房 · scarlet study"
-            hint="夜间主题 × 深紫背景 · 珍藏配方"
+            hint="特殊书房主题"
             active={isScarletStudy}
             onClick={applyScarletStudy}
             swatches={

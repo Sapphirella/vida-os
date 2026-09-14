@@ -7,14 +7,18 @@
       ;(function () {
         try {
           var m = localStorage.getItem('vidaos-theme') || 'system';
-          var light =
-            m === 'day' ||
-            (m === 'system' &&
-              window.matchMedia('(prefers-color-scheme: light)').matches);
-          document.documentElement.setAttribute(
-            'data-theme',
-            light ? 'day' : 'night',
-          );
+          var theme;
+          if (m === 'scarlet') {
+            theme = 'scarlet'; // 猩红书房：独立主题
+          } else {
+            theme =
+              m === 'day' ||
+              (m === 'system' &&
+                window.matchMedia('(prefers-color-scheme: light)').matches)
+                ? 'day'
+                : 'night';
+          }
+          document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'night');
         }

@@ -152,7 +152,7 @@ export function MomentsPage() {
         </div>
 
         {/* 页内查找替换：fixed 钉在顶栏下方，滚动/跳转不消失 */}
-        <PageFindBar find={find} activeClass="text-amber" />
+        <PageFindBar find={find} activeClass="text-[color:var(--find-fg)]" />
 
         {moments.length === 0 ? (
           <EmptyState

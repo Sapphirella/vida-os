@@ -297,13 +297,13 @@ export function GlobalFindReplaceCard() {
             <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-headline flex-1 truncate">
               全局查找替换
             </span>
-            <span className="font-mono text-[10px] text-bronze-deep hidden sm:inline">
+            <span className="font-mono text-[10px] text-[color:var(--find-fg-dim)] hidden sm:inline">
               ⌘K / 顶栏搜索
             </span>
             <button
               onClick={() => close(false)}
               aria-label="关闭查找替换"
-              className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle transition-colors flex-none"
+              className="w-8 h-8 flex items-center justify-center text-[color:var(--find-fg)] hover:text-[color:var(--find-fg)] transition-colors flex-none"
             >
               <X size={17} strokeWidth={1.5} />
             </button>
@@ -323,8 +323,8 @@ export function GlobalFindReplaceCard() {
                   className={clsx(
                     'px-2.5 py-1 rounded-pill text-[11px] font-mono tracking-wider transition-colors',
                     scope === s.key
-                      ? 'text-candle bg-wine/25'
-                      : 'text-bronze hover:text-candle bg-bronze/8',
+                      ? 'text-[color:var(--find-fg)] bg-wine/30'
+                      : 'text-[color:var(--find-fg-dim)] hover:text-[color:var(--find-fg)] bg-bronze/10',
                   )}
                 >
                   {s.label}
@@ -336,8 +336,8 @@ export function GlobalFindReplaceCard() {
                 className={clsx(
                   'px-2.5 py-1 rounded-pill text-[11px] font-mono tracking-wider transition-colors',
                   ignoreCase
-                    ? 'text-candle bg-wine/25'
-                    : 'text-bronze hover:text-candle bg-bronze/8',
+                    ? 'text-[color:var(--find-fg)] bg-wine/30'
+                    : 'text-[color:var(--find-fg-dim)] hover:text-[color:var(--find-fg)] bg-bronze/10',
                 )}
                 title="忽略大小写（英文命中有效）"
               >
@@ -359,16 +359,16 @@ export function GlobalFindReplaceCard() {
                   }
                 }}
                 placeholder="查找全文（文章 / 动态 / 信件）…"
-                className="flex-1 min-w-0 px-3 py-2 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 transition-colors"
+                className="flex-1 min-w-0 px-3 py-2 rounded-pill text-sm font-serif text-paper placeholder:text-[color:var(--find-fg-dim)] outline-none border border-bronze/15 focus:border-[color:var(--find-fg)]/40 transition-colors"
               />
-              <span className="font-mono text-[10px] text-bronze-deep whitespace-nowrap">
+              <span className="font-mono text-[10px] text-[color:var(--find-fg)] whitespace-nowrap">
                 {searched ? `${matchCount} 处` : ''}
               </span>
               <button
                 onClick={() => step(-1)}
                 disabled={!matchCount}
                 aria-label="上一个"
-                className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle disabled:opacity-30 transition-colors"
+                className="w-8 h-8 flex items-center justify-center text-[color:var(--find-fg)] hover:text-[color:var(--find-fg)] disabled:opacity-30 transition-colors"
               >
                 <ChevronUp size={16} strokeWidth={1.6} />
               </button>
@@ -376,7 +376,7 @@ export function GlobalFindReplaceCard() {
                 onClick={() => step(1)}
                 disabled={!matchCount}
                 aria-label="下一个"
-                className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle disabled:opacity-30 transition-colors"
+                className="w-8 h-8 flex items-center justify-center text-[color:var(--find-fg)] hover:text-[color:var(--find-fg)] disabled:opacity-30 transition-colors"
               >
                 <ChevronDown size={16} strokeWidth={1.6} />
               </button>
@@ -389,7 +389,7 @@ export function GlobalFindReplaceCard() {
                     setChecked({});
                   }}
                   aria-label="清空"
-                  className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle transition-colors"
+                  className="w-8 h-8 flex items-center justify-center text-[color:var(--find-fg)] hover:text-[color:var(--find-fg)] transition-colors"
                 >
                   <X size={15} strokeWidth={1.6} />
                 </button>
@@ -408,7 +408,7 @@ export function GlobalFindReplaceCard() {
                   }
                 }}
                 placeholder="替换为…"
-                className="flex-1 min-w-0 px-3 py-2 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 transition-colors"
+                className="flex-1 min-w-0 px-3 py-2 rounded-pill text-sm font-serif text-paper placeholder:text-[color:var(--find-fg-dim)] outline-none border border-bronze/15 focus:border-[color:var(--find-fg)]/40 transition-colors"
               />
               <button
                 onClick={doReplace}
@@ -437,7 +437,7 @@ export function GlobalFindReplaceCard() {
                 反选
               </button>
             </div>
-            <p className="font-mono text-[10px] text-bronze-deep/70 mt-1.5 px-1">
+            <p className="font-mono text-[10px] text-[color:var(--find-fg-dim)]/70 mt-1.5 px-1">
               勾选结果后点「替换」批量替换；「全选/反选」可快速调整勾选；点击结果行可跳转到对应内容。
             </p>
 
@@ -448,11 +448,11 @@ export function GlobalFindReplaceCard() {
               style={{ scrollbarWidth: 'thin' }}
             >
               {!searched ? (
-                <p className="text-center text-bronze-deep italic text-xs py-4">
+                <p className="text-center text-[color:var(--find-fg-dim)] italic text-xs py-4">
                   输入关键词开始查找
                 </p>
               ) : matchCount === 0 ? (
-                <p className="text-center text-bronze-deep italic text-xs py-4">
+                <p className="text-center text-[color:var(--find-fg-dim)] italic text-xs py-4">
                   未找到匹配
                 </p>
               ) : (
@@ -464,8 +464,8 @@ export function GlobalFindReplaceCard() {
                     className={clsx(
                       'flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer border transition-colors',
                       cur === i
-                        ? 'border-candle/50 bg-candle/8'
-                        : 'border-transparent hover:bg-bronze/6',
+                        ? 'border-[color:var(--find-fg)]/50 bg-[color:var(--find-fg)]/8'
+                        : 'border-transparent hover:bg-bronze/8',
                     )}
                   >
                     <label
@@ -484,7 +484,7 @@ export function GlobalFindReplaceCard() {
                     </label>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-mono text-[9px] tracking-widest text-bronze-deep uppercase flex-none">
+                        <span className="font-mono text-[9px] tracking-widest text-[color:var(--find-fg-dim)] uppercase flex-none">
                           {h.kind === 'article'
                             ? '文章'
                             : h.kind === 'letter'
@@ -497,7 +497,7 @@ export function GlobalFindReplaceCard() {
                           </span>
                         )}
                         <span className="flex-1 min-w-0" />
-                        <span className="font-mono text-[9px] text-bronze-deep/70 flex-none">
+                        <span className="font-mono text-[9px] text-[color:var(--find-fg-dim)]/70 flex-none">
                           {h.pos}
                         </span>
                       </div>

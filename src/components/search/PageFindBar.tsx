@@ -13,7 +13,7 @@ interface Props {
   activeClass?: string;
 }
 
-export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
+export function PageFindBar({ find, activeClass = 'text-[color:var(--find-fg)]' }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 打开时聚焦查找框
@@ -56,12 +56,12 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
               }
             }}
             placeholder="查找…"
-            className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 transition-colors"
+            className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-[color:var(--find-fg-dim)] outline-none border border-bronze/15 focus:border-[color:var(--find-fg)]/40 transition-colors"
             style={{ background: 'var(--search-input-bg)' }}
           />
           <span
             className={`shrink-0 font-mono text-[10px] whitespace-nowrap ${
-              canReplace ? activeClass : 'text-bronze-deep'
+              canReplace ? activeClass : 'text-[color:var(--find-fg)]'
             }`}
           >
             {canReplace ? `${find.activeHit + 1} / ${find.matchCount}` : '0'}
@@ -69,7 +69,7 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
           <button
             type="button"
             aria-label="上一个"
-            className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle disabled:opacity-30 transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-[color:var(--find-fg)] hover:text-[color:var(--find-fg)] disabled:opacity-30 transition-colors"
             disabled={!canReplace}
             onClick={() => find.step(-1)}
           >
@@ -78,7 +78,7 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
           <button
             type="button"
             aria-label="下一个"
-            className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle disabled:opacity-30 transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-[color:var(--find-fg)] hover:text-[color:var(--find-fg)] disabled:opacity-30 transition-colors"
             disabled={!canReplace}
             onClick={() => find.step(1)}
           >
@@ -87,7 +87,7 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
           <button
             type="button"
             aria-label="关闭查找替换"
-            className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-[color:var(--find-fg)] hover:text-[color:var(--find-fg)] transition-colors"
             onClick={() => find.close()}
           >
             <X size={15} strokeWidth={1.6} />
@@ -105,7 +105,7 @@ export function PageFindBar({ find, activeClass = 'text-amber' }: Props) {
               }
             }}
             placeholder="替换为…"
-            className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 transition-colors"
+            className="flex-1 min-w-0 px-3 py-1.5 rounded-pill text-sm font-serif text-paper placeholder:text-[color:var(--find-fg-dim)] outline-none border border-bronze/15 focus:border-[color:var(--find-fg)]/40 transition-colors"
             style={{ background: 'var(--search-input-bg)' }}
           />
           <button
