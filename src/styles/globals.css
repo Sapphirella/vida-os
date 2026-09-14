@@ -863,6 +863,21 @@ mark.vd-focus-flash {
 }
 
 /* ===== 待办长按拖拽排序（TodoView）===== */
+/* 排序模式：禁长按复制 / 文本选择 / 拖拽（iOS 上长按行会弹选择菜单，拖不起来） */
+ul.vd-sort-mode {
+  touch-action: none;
+  overscroll-behavior: none;
+}
+ul.vd-sort-mode > li {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+/* 排序模式行的按钮仍可点按，但省去 hover 缩放动画干扰拖动 */
+ul.vd-sort-mode .hover\:scale-\[1\.005\] {
+  transform: none !important;
+}
 /* 插入指示线：高亮细线，日间/夜间均清晰可见 */
 li.vd-sort-indicator {
   list-style: none;
@@ -873,14 +888,14 @@ li.vd-sort-indicator {
   margin: 4px 0;
   padding: 0;
 }
-/* 拖拽中的行：轻微抬起 + 阴影，跟随手指平移由 JS 控制 */
+/* 拖拽中的行：轻微抬起 + 阴影，跟随平移由 JS 控制（translateY + scale 内联合成） */
 li.vd-dragging {
-  opacity: 0.9;
-  transform: scale(0.99);
-  box-shadow: var(--shadow-card-elevated);
+  opacity: 1;
   z-index: 30;
   position: relative;
   touch-action: none;
+  will-change: transform;
+  box-shadow: var(--shadow-card-elevated);
 }
 
 /* 顶栏 / 底栏颜色由背景预设驱动（见 src/lib/backgrounds.ts 的 bar 字段）。
@@ -940,8 +955,8 @@ input, textarea, select {
      这里对全部表单控件与 contenteditable 显式放行文本选择与取词。
    - touch-action: manipulation 排除双击缩放延时干扰，不阻断输入。 */
 input, textarea, [contenteditable] {
-  -webkit-user-select: text;
-  user-select: text;
-  -webkit-touch-callout: default;
-  touch-action: manipulation;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+  touch-action: manipulation !important;
 }
