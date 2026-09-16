@@ -96,8 +96,19 @@ export interface Categories {
   todo: string[];
 }
 
+/** WebDAV 云同步配置（如坚果云 dav.jianguoyun.com） */
+export interface WebDavConfig {
+  /** 接口地址，如 https://dav.jianguoyun.com/dav/vidaos/ */
+  url: string;
+  /** 账号（坚果云为注册邮箱） */
+  username: string;
+  /** 应用密码（坚果云需在官网单独生成，非网页登录密码） */
+  password: string;
+}
+
 export interface Settings {
   lastTab: TabKey;
+  webdav?: WebDavConfig;
 }
 
 export interface AppState {

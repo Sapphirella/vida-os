@@ -10,6 +10,10 @@ import {
   Save,
   RotateCcw,
   Trash2,
+  CloudUpload,
+  Link2,
+  User,
+  KeyRound,
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
@@ -28,6 +32,12 @@ import {
   ALL_SCOPE_KEYS,
   type ExportScopeKey,
 } from '@/lib/exportImport';
+import {
+  hasWebDavConfig,
+  syncToWebDav,
+  normalizeDavUrl,
+  BACKUP_FILENAME,
+} from '@/lib/webdav';
 import {
   supportsFolderPicker,
   pickDataFolder,
@@ -53,6 +63,7 @@ const SCOPES: { key: ExportScopeKey; label: string; en: string; desc: string }[]
 export function DataPage() {
   const state = useAppStore();
   const importState = useAppStore((s) => s.importState);
+  const updateSettings = useAppStore((s) => s.updateSettings);
   const showToast = useUIStore((s) => s.showToast);
   const showModal = useUIStore((s) => s.showModal);
   const [exporting, setExporting] = useState<string | null>(null);
@@ -63,6 +74,48 @@ export function DataPage() {
     setScopes((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
     );
+
+  // ── WebDAV 云备份 ──
+  const davCfg = state.settings.webdav;
+  const [davUrl, setDavUrl] = useState(davCfg?.url ?? '');
+  const [davUser, setDavUser] = useState(davCfg?.username ?? '');
+  const [davPass, setDavPass] = useState(davCfg?.password ?? '');
+  const [davBusy, setDavBusy] = useState(false);
+
+  const doSaveDavConfig = () => {
+    if (!davUrl.trim() || !davUser.trim() || !davPass.trim()) {
+      showToast('请填写完整的 WebDAV 配置', 'error');
+      return;
+    }
+    updateSettings({
+      webdav: {
+        url: davUrl.trim(),
+        username: davUser.trim(),
+        password: davPass.trim(),
+      },
+    });
+    showToast('WebDAV 配置已保存', 'success');
+  };
+
+  const doDavBackup = async () => {
+    if (davBusy) return;
+    const cfg = hasWebDavConfig(state.settings.webdav)
+      ? state.settings.webdav
+      : null;
+    if (!cfg) {
+      showToast('请先填写并保存 WebDAV 配置', 'error');
+      return;
+    }
+    setDavBusy(true);
+    try {
+      const info = await syncToWebDav(cfg, state);
+      showToast(`云备份完成：已上传 ${humanBytes(info.bytes)}`, 'success');
+    } catch (e: any) {
+      showToast(`云备份失败：${e.message}`, 'error');
+    } finally {
+      setDavBusy(false);
+    }
+  };
 
   // ── 本地文件夹快照备份 ──
   const folderSupported = supportsFolderPicker();
@@ -291,6 +344,98 @@ export function DataPage() {
           <p className="text-bronze text-sm leading-relaxed">
             你的所有数据都保存在浏览器本地。定期导出备份，避免清理浏览器数据时丢失。
           </p>
+        </Card>
+
+        {/* WebDAV 云备份 */}
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <CloudUpload size={15} strokeWidth={1.5} className="text-amber" />
+            <h3 className="font-serif text-headline text-lg">WebDAV 全量备份</h3>
+          </div>
+          <p className="text-bronze text-xs mb-4 leading-relaxed">
+            把全部数据（含图片 / 音频）压缩成一个{' '}
+            <span className="font-mono text-bronze-light">{BACKUP_FILENAME}</span>{' '}
+            上传到你的 WebDAV 空间（坚果云等）。每次同步覆盖同一份，只保留最新备份。
+          </p>
+
+          <div className="space-y-3 mb-4">
+            <label className="block">
+              <span className="flex items-center gap-1.5 text-bronze-light text-xs mb-1">
+                <Link2 size={12} strokeWidth={1.6} /> 接口地址
+              </span>
+              <input
+                type="url"
+                value={davUrl}
+                onChange={(e) => setDavUrl(e.target.value)}
+                placeholder="https://dav.jianguoyun.com/dav/vidaos/"
+                autoComplete="off"
+                className="w-full px-3 py-2 rounded-card border border-line/50 bg-bg-base text-paper text-sm placeholder:text-bronze-deep focus:border-wine/60 focus:outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="flex items-center gap-1.5 text-bronze-light text-xs mb-1">
+                <User size={12} strokeWidth={1.6} /> 账号
+              </span>
+              <input
+                type="text"
+                value={davUser}
+                onChange={(e) => setDavUser(e.target.value)}
+                placeholder="坚果云注册邮箱"
+                autoComplete="off"
+                className="w-full px-3 py-2 rounded-card border border-line/50 bg-bg-base text-paper text-sm placeholder:text-bronze-deep focus:border-wine/60 focus:outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="flex items-center gap-1.5 text-bronze-light text-xs mb-1">
+                <KeyRound size={12} strokeWidth={1.6} /> 应用密码
+              </span>
+              <input
+                type="password"
+                value={davPass}
+                onChange={(e) => setDavPass(e.target.value)}
+                placeholder="在坚果云官网「账户信息 → 安全选项」生成"
+                autoComplete="off"
+                className="w-full px-3 py-2 rounded-card border border-line/50 bg-bg-base text-paper text-sm placeholder:text-bronze-deep focus:border-wine/60 focus:outline-none"
+              />
+            </label>
+            <p className="text-bronze-deep text-[11px] leading-relaxed">
+              应用密码不是网页登录密码，需在坚果云官网「账户信息 → 安全选项 → 添加应用密码」单独生成。
+              配置保存在本机浏览器数据库中。
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={doSaveDavConfig} className="btn-ghost">
+              保存配置
+            </button>
+            <button
+              onClick={() => void doDavBackup()}
+              disabled={!hasWebDavConfig(state.settings.webdav) || davBusy}
+              className="btn-primary disabled:opacity-40"
+            >
+              <CloudUpload size={13} strokeWidth={1.6} />
+              {davBusy ? '同步中…' : '云备份'}
+            </button>
+            {hasWebDavConfig(state.settings.webdav) && (
+              <span
+                className="font-mono text-[10px] text-bronze-deep ml-auto self-center truncate-1 max-w-[180px]"
+                title={normalizeDavUrl(state.settings.webdav!.url)}
+              >
+                ☁ {normalizeDavUrl(state.settings.webdav!.url)}
+              </span>
+            )}
+          </div>
+
+          <div
+            className="mt-4 rounded-card border border-amber/25 p-3"
+            style={{ background: 'rgba(212, 164, 84, 0.07)' }}
+          >
+            <p className="text-amber/90 text-[11px] leading-relaxed">
+              ⚠ 注意事项：该备份是全量快照同步，<span className="text-candle">不支持多设备同时进行编辑</span>
+              （后同步的一方会覆盖先同步的内容，请保持单设备使用）；若使用坚果云
+              免费版，每月有流量限制，<span className="text-candle">建议一天内不要高频同步</span>。
+            </p>
+          </div>
         </Card>
 
         {/* 范围 */}

@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Search, Settings as SettingsIcon } from 'lucide-react';
+import { ChevronLeft, Search, CloudUpload, Loader2 } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
+import { useAppStore } from '@/stores/useAppStore';
+import { hasWebDavConfig, syncToWebDav } from '@/lib/webdav';
+import { humanBytes } from '@/lib/snapshot';
 
 const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/desk': { title: 'VidaOS', sub: 'A quiet place for your days' },
@@ -31,9 +34,31 @@ function matchTitle(pathname: string): { title: string; sub?: string; canBack: b
 export function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const setTab = useUIStore((s) => s.setTab);
+  const showToast = useUIStore((s) => s.showToast);
   const setFindPanelOpen = useUIStore((s) => s.setFindPanelOpen);
+  const [syncing, setSyncing] = useState(false);
   const { title, sub, canBack } = matchTitle(location.pathname);
+
+  /** 云同步：未配置则跳到「数据」页引导配置 */
+  const syncNow = async () => {
+    if (syncing) return;
+    const st = useAppStore.getState();
+    const cfg = hasWebDavConfig(st.settings.webdav) ? st.settings.webdav : null;
+    if (!cfg) {
+      navigate('/data');
+      showToast('请先配置 WebDAV 云同步（数据页 → WebDAV 全量备份）', 'error');
+      return;
+    }
+    setSyncing(true);
+    try {
+      const info = await syncToWebDav(cfg, st);
+      showToast(`云同步完成：已上传 ${humanBytes(info.bytes)}`, 'success');
+    } catch (e: any) {
+      showToast(`云同步失败：${e.message}`, 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // ⌘K / Ctrl+K：全局打开查找替换
   useEffect(() => {
@@ -102,14 +127,17 @@ export function TopBar() {
 
         {!canBack && location.pathname !== '/settings' && (
           <button
-            onClick={() => {
-              setTab('settings');
-              navigate('/settings');
-            }}
-            className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-            aria-label="设置"
+            onClick={() => void syncNow()}
+            disabled={syncing}
+            className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors disabled:opacity-60"
+            aria-label="云同步"
+            title="云同步：全量备份到 WebDAV"
           >
-            <SettingsIcon size={18} strokeWidth={1.5} />
+            {syncing ? (
+              <Loader2 size={18} strokeWidth={1.5} className="animate-spin" />
+            ) : (
+              <CloudUpload size={18} strokeWidth={1.5} />
+            )}
           </button>
         )}
       </div>
