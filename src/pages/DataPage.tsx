@@ -16,6 +16,7 @@ import {
   KeyRound,
   Lock,
   CloudDownload,
+  HelpCircle,
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
@@ -64,6 +65,63 @@ const SCOPES: { key: ExportScopeKey; label: string; en: string; desc: string }[]
   { key: 'favorites', label: '收藏夹', en: 'Favorites', desc: '收藏记录 + 被收藏的内容' },
   { key: 'profile', label: '个人资料', en: 'Profile', desc: '头像 / 昵称 / 签名 / 背景' },
 ];
+
+/** 「备份配置说明书」弹窗内容 */
+const BACKUP_GUIDE = (
+  <div className="max-h-[62vh] overflow-y-auto pr-1">
+    {/* 一、配置教程 */}
+    <p className="font-serif text-base text-candle mb-1.5">一、配置教程</p>
+    <p className="text-bronze text-[12px] leading-relaxed mb-1.5">
+      本功能把全部数据（含图片 / 音频）压缩成一个 gzip 快照，经 WebDAV 上传到你指定的云空间（如坚果云），取回时一键恢复。
+    </p>
+    <div className="text-bronze text-[12px] leading-relaxed space-y-1 mb-2">
+      <p>① 准备坚果云账号：注册并登录坚果云（免费版即可），进入「账户信息 → 安全选项 → 添加应用密码」，生成一个专用密码。这个密码与网页登录密码不同，是 WebDAV 访问凭证。</p>
+      <p>② 创建备份目录：建议在坚果云中新建一个文件夹（如 vidaos），把它的路径记下来。</p>
+      <p>③ 填写配置：接口地址填「https://dav.jianguoyun.com/dav/vidaos/」（目录以 / 结尾）；账号填坚果云注册邮箱；应用密码填第 ① 步生成的专用密码。</p>
+      <p>④ 点击「保存配置」：配置将存入本机浏览器数据库（下次打开自动回显）。</p>
+      <p>⑤ 点击「云备份」：立即上传一次全量快照（vidaos-backup.json.gz，固定文件名、每次覆盖）。</p>
+      <p>⑥ 需要取回时点击「云端恢复」：下载 → 若已加密则输入口令 → 确认后覆盖恢复本地数据。</p>
+    </div>
+
+    <div className="border-t border-line/40 my-3" />
+
+    {/* 二、失败情况详解 */}
+    <p className="font-serif text-base text-candle mb-1.5">二、失败情况详解</p>
+    <div className="text-bronze text-[12px] leading-relaxed space-y-1 mb-2">
+      <p><span className="text-candle">认证失败（401 / 403）：</span>账号或应用密码不对。确认填的是官网「安全选项」里单独生成的应用密码，而不是网页登录密码。</p>
+      <p><span className="text-candle">目标路径不存在（404）：</span>接口地址拼写有误，域名或目录写错，请对照坚果云 WebDAV 地址检查。</p>
+      <p><span className="text-candle">目录缺失（409）：</span>填写的目录或其上级目录不存在。请先在坚果云里建好目录，或改填一个已存在的路径。</p>
+      <p><span className="text-candle">无法连接 / 网络错误（直连失败）：</span>可能是网络不可达，也可能是浏览器直连 WebDAV 被跨域（CORS）策略拦截——这是纯网页版的浏览器限制，坚果云未开放跨域头；Tauri 桌面版（规划中）落地后会自动解除。此类错误可在支持 CORS 的 WebDAV 服务上先行验证配置。</p>
+      <p><span className="text-candle">解密失败：</span>口令错误或云端文件已损坏。口令无法找回，只能重建备份。</p>
+      <p><span className="text-candle">拒绝写入（507）：</span>云空间容量不足，或本月流量配额已用尽，下月重置后再试。</p>
+    </div>
+
+    <div className="border-t border-line/40 my-3" />
+
+    {/* 三、端到端加密说明 */}
+    <p className="font-serif text-base text-candle mb-1.5">三、端到端加密说明</p>
+    <p className="text-bronze text-[12px] leading-relaxed mb-1.5">
+      开启「端到端加密」后，每次上传前会用你设置的口令，经 PBKDF2（15 万次迭代）派生 AES-256-GCM 密钥，加密整份快照：
+    </p>
+    <div className="text-bronze text-[12px] leading-relaxed space-y-1 mb-2">
+      <p>· 云端只存密文（VDOS1 容器），服务商与拿到文件的人均无法查看内容；</p>
+      <p>· 口令只保存在本机、绝不随备份上传；本机恢复自动使用，换设备恢复需手动输入；</p>
+      <p>· 加密只保护云端备份，本地 IndexedDB 中的数据仍是明文；</p>
+      <p><span className="text-amber/90">重要：口令一旦丢失，云端已加密的备份将永久无法解密、无法找回。</span>建议把口令另行记录在密码管理器中。</p>
+    </div>
+
+    <div className="border-t border-line/40 my-3" />
+
+    {/* 四、重要提醒 */}
+    <p className="font-serif text-base text-candle mb-1.5">四、重要提醒</p>
+    <div className="text-bronze text-[12px] leading-relaxed space-y-1">
+      <p>· 备份是全量快照、后写覆盖：<span className="text-candle">不支持多设备同时进行编辑</span>，请保持单设备使用；</p>
+      <p>· 坚果云免费版每月有流量与空间限制，<span className="text-candle">建议一天内不要高频同步</span>；</p>
+      <p>· 建议偶尔执行一次「云端恢复」演练，确认备份链路可用；</p>
+      <p>· 云备份与本地文件夹快照（下方区块）互不影响，可同时使用、互为兜底。</p>
+    </div>
+  </div>
+);
 
 export function DataPage() {
   const state = useAppStore();
@@ -550,6 +608,16 @@ export function DataPage() {
             </p>
           </div>
         </Card>
+
+        <div className="px-1">
+          <button
+            onClick={() => showModal({ title: '备份配置说明书', content: BACKUP_GUIDE })}
+            className="inline-flex items-center gap-1 text-bronze-deep text-[11px] hover:text-candle transition-colors"
+          >
+            <HelpCircle size={11} strokeWidth={1.6} />
+            备份配置说明书
+          </button>
+        </div>
 
         {/* 范围 */}
         <Card className="p-5">
