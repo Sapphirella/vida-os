@@ -10,7 +10,8 @@ const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/settings': { title: '设置', sub: '个人主页 · 主题' },
   '/space': { title: '空间', sub: '长文与合集' },
   '/moments': { title: '动态', sub: '生活碎碎念' },
-  '/mailbox': { title: '信箱', sub: '重要信件与照片' },
+  '/diary': { title: '日记', sub: 'Daily · Journal' },
+  '/agent': { title: 'Agent', sub: 'AI · Assistant' },
   '/favorites': { title: '收藏夹', sub: '喜欢的一切' },
 };
 
@@ -20,9 +21,6 @@ function matchTitle(pathname: string): { title: string; sub?: string; canBack: b
   }
   if (pathname.startsWith('/space/article/')) {
     return { title: '文章', sub: 'Space · Article', canBack: true };
-  }
-  if (pathname.startsWith('/mailbox/letter/')) {
-    return { title: '信件', sub: 'Mailbox · Letter', canBack: true };
   }
   if (ROUTE_TITLES[pathname]) {
     return { ...ROUTE_TITLES[pathname], canBack: false };

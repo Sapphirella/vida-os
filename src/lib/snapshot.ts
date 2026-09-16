@@ -42,7 +42,7 @@ export interface SnapshotInfo {
   createdAt: number;
   bytes: number;
   fileCount: number;
-  counts: { articles: number; moments: number; letters: number; notes: number };
+  counts: { articles: number; moments: number; notes: number };
 }
 
 export const supportsFolderPicker = (): boolean =>
@@ -182,7 +182,6 @@ export async function saveSnapshotTo(
   const counts = {
     articles: state.articles.length,
     moments: state.moments.length,
-    letters: state.letters.length,
     notes:
       state.notes.inspiration.length + state.notes.schedule.length + state.notes.todo.length,
   };

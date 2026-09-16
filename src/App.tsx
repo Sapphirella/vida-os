@@ -17,11 +17,11 @@ import { DataPage } from '@/pages/DataPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { SpacePage } from '@/pages/SpacePage';
 import { MomentsPage } from '@/pages/MomentsPage';
-import { MailboxPage } from '@/pages/MailboxPage';
 import { FavoritesPage } from '@/pages/FavoritesPage';
 import { ArticleReaderPage } from '@/pages/ArticleReaderPage';
-import { LetterReaderPage } from '@/pages/LetterReaderPage';
 import { CollectionPage } from '@/pages/CollectionPage';
+import { DiaryPage } from '@/pages/DiaryPage';
+import { AgentPage } from '@/pages/AgentPage';
 
 function App() {
   const hydrate = useAppStore((s) => s.hydrate);
@@ -93,8 +93,8 @@ function App() {
             <Route path="/space/collection/:id" element={<CollectionPage />} />
             <Route path="/space/article/:id" element={<ArticleReaderPage />} />
             <Route path="/moments" element={<MomentsPage />} />
-            <Route path="/mailbox" element={<MailboxPage />} />
-            <Route path="/mailbox/letter/:id" element={<LetterReaderPage />} />
+            <Route path="/diary" element={<DiaryPage />} />
+            <Route path="/agent" element={<AgentPage />} />
             <Route path="/favorites" element={<FavoritesPage />} />
           </Routes>
         </ErrorBoundary>

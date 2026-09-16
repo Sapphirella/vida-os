@@ -56,7 +56,6 @@ export async function exportJSON(state: AppState, scope: ExportScopes = ['all'])
 export type ExportScopeKey =
   | 'articles'
   | 'moments'
-  | 'letters'
   | 'notes'
   | 'favorites'
   | 'profile';
@@ -68,7 +67,6 @@ export type ExportScopes = ExportScope[];
 export const ALL_SCOPE_KEYS: ExportScopeKey[] = [
   'articles',
   'moments',
-  'letters',
   'notes',
   'favorites',
   'profile',
@@ -96,18 +94,15 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
   // 收藏夹导出：除收藏记录本身，也带上被收藏的内容，否则导出的收藏夹是空壳
   let favArticles: typeof state.articles = [];
   let favMoments: typeof state.moments = [];
-  let favLetters: typeof state.letters = [];
   if (has.has('favorites')) {
     const refIds = (t: string) =>
       new Set(state.favorites.filter((f) => f.refType === t).map((f) => f.refId));
     favArticles = state.articles.filter((a) => refIds('article').has(a.id));
     favMoments = state.moments.filter((m) => refIds('moment').has(m.id));
-    favLetters = state.letters.filter((l) => refIds('letter').has(l.id));
   }
 
   const articles = has.has('articles') ? state.articles : favArticles;
   const moments = has.has('moments') ? state.moments : favMoments;
-  const letters = has.has('letters') ? state.letters : favLetters;
 
   return {
     ...state,
@@ -118,7 +113,6 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
       : state.collections.filter((c) => articles.some((a) => a.collectionId === c.id)),
     articles,
     moments,
-    letters,
     favorites: has.has('favorites') ? state.favorites : [],
     notes: has.has('notes') ? state.notes : { inspiration: [], schedule: [], todo: [] },
     categories: state.categories,
@@ -141,10 +135,6 @@ export function collectFileIds(state: AppState): Set<string> {
   state.moments.forEach((m) => {
     m.imageIds.forEach((id) => ids.add(id));
     scanText(m.content);
-  });
-  state.letters.forEach((l) => {
-    l.imageIds.forEach((id) => ids.add(id));
-    scanText(l.content);
   });
   if (state.profile.avatarId) ids.add(state.profile.avatarId);
   if (state.profile.backgroundFileId) ids.add(state.profile.backgroundFileId);
@@ -204,33 +194,15 @@ export function exportMarkdown(state: AppState, scope: ExportScopes = ['articles
     }
   }
 
-  if (has.has('letters')) {
-    if (s.letters.length > 0) {
-      lines.push(`## 信件`);
-      s.letters.forEach((l) => {
-        lines.push(`### ${l.title || '(无题)'}`);
-        lines.push(`*${formatDate(l.createdAt, 'YYYY-MM-DD')}*`);
-        lines.push('');
-        lines.push(l.content);
-        lines.push('');
-        lines.push('---');
-        lines.push('');
-      });
-    }
-  }
-
   if (has.has('favorites') && s.favorites.length > 0) {
     lines.push(`## 收藏`);
     s.favorites.forEach((f) => {
       if (f.refType === 'article') {
         const a = state.articles.find((x) => x.id === f.refId);
         lines.push(`- [文章] ${a ? a.title : '(已删除)'}`);
-      } else if (f.refType === 'moment') {
+      } else {
         const m = state.moments.find((x) => x.id === f.refId);
         lines.push(`- [动态] ${m ? plainText(m.content).slice(0, 40) : '(已删除)'}`);
-      } else {
-        const l = state.letters.find((x) => x.id === f.refId);
-        lines.push(`- [信件] ${l ? l.title || '(无题)' : '(已删除)'}`);
       }
     });
     lines.push('');
@@ -297,16 +269,6 @@ export function exportTXT(state: AppState, scope: ExportScopes = ['all']): strin
   s.moments.forEach((m) => {
     lines.push(`【动态】${formatDate(m.createdAt, 'YYYY-MM-DD HH:mm')}`);
     lines.push(plainText(m.content));
-    lines.push('');
-  });
-
-  s.letters.forEach((l) => {
-    lines.push(`【信件】${l.title || '(无题)'}`);
-    lines.push(formatDate(l.createdAt, 'YYYY-MM-DD'));
-    lines.push('');
-    lines.push(plainText(l.content));
-    lines.push('');
-    lines.push('---');
     lines.push('');
   });
 
@@ -548,20 +510,6 @@ export async function exportPDF(
     });
   }
 
-  if (s.letters.length > 0 && has.has('letters')) {
-    html += h2('信件');
-    s.letters.forEach((l) => {
-      html += `
-        <article style="margin:32px 0;">
-          <h3 style="font-size:22px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(l.title || '(无题)')}</h3>
-          <p style="color:#947D75;font-size:11px;margin:0 0 16px;">${formatDate(l.createdAt, 'YYYY · MM · DD')}</p>
-          <div style="font-size:16px;">${resolveInline(renderMarkdown(l.content))}</div>
-          ${imagesOf(l.imageIds)}
-        </article>
-      `;
-    });
-  }
-
   if (s.notes.inspiration.length > 0 && has.has('notes')) {
     html += h2('灵感') + '<ul style="list-style:none;padding:0;">';
     s.notes.inspiration.forEach((n) => {
@@ -590,9 +538,7 @@ export async function exportPDF(
       const label =
         f.refType === 'article'
           ? state.articles.find((x) => x.id === f.refId)?.title ?? '(已删除)'
-          : f.refType === 'moment'
-            ? plainText(state.moments.find((x) => x.id === f.refId)?.content ?? '').slice(0, 30)
-            : state.letters.find((x) => x.id === f.refId)?.title ?? '(无题)';
+          : plainText(state.moments.find((x) => x.id === f.refId)?.content ?? '').slice(0, 30) || '(已删除)';
       html += `<p style="margin:6px 0;font-size:14px;">★ ${escapeHTML(label)}</p>`;
     });
   }

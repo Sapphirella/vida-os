@@ -6,7 +6,6 @@ import type {
   Collection,
   Article,
   Moment,
-  Letter,
   Favorite,
   InspirationNote,
   ScheduleNote,
@@ -57,12 +56,6 @@ interface Actions {
   deleteMoment: (id: string) => void;
   addMomentComment: (momentId: string, content: string, author?: string) => string;
   deleteMomentComment: (momentId: string, commentId: string) => void;
-
-  // 信件
-  addLetter: (letter: Omit<Letter, 'id' | 'createdAt' | 'unread'>) => string;
-  updateLetter: (id: string, patch: Partial<Letter>) => void;
-  deleteLetter: (id: string) => void;
-  markLetterRead: (id: string) => void;
 
   // 收藏
   toggleFavorite: (refType: Favorite['refType'], refId: string) => void;
@@ -122,7 +115,6 @@ function snapshot(s: Store): AppState {
     collections: s.collections,
     articles: s.articles,
     moments: s.moments,
-    letters: s.letters,
     favorites: s.favorites,
     notes: s.notes,
     categories: s.categories,
@@ -256,35 +248,6 @@ export const useAppStore = create<Store>((set, get) => ({
           ? { ...m, comments: (m.comments ?? []).filter((c) => c.id !== commentId) }
           : m,
       ),
-    }));
-    persist(get());
-  },
-
-  // 信件
-  addLetter: (letter) => {
-    const id = uid('let_');
-    set((s) => ({
-      letters: [{ ...letter, id, unread: true, createdAt: now() }, ...s.letters],
-    }));
-    persist(get());
-    return id;
-  },
-  updateLetter: (id, patch) => {
-    set((s) => ({
-      letters: s.letters.map((l) => (l.id === id ? { ...l, ...patch } : l)),
-    }));
-    persist(get());
-  },
-  deleteLetter: (id) => {
-    set((s) => ({
-      letters: s.letters.filter((l) => l.id !== id),
-      favorites: s.favorites.filter((f) => !(f.refType === 'letter' && f.refId === id)),
-    }));
-    persist(get());
-  },
-  markLetterRead: (id) => {
-    set((s) => ({
-      letters: s.letters.map((l) => (l.id === id ? { ...l, unread: false } : l)),
     }));
     persist(get());
   },
@@ -545,7 +508,6 @@ export const useAppStore = create<Store>((set, get) => ({
         collections: mergeById(cur.collections, incoming.collections),
         articles: mergeById(cur.articles, incoming.articles),
         moments: mergeById(cur.moments, incoming.moments),
-        letters: mergeById(cur.letters, incoming.letters),
         favorites: [
           ...cur.favorites,
           ...(incoming.favorites ?? []).filter(

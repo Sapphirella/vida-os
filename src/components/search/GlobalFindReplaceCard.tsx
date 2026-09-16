@@ -1,5 +1,5 @@
 // 全局查找替换面板（复刻 Nookery FindBar 思路，桌面/移动两端全局可用）
-// - 全局搜索：文章 / 动态 / 信件（标题 + 正文），支持按范围筛选
+// - 全局搜索：文章 / 动态（标题 + 正文），支持按范围筛选
 // - 结果列表：来源路径 + 命中摘要（<mark> 高亮），可勾选批量替换
 // - 上一个 / 下一个：在当前结果中移动高亮
 // - 输入即搜（250ms 防抖）+ Enter 触发；忽略大小写可切换
@@ -17,16 +17,15 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { clsx } from '@/lib/utils';
 
-type ScopeKey = 'all' | 'article' | 'moment' | 'letter';
+type ScopeKey = 'all' | 'article' | 'moment';
 
 const SCOPES: { key: ScopeKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'article', label: '文章' },
   { key: 'moment', label: '动态' },
-  { key: 'letter', label: '信件' },
 ];
 
-type HitKind = 'article' | 'moment' | 'letter';
+type HitKind = 'article' | 'moment';
 
 interface Target {
   kind: HitKind;
@@ -70,10 +69,8 @@ export function GlobalFindReplaceCard() {
   const setFocusRequest = useUIStore((s) => s.setFocusRequest);
   const articles = useAppStore((s) => s.articles);
   const moments = useAppStore((s) => s.moments);
-  const letters = useAppStore((s) => s.letters);
   const updateArticle = useAppStore((s) => s.updateArticle);
   const updateMoment = useAppStore((s) => s.updateMoment);
-  const updateLetter = useAppStore((s) => s.updateLetter);
   const showToast = useUIStore((s) => s.showToast);
 
   const [query, setQuery] = useState('');
@@ -108,7 +105,7 @@ export function GlobalFindReplaceCard() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, close]);
 
-  // 全局内容构造搜索目标：标题（文章/信件）+ 正文
+  // 全局内容构造搜索目标：标题（文章/动态）+ 正文
   // 注意：useMemo 必须位于 early return 之前，保证 hooks 顺序稳定
   const targets = useMemo(() => {
     if (!open) return [];
@@ -127,9 +124,8 @@ export function GlobalFindReplaceCard() {
     };
     if (scope === 'all' || scope === 'article') push('article', articles);
     if (scope === 'all' || scope === 'moment') push('moment', moments);
-    if (scope === 'all' || scope === 'letter') push('letter', letters);
     return out;
-  }, [articles, moments, letters, scope, open]);
+  }, [articles, moments, scope, open]);
 
   const hits = useMemo(() => {
     if (!open) return [];
@@ -212,7 +208,6 @@ export function GlobalFindReplaceCard() {
       ts: Date.now(),
     });
     if (h.kind === 'article') navigate(`/space/article/${h.id}`);
-    else if (h.kind === 'letter') navigate(`/mailbox/letter/${h.id}`);
     else navigate('/moments');
     close(false);
   };
@@ -231,8 +226,7 @@ export function GlobalFindReplaceCard() {
   };
 
   const docTextOf = (kind: HitKind, id: string): string => {
-    const src: EntryLike[] =
-      kind === 'article' ? articles : kind === 'moment' ? moments : letters;
+    const src = kind === 'article' ? articles : moments;
     return src.find((x) => x.id === id)?.content ?? '';
   };
 
@@ -267,8 +261,7 @@ export function GlobalFindReplaceCard() {
         total++;
       }
       if (kind === 'article') updateArticle(id, { content: text });
-      else if (kind === 'moment') updateMoment(id, { content: text });
-      else updateLetter(id, { content: text });
+      else updateMoment(id, { content: text });
     }
     showToast(
       total ? `已替换 ${total} 处` : '内容已变化，未应用替换',
@@ -363,7 +356,7 @@ export function GlobalFindReplaceCard() {
                     else step(1);
                   }
                 }}
-                placeholder="查找全文（文章 / 动态 / 信件）…"
+                placeholder="查找全文（文章 / 动态）…"
                 className="flex-1 min-w-0 px-3 py-2 rounded-pill text-sm font-serif text-paper placeholder:text-[color:var(--find-fg-dim)] outline-none border border-bronze/15 focus:border-[color:var(--find-fg)]/40 transition-colors"
               />
               <span className="font-mono text-[10px] text-[color:var(--find-fg)] whitespace-nowrap">
@@ -492,11 +485,7 @@ export function GlobalFindReplaceCard() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-mono text-[9px] tracking-widest text-[color:var(--find-fg-dim)] uppercase flex-none">
-                          {h.kind === 'article'
-                            ? '文章'
-                            : h.kind === 'letter'
-                              ? '信件'
-                              : '动态'}
+                          {h.kind === 'article' ? '文章' : '动态'}
                         </span>
                         {h.title && (
                           <span className="font-serif text-xs text-headline truncate">

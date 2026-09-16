@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, MessageCircle, Mail, Star } from 'lucide-react';
+import { BookOpen, MessageCircle, StickyNote, Star } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { clsx } from '@/lib/utils';
 import type { FeatureKey } from '@/types';
@@ -14,7 +14,7 @@ const FEATURES: {
 }[] = [
   { key: 'space', label: '空间', en: 'Space', icon: BookOpen, path: '/space', desc: '长文与合集' },
   { key: 'moments', label: '动态', en: 'Moments', icon: MessageCircle, path: '/moments', desc: '朋友圈碎片' },
-  { key: 'mailbox', label: '信箱', en: 'Mailbox', icon: Mail, path: '/mailbox', desc: '重要信件与照片' },
+  { key: 'notes', label: '便签', en: 'Notes', icon: StickyNote, path: '/notes', desc: '灵感 · 日程 · 待办' },
   { key: 'favorites', label: '收藏夹', en: 'Favorites', icon: Star, path: '/favorites', desc: '喜欢的一切' },
 ];
 

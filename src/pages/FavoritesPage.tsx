@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, BookOpen, MessageCircle, Mail, Search } from 'lucide-react';
+import { Star, BookOpen, MessageCircle, Search } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useAppStore } from '@/stores/useAppStore';
@@ -15,7 +15,7 @@ interface FavoriteEntry {
   favId: string;
   refType: Favorite['refType'];
   refId: string;
-  type: 'article' | 'moment' | 'letter';
+  type: 'article' | 'moment';
   title: string;
   excerpt: string;
   createdAt: number;
@@ -26,11 +26,9 @@ export function FavoritesPage() {
   const favorites = useAppStore((s) => s.favorites);
   const articles = useAppStore((s) => s.articles);
   const moments = useAppStore((s) => s.moments);
-  const letters = useAppStore((s) => s.letters);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const updateArticle = useAppStore((s) => s.updateArticle);
   const updateMoment = useAppStore((s) => s.updateMoment);
-  const updateLetter = useAppStore((s) => s.updateLetter);
   const showToast = useUIStore((s) => s.showToast);
 
   // ── 查找 / 替换：作用于收藏引用的底层文档（替换写回 store） ──
@@ -62,20 +60,10 @@ export function FavoritesPage() {
             content: m.content,
             replaceContent: (next) => updateMoment(m.id, { content: next }),
           });
-      } else {
-        const l = letters.find((x) => x.id === f.refId);
-        if (l)
-          out.push({
-            id: l.id,
-            title: l.title || '(无题)',
-            content: l.content,
-            replaceTitle: (next) => updateLetter(l.id, { title: next }),
-            replaceContent: (next) => updateLetter(l.id, { content: next }),
-          });
       }
     }
     return out;
-  }, [favorites, articles, moments, letters, updateArticle, updateMoment, updateLetter]);
+  }, [favorites, articles, moments, updateArticle, updateMoment]);
   const find = usePageFind<HTMLUListElement>(findTargets, {
     onToast: (msg) => showToast(msg, 'success'),
   });
@@ -108,19 +96,6 @@ export function FavoritesPage() {
           createdAt: f.createdAt,
         });
       }
-    } else {
-      const l = letters.find((x) => x.id === f.refId);
-      if (l) {
-        grouped.push({
-          favId: f.id,
-          refType: f.refType,
-          refId: l.id,
-          type: 'letter',
-          title: l.title || '(无题)',
-          excerpt: excerpt(plainText(l.content), 100),
-          createdAt: f.createdAt,
-        });
-      }
     }
   }
 
@@ -130,7 +105,7 @@ export function FavoritesPage() {
         {grouped.length === 0 ? (
           <EmptyState
             title="还没有收藏"
-            hint="在空间、动态或信箱中点星，就能在这里看到"
+            hint="在空间或动态中点星，就能在这里看到"
           />
         ) : (
           <>
@@ -152,13 +127,11 @@ export function FavoritesPage() {
             <ul className="space-y-3" ref={find.listRef}>
               {grouped.map((g) => {
                 const Icon =
-                  g.type === 'article' ? BookOpen : g.type === 'moment' ? MessageCircle : Mail;
+                  g.type === 'article' ? BookOpen : MessageCircle;
                 const path =
                   g.type === 'article'
                     ? `/space/article/${g.refId}`
-                    : g.type === 'letter'
-                      ? `/mailbox/letter/${g.refId}`
-                      : '/moments';
+                    : '/moments';
                 return (
                   <li key={g.favId} {...find.findCardProps(g.refId)}>
                     <Card
@@ -176,7 +149,7 @@ export function FavoritesPage() {
                           <h3
                             className="font-serif text-headline text-base leading-snug truncate-1 group-hover:text-candle transition-colors"
                             dangerouslySetInnerHTML={{
-                              // 动态收藏：标题即摘录，命中算作 content；文章/信件：标题算 title
+                              // 动态收藏：标题即摘录，命中算作 content；文章：标题算 title
                               __html: find.hlText(
                                 g.title,
                                 g.refId,

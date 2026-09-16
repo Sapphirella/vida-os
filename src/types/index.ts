@@ -46,18 +46,9 @@ export interface Moment {
   comments?: MomentComment[];
 }
 
-export interface Letter {
-  id: string;
-  title: string;
-  content: string;
-  imageIds: string[];
-  unread: boolean;
-  createdAt: number;
-}
-
 export interface Favorite {
   id: string;
-  refType: 'article' | 'moment' | 'letter';
+  refType: 'article' | 'moment';
   refId: string;
   createdAt: number;
 }
@@ -106,7 +97,7 @@ export interface Categories {
 }
 
 export interface Settings {
-  lastTab: 'desk' | 'notes' | 'data' | 'settings';
+  lastTab: TabKey;
 }
 
 export interface AppState {
@@ -115,7 +106,6 @@ export interface AppState {
   collections: Collection[];
   articles: Article[];
   moments: Moment[];
-  letters: Letter[];
   favorites: Favorite[];
   notes: {
     inspiration: InspirationNote[];
@@ -131,11 +121,15 @@ export interface AppState {
 // 运行时辅助
 // ============================================================
 
-export type TabKey = 'desk' | 'notes' | 'data' | 'settings';
+export const TAB_KEYS = ['desk', 'diary', 'agent', 'data', 'settings'] as const;
+export type TabKey = (typeof TAB_KEYS)[number];
+
+export const isTabKey = (v: unknown): v is TabKey =>
+  typeof v === 'string' && (TAB_KEYS as readonly string[]).includes(v);
 
 export type NoteTabKey = 'inspiration' | 'schedule' | 'todo';
 
-export type FeatureKey = 'space' | 'moments' | 'mailbox' | 'favorites';
+export type FeatureKey = 'space' | 'moments' | 'notes' | 'favorites';
 
 export interface MediaFile {
   id: string;

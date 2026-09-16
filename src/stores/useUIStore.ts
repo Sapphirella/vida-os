@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { uid, todayKey } from '@/lib/utils';
 import type { ReactNode } from 'react';
+import type { TabKey } from '@/types';
 
 export interface ToastItem {
   id: string;
@@ -11,7 +12,7 @@ export interface ToastItem {
 
 export interface EditorState {
   open: boolean;
-  mode: 'article' | 'moment' | 'letter';
+  mode: 'article' | 'moment';
   editingId?: string;
   initialContent?: string;
   initialTitle?: string;
@@ -25,8 +26,8 @@ export interface EditorState {
 
 interface UIStore {
   // Tab
-  currentTab: 'desk' | 'notes' | 'data' | 'settings';
-  setTab: (tab: 'desk' | 'notes' | 'data' | 'settings') => void;
+  currentTab: TabKey;
+  setTab: (tab: TabKey) => void;
 
   // 笔记内 tab
   notesTab: 'inspiration' | 'schedule' | 'todo';
@@ -51,13 +52,13 @@ interface UIStore {
 
   // 全局查找「跳转到命中处」：目标页挂载后读取并定位/高亮
   focusRequest: {
-    kind: 'article' | 'moment' | 'letter';
+    kind: 'article' | 'moment';
     id: string;
     query: string;
     ignoreCase: boolean;
     /** 该文档正文中的命中序号（只计算正文，即 content 部分） */
     index: number;
-    /** 命中是否落在标题（article/letter 的 title 段） */
+    /** 命中是否落在标题（article 的 title 段） */
     inTitle: boolean;
     ts: number;
   } | null;

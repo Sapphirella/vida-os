@@ -16,10 +16,7 @@ export function EditorOverlay() {
   const updateArticle = useAppStore((s) => s.updateArticle);
   const addMoment = useAppStore((s) => s.addMoment);
   const updateMoment = useAppStore((s) => s.updateMoment);
-  const addLetter = useAppStore((s) => s.addLetter);
-  const updateLetter = useAppStore((s) => s.updateLetter);
   const articles = useAppStore((s) => s.articles);
-  const letters = useAppStore((s) => s.letters);
   const moments = useAppStore((s) => s.moments);
 
   if (!editor.open) return null;
@@ -64,16 +61,6 @@ export function EditorOverlay() {
         }
         break;
       }
-      case 'letter': {
-        if (editingId) {
-          updateLetter(editingId, { title, content, imageIds });
-          showToast('已保存', 'success');
-        } else {
-          addLetter({ title, content, imageIds });
-          showToast('信件已存入', 'success');
-        }
-        break;
-      }
     }
     closeEditor();
   };
@@ -103,19 +90,12 @@ export function EditorOverlay() {
         initialImageIds = m.imageIds;
         initialCreatedAt = m.createdAt;
       }
-    } else if (mode === 'letter') {
-      const l = letters.find((x) => x.id === editingId);
-      if (l) {
-        initialTitle = l.title;
-        initialContent = l.content;
-        initialImageIds = l.imageIds;
-      }
     }
   }
 
-  // 收藏星标只对「已存在」的文章/信件有意义：新建时还没有 id 可收藏
+  // 收藏星标只对「已存在」的文章有意义：新建时还没有 id 可收藏
   const favoriteId =
-    editingId && (mode === 'article' || mode === 'letter')
+    editingId && mode === 'article'
       ? { refType: mode, refId: editingId }
       : undefined;
 
@@ -139,11 +119,10 @@ export function EditorOverlay() {
   );
 }
 
-function getEditorTitle(mode: 'article' | 'moment' | 'letter', isEdit: boolean): string {
-  const map: Record<'article' | 'moment' | 'letter', [string, string]> = {
+function getEditorTitle(mode: 'article' | 'moment', isEdit: boolean): string {
+  const map: Record<'article' | 'moment', [string, string]> = {
     article: ['长文 · Space', '空间 · 编辑'],
     moment: ['动态 · Moments', '动态 · 发布'],
-    letter: ['信件 · Mailbox', '信件 · 编辑'],
   };
   const [create, edit] = map[mode];
   return isEdit ? edit : create;

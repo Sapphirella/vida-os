@@ -45,7 +45,6 @@ import {
 const SCOPES: { key: ExportScopeKey; label: string; en: string; desc: string }[] = [
   { key: 'articles', label: '空间文章', en: 'Articles', desc: '长文 + 合集' },
   { key: 'moments', label: '动态', en: 'Moments', desc: '朋友圈碎片' },
-  { key: 'letters', label: '信箱', en: 'Letters', desc: '重要信件' },
   { key: 'notes', label: '便签', en: 'Notes', desc: '灵感 + 日程 + 待办' },
   { key: 'favorites', label: '收藏夹', en: 'Favorites', desc: '收藏记录 + 被收藏的内容' },
   { key: 'profile', label: '个人资料', en: 'Profile', desc: '头像 / 昵称 / 签名 / 背景' },
@@ -466,7 +465,7 @@ export function DataPage() {
                           {s.name.replace('vidaos-snapshot-', '')}
                         </p>
                         <p className="font-mono text-[10px] text-bronze-deep mt-0.5">
-                          {new Date(s.createdAt).toLocaleString('zh-CN')} · {humanBytes(s.bytes)} · 文章 {s.counts.articles} · 动态 {s.counts.moments} · 信件 {s.counts.letters} · 便签 {s.counts.notes}
+                          {new Date(s.createdAt).toLocaleString('zh-CN')} · {humanBytes(s.bytes)} · 文章 {s.counts.articles} · 动态 {s.counts.moments} · 便签 {s.counts.notes}
                           {s.fileCount ? ` · 媒体 ${s.fileCount}` : ''}
                         </p>
                       </div>

@@ -1,6 +1,7 @@
 // VidaOS 数据持久化 - Dexie 封装
 import Dexie, { type Table } from 'dexie';
-import type { AppState, MediaFile } from '@/types';
+import type { AppState, MediaFile, TabKey } from '@/types';
+import { isTabKey } from '@/types';
 import { DEFAULT_BACKGROUND_PRESET } from './backgrounds';
 
 class VidaDB extends Dexie {
@@ -32,13 +33,26 @@ export async function loadState(): Promise<AppState | null> {
   try {
     const row = await db.state.get(STATE_KEY);
     if (!row?.data) return null;
-    // 兼容迁移：旧版本含内置音景轨道（WebAudio 合成，无实体文件），
-    // 新版已移除内置音频，只保留用户自己导入的本地文件曲目。
+    // 兼容迁移：
+    // 1) 旧版本含内置音景轨道（WebAudio 合成，无实体文件），
+    //    新版已移除内置音频，只保留用户自己导入的本地文件曲目。
+    // 2) 信箱功能已移除（v4 数据模型）：剥离旧 letters 数据，并清理指向
+    //    已删除信件的收藏记录，避免收藏夹出现「已删除」空项。
+    // 3) lastTab 归一化：旧数据可能持久化了已不存在的 tab（如 'notes'），
+    //    恢复时回退到 'desk'，防止启动后 setTab 到无效 key。
+    const lastTab: TabKey = isTabKey(row.data.settings?.lastTab)
+      ? row.data.settings!.lastTab
+      : 'desk';
     const data: AppState = {
       ...row.data,
       tracks: (row.data.tracks ?? []).filter(
         (t) => !(t as { builtin?: unknown }).builtin,
       ),
+      favorites: (row.data.favorites ?? []).filter(
+        // 运行时旧数据可能含 letter 收藏（类型已收窄，需按 string 比较）
+        (f) => (f.refType as string) !== 'letter',
+      ),
+      settings: { ...row.data.settings, lastTab },
     };
     return data;
   } catch (err) {
@@ -89,7 +103,6 @@ export function defaultState(): AppState {
     collections: [],
     articles: [],
     moments: [],
-    letters: [],
     favorites: [],
     notes: {
       inspiration: [],

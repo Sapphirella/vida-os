@@ -1,12 +1,13 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, StickyNote, Database, Settings as SettingsIcon } from 'lucide-react';
+import { Home, NotebookPen, Bot, Database, Settings as SettingsIcon } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { clsx } from '@/lib/utils';
 import type { TabKey } from '@/types';
 
 const TABS: { key: TabKey; label: string; icon: typeof Home; path: string }[] = [
-  { key: 'desk', label: '桌面', icon: Home, path: '/desk' },
-  { key: 'notes', label: '便签', icon: StickyNote, path: '/notes' },
+  { key: 'desk', label: '主页', icon: Home, path: '/desk' },
+  { key: 'diary', label: '日记', icon: NotebookPen, path: '/diary' },
+  { key: 'agent', label: 'Agent', icon: Bot, path: '/agent' },
   { key: 'data', label: '数据', icon: Database, path: '/data' },
   { key: 'settings', label: '设置', icon: SettingsIcon, path: '/settings' },
 ];
@@ -33,7 +34,10 @@ export function BottomTabBar() {
     >
       <div className="max-w-5xl mx-auto h-[56px] px-2 flex items-stretch">
         {TABS.map(({ key, label, icon: Icon, path }) => {
-          const active = location.pathname.startsWith(path) || (path === '/desk' && location.pathname === '/');
+          const active =
+            location.pathname.startsWith(path) ||
+            (path === '/desk' &&
+              (location.pathname === '/' || location.pathname.startsWith('/notes')));
           return (
             <button
               key={key}

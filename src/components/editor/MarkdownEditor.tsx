@@ -43,13 +43,13 @@ interface MarkdownEditorProps {
   initialTitle?: string;
   /** 动态的发布时间（可编辑） */
   initialCreatedAt?: number;
-  mode: 'article' | 'moment' | 'letter';
-  // 文章/动态/信件专用
+  mode: 'article' | 'moment';
+  // 文章/动态专用
   imageIds?: string[];
   collectionId?: string;
   tags?: string[];
   // 收藏
-  favoriteId?: { refType: 'article' | 'moment' | 'letter'; refId: string };
+  favoriteId?: { refType: 'article' | 'moment'; refId: string };
   // 保存
   onSave: (data: {
     title: string;
@@ -423,8 +423,8 @@ export function MarkdownEditor({
         {mode_ === 'edit' && (
           <div className="flex-1 overflow-y-auto vd-editor-scroll">
             <div className="max-w-3xl mx-auto w-full px-4 sm:px-8 py-4 sm:py-6">
-              {/* 标题（文章与信件都需要；信件同样有 title 字段）——随正文滚动 */}
-              {(mode === 'article' || mode === 'letter') && (
+              {/* 标题（文章需要）——随正文滚动 */}
+              {mode === 'article' && (
                 <>
                   <input
                     value={title}
@@ -513,7 +513,7 @@ export function MarkdownEditor({
         {mode_ === 'preview' && (
           <div className="flex-1 overflow-y-auto vd-editor-scroll px-4 sm:px-8 py-4 sm:py-6 max-w-3xl mx-auto w-full">
             {/* 预览中的头部：标题随内容一起滚动（与编辑态布局一致） */}
-            {(mode === 'article' || mode === 'letter') && title.trim() && (
+            {mode === 'article' && title.trim() && (
               <h1 className="font-serif text-headline text-2xl sm:text-3xl mb-2" style={{ fontWeight: 500, lineHeight: 1.3 }}>
                 {title}
               </h1>
