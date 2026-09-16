@@ -104,6 +104,10 @@ export interface WebDavConfig {
   username: string;
   /** 应用密码（坚果云需在官网单独生成，非网页登录密码） */
   password: string;
+  /** 是否启用端到端加密：上传前用口令派生密钥加密快照 */
+  encrypted?: boolean;
+  /** 加密口令（仅存本机，用于派生 AES 密钥；绝不随备份上传） */
+  passphrase?: string;
 }
 
 export interface Settings {

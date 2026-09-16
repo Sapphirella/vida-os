@@ -5,6 +5,11 @@
 // 一个 gzip JSON 快照，通过 WebDAV MKCOL + PUT 上传到用户指定的
 // 目录，固定文件名覆盖写入（后写覆盖，天然符合「单设备编辑」语义）。
 //
+// 可选端到端加密：开启后上传前用「口令 + PBKDF2 派生密钥 + AES-256-GCM」
+// 加密整个 gzip，云端只存密文；取回时用同一口令解密。密文文件头
+// 带 VDOS1 魔数 + salt + iv，解密所需信息全部随文件走，口令只在
+// 本机保存、绝不随备份上传。
+//
 // 注意：纯浏览器直连 WebDAV 可能被跨域（CORS）策略拦截（坚果云未开放
 // 浏览器跨域头），失败时错误信息会如实归因；桌面版（Tauri 壳）下
 // 本模块可无缝复用。
@@ -16,9 +21,87 @@ import type { AppState, WebDavConfig } from '@/types';
 /** 云端固定文件名（幂等覆盖，只保留最新一份） */
 export const BACKUP_FILENAME = 'vidaos-backup.json.gz';
 
+/** 是否需要用户输入口令（下载时发现已加密但未提供口令） */
+export class NeedPassphraseError extends Error {
+  constructor() {
+    super('云端备份已加密，请输入加密口令');
+    this.name = 'NeedPassphraseError';
+  }
+}
+
+/** 当前环境是否支持 Web Crypto（非 https/localhost 下 crypto.subtle 不可用） */
+export const supportsCrypto = (): boolean =>
+  typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined';
+
+// ── 端到端加密（AES-256-GCM + PBKDF2） ────────────────────────
+
+const ENC_MAGIC = new Uint8Array([0x56, 0x44, 0x4f, 0x53, 0x31]); // "VDOS1"
+const SALT_LEN = 16;
+const IV_LEN = 12;
+const PBKDF2_ITERATIONS = 150000;
+
+async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
+  const base = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(passphrase),
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: new Uint8Array(salt), iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    base,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+/** 加密 gzip Blob：返回「VDOS1 + salt + iv + 密文」容器 */
+export async function encryptBlob(blob: Blob, passphrase: string): Promise<Blob> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
+  const key = await deriveKey(passphrase, salt);
+  const data = new Uint8Array(await blob.arrayBuffer());
+  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data));
+  const out = new Uint8Array(ENC_MAGIC.length + SALT_LEN + IV_LEN + cipher.length);
+  out.set(ENC_MAGIC, 0);
+  out.set(salt, ENC_MAGIC.length);
+  out.set(iv, ENC_MAGIC.length + SALT_LEN);
+  out.set(cipher, ENC_MAGIC.length + SALT_LEN + IV_LEN);
+  return new Blob([out], { type: 'application/octet-stream' });
+}
+
+/** 检查 Blob 是否是我们的加密容器 */
+async function isEncryptedContainer(blob: Blob): Promise<boolean> {
+  const head = new Uint8Array(await blob.slice(0, ENC_MAGIC.length).arrayBuffer());
+  return ENC_MAGIC.every((b, i) => head[i] === b);
+}
+
+/** 解密加密容器；口令错误或数据损坏返回 null */
+async function decryptBlob(blob: Blob, passphrase: string): Promise<Blob | null> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  if (buf.length < ENC_MAGIC.length + SALT_LEN + IV_LEN + 16) return null;
+  const salt = buf.subarray(ENC_MAGIC.length, ENC_MAGIC.length + SALT_LEN);
+  const iv = buf.subarray(ENC_MAGIC.length + SALT_LEN, ENC_MAGIC.length + SALT_LEN + IV_LEN);
+  const data = buf.subarray(ENC_MAGIC.length + SALT_LEN + IV_LEN);
+  try {
+    const key = await deriveKey(passphrase, salt);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+    return new Blob([plain], { type: 'application/gzip' });
+  } catch {
+    return null;
+  }
+}
+
 /** 是否已填写可用配置（三项齐全才算） */
 export function hasWebDavConfig(cfg?: WebDavConfig): cfg is WebDavConfig {
   return !!cfg && !!cfg.url.trim() && !!cfg.username.trim() && !!cfg.password.trim();
+}
+
+/** 加密配置是否齐全（开关开启且已设口令） */
+export function hasEncryption(cfg?: WebDavConfig): boolean {
+  return !!cfg?.encrypted && !!cfg.passphrase?.trim();
 }
 
 /** 规范化接口地址：补协议、补末尾斜杠，保证是「目录」地址 */
@@ -146,18 +229,108 @@ export async function syncToWebDav(
 
     const gz = await gzipBlob(payload);
 
+    // 开启加密时：上传前用口令加密为密文容器
+    const encrypted = hasEncryption(cfg);
+    const body = encrypted ? await encryptBlob(gz, cfg.passphrase!) : gz;
+
     const res = await fetch(target, {
       method: 'PUT',
       headers: {
         Authorization: auth,
-        'Content-Type': 'application/gzip',
-        'Content-Length': String(gz.size),
+        'Content-Type': encrypted ? 'application/octet-stream' : 'application/gzip',
+        'Content-Length': String(body.size),
       },
-      body: gz,
+      body,
     });
     if (!res.ok) throw new Error(davError(res.status));
 
-    return { bytes: gz.size, createdAt: Date.now(), url: target };
+    return { bytes: body.size, createdAt: Date.now(), url: target };
+  } catch (e) {
+    if (e instanceof TypeError) {
+      throw new Error(
+        '无法连接 WebDAV 服务器：网络不可达，或浏览器直连被跨域（CORS）策略拦截（桌面版可正常使用）',
+      );
+    }
+    throw e;
+  }
+}
+
+// ── 云端取回 ──────────────────────────────────────────────────
+
+/** 下载、解压并校验云端快照 */
+async function fetchBackupBlob(cfg: WebDavConfig, auth: string): Promise<Blob> {
+  const target = normalizeDavUrl(cfg.url) + BACKUP_FILENAME;
+  const res = await fetch(target, { method: 'GET', headers: { Authorization: auth } });
+  if (res.status === 404) throw new Error('云端还没有备份文件：请先执行一次「云备份」');
+  if (!res.ok) throw new Error(davError(res.status));
+  return res.blob();
+}
+
+async function gunzipBlob(blob: Blob): Promise<string> {
+  try {
+    const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'));
+    return await new Response(stream).text();
+  } catch {
+    throw new Error('云端备份内容不是有效的压缩文件（可能已加密但未提供口令，或文件损坏）');
+  }
+}
+
+export interface DavBackupInfo {
+  bytes: number;
+  createdAt: number;
+  url: string;
+  /** 云端这份备份是否为加密存储 */
+  encrypted: boolean;
+  /** 快照内的纯数据状态（不含本机 webdav 配置） */
+  state: AppState;
+}
+
+/**
+ * 从 WebDAV 取回云端备份。
+ * 若备份已加密：需要提供口令（本机已存则自动使用）；未提供时抛 NeedPassphraseError。
+ */
+export async function downloadFromWebDav(
+  cfg: WebDavConfig,
+  passphrase?: string,
+): Promise<DavBackupInfo> {
+  const base = normalizeDavUrl(cfg.url);
+  const target = base + BACKUP_FILENAME;
+  const auth = 'Basic ' + btoa(unescape(encodeURIComponent(`${cfg.username}:${cfg.password}`)));
+
+  try {
+    const blob = await fetchBackupBlob(cfg, auth);
+    const encrypted = await isEncryptedContainer(blob);
+
+    let gz: Blob;
+    if (encrypted) {
+      const pass = (passphrase ?? cfg.passphrase ?? '').trim();
+      if (!pass) throw new NeedPassphraseError();
+      const plain = await decryptBlob(blob, pass);
+      if (!plain) {
+        throw new Error('解密失败：口令错误或备份数据已损坏。口令无法找回，该备份视为不可用');
+      }
+      gz = plain;
+    } else {
+      gz = blob;
+    }
+
+    const text = await gunzipBlob(gz);
+    let data: { kind?: string; createdAt?: number; state?: AppState };
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error('云端备份 JSON 解析失败：文件可能已损坏');
+    }
+    if (data?.kind !== 'webdav-backup' || !data.state) {
+      throw new Error('云端备份不符合 VidaOS 快照格式');
+    }
+    return {
+      bytes: blob.size,
+      createdAt: data.createdAt ?? Date.now(),
+      url: target,
+      encrypted,
+      state: data.state,
+    };
   } catch (e) {
     if (e instanceof TypeError) {
       throw new Error(

@@ -14,12 +14,14 @@ import {
   Link2,
   User,
   KeyRound,
+  Lock,
+  CloudDownload,
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile, db } from '@/lib/db';
-import { base64ToBlob, saveBlob, saveText } from '@/lib/utils';
+import { base64ToBlob, saveBlob, saveText, clsx } from '@/lib/utils';
 import {
   exportJSON,
   exportMarkdown,
@@ -37,6 +39,9 @@ import {
   syncToWebDav,
   normalizeDavUrl,
   BACKUP_FILENAME,
+  downloadFromWebDav,
+  NeedPassphraseError,
+  supportsCrypto,
 } from '@/lib/webdav';
 import {
   supportsFolderPicker,
@@ -80,11 +85,22 @@ export function DataPage() {
   const [davUrl, setDavUrl] = useState(davCfg?.url ?? '');
   const [davUser, setDavUser] = useState(davCfg?.username ?? '');
   const [davPass, setDavPass] = useState(davCfg?.password ?? '');
+  const [davEnc, setDavEnc] = useState(davCfg?.encrypted ?? false);
+  const [davPassPhrase, setDavPassPhrase] = useState(davCfg?.passphrase ?? '');
   const [davBusy, setDavBusy] = useState(false);
+  const [davRestoring, setDavRestoring] = useState(false);
 
   const doSaveDavConfig = () => {
     if (!davUrl.trim() || !davUser.trim() || !davPass.trim()) {
       showToast('请填写完整的 WebDAV 配置', 'error');
+      return;
+    }
+    if (davEnc && !supportsCrypto()) {
+      showToast('当前环境不支持 Web Crypto 加密（需要 https 或 localhost）', 'error');
+      return;
+    }
+    if (davEnc && !davPassPhrase.trim()) {
+      showToast('启用加密需要设置加密口令', 'error');
       return;
     }
     updateSettings({
@@ -92,6 +108,7 @@ export function DataPage() {
         url: davUrl.trim(),
         username: davUser.trim(),
         password: davPass.trim(),
+        ...(davEnc ? { encrypted: true, passphrase: davPassPhrase.trim() } : {}),
       },
     });
     showToast('WebDAV 配置已保存', 'success');
@@ -114,6 +131,44 @@ export function DataPage() {
       showToast(`云备份失败：${e.message}`, 'error');
     } finally {
       setDavBusy(false);
+    }
+  };
+
+  /** 从云端取回并覆盖恢复；备份已加密且缺少口令时弹输入框 */
+  const doDavRestore = async (pass?: string) => {
+    if (davRestoring) return;
+    const cfg = hasWebDavConfig(state.settings.webdav)
+      ? state.settings.webdav
+      : null;
+    if (!cfg) {
+      showToast('请先填写并保存 WebDAV 配置', 'error');
+      return;
+    }
+    setDavRestoring(true);
+    try {
+      const info = await downloadFromWebDav(cfg, pass);
+      if (
+        !confirm(
+          `用云端这份备份覆盖当前全部数据？\n\n${new Date(info.createdAt).toLocaleString('zh-CN')} · ${humanBytes(info.bytes)}${info.encrypted ? ' · 已加密' : ''}\n\n当前数据将被替换（建议先手动导出一份 JSON 再恢复）。`,
+        )
+      ) {
+        return;
+      }
+      importState(info.state, 'overwrite');
+      showToast('已从云端恢复', 'success');
+    } catch (e: any) {
+      if (e instanceof NeedPassphraseError) {
+        showModal({
+          title: '输入加密口令',
+          content: '云端备份已加密，请输入备份时设置的口令才能取回。若口令丢失，该备份将无法解密。',
+          inputMode: { placeholder: '加密口令' },
+          onInputConfirm: (v) => void doDavRestore(v),
+        });
+      } else {
+        showToast(`云端恢复失败：${e.message}`, 'error');
+      }
+    } finally {
+      setDavRestoring(false);
     }
   };
 
@@ -416,6 +471,14 @@ export function DataPage() {
               <CloudUpload size={13} strokeWidth={1.6} />
               {davBusy ? '同步中…' : '云备份'}
             </button>
+            <button
+              onClick={() => void doDavRestore()}
+              disabled={!hasWebDavConfig(state.settings.webdav) || davRestoring}
+              className="btn-ghost disabled:opacity-40"
+            >
+              <CloudDownload size={13} strokeWidth={1.6} />
+              {davRestoring ? '取回中…' : '云端恢复'}
+            </button>
             {hasWebDavConfig(state.settings.webdav) && (
               <span
                 className="font-mono text-[10px] text-bronze-deep ml-auto self-center truncate-1 max-w-[180px]"
@@ -423,6 +486,56 @@ export function DataPage() {
               >
                 ☁ {normalizeDavUrl(state.settings.webdav!.url)}
               </span>
+            )}
+          </div>
+
+          {/* 端到端加密开关 */}
+          <div className="mt-4 rounded-card border border-line/40 p-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setDavEnc(!davEnc)}
+                role="switch"
+                aria-checked={davEnc}
+                aria-label="端到端加密开关"
+                className={clsx(
+                  'relative w-10 h-[22px] rounded-full transition-colors flex-shrink-0',
+                  davEnc ? 'bg-wine/70' : 'bg-bronze/25',
+                )}
+              >
+                <span
+                  className={clsx(
+                    'absolute top-[2px] w-[18px] h-[18px] rounded-full bg-paper transition-all shadow',
+                    davEnc ? 'left-[20px]' : 'left-[2px]',
+                  )}
+                />
+              </button>
+              <div className="min-w-0">
+                <p className="text-paper text-sm font-medium leading-tight">端到端加密（可选）</p>
+                <p className="text-bronze text-[11px] leading-snug mt-0.5">
+                  上传前用口令加密整份快照，云端只存密文，取回时用同一口令解密。
+                </p>
+              </div>
+            </div>
+            {davEnc && (
+              <div className="mt-3">
+                <label className="block">
+                  <span className="flex items-center gap-1.5 text-bronze-light text-xs mb-1">
+                    <Lock size={12} strokeWidth={1.6} /> 加密口令
+                  </span>
+                  <input
+                    type="password"
+                    value={davPassPhrase}
+                    onChange={(e) => setDavPassPhrase(e.target.value)}
+                    placeholder="设置备份加密口令（40 位以内）"
+                    autoComplete="new-password"
+                    className="w-full px-3 py-2 rounded-card border border-line/50 bg-bg-base text-paper text-sm placeholder:text-bronze-deep focus:border-wine/60 focus:outline-none"
+                  />
+                </label>
+                <p className="text-amber/90 text-[11px] leading-relaxed mt-2">
+                  ⚠ 数据敏感：口令仅保存在本机、不会上传云端。若丢失口令，云端已加密的备份将
+                  <span className="text-candle">永远无法解密</span>（无法找回），请务必牢记或另行保存。
+                </p>
+              </div>
             )}
           </div>
 
