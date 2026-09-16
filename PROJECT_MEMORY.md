@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-12（v3.8 修复配图顺序 / 滑块 resize / ul&gt;div 三项）
+> 最后更新：2026-09-16（v4.0 删信箱 + WebDAV 云同步与端到端加密 + 数据页备份配置说明书）
 
 ---
 
@@ -9,14 +9,16 @@
 
 | 项目 | 说明 |
 |---|---|
-| **是什么** | 纯前端、纯本地的个人生活记录 PWA（日记/便签/文章/动态/信件/收藏/音乐/备份） |
+| **是什么** | 纯前端、纯本地的个人生活记录 PWA（主页/日记/便签/文章/动态/收藏/音乐/云备份） |
 | **在哪里** | `/Users/amarisgo/Documents/DeepSeek Harness/VidaOS`（**父目录含空格，命令里要带引号**） |
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
-| **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/` |
+| **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
-| **当前版本** | package.json 写的是 `3.0.0`；文档按迭代日志记到 **v3.8** |
-| **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA |
-| **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`）；**无后端、无账号** |
+| **当前版本** | package.json 写的是 `3.0.0`、设置页显示「v3.0 · night study」；文档按迭代日志记到 **v4.0** |
+| **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
+| **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
+| **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
+| **云同步** | WebDAV（坚果云等）可选端到端加密；**注意纯浏览器直连坚果云被 CORS 拦截**（见第 8 节） |
 
 ### ⚠️ 改动前必读的四条
 
@@ -35,10 +37,10 @@
 | 字段 | 值 |
 |------|-----|
 | **项目名称** | VidaOS —— 暗夜书房 |
-| **项目类型** | 纯前端 SPA（个人博客 / 生活记录），PWA 离线可用 |
+| **项目类型** | 纯前端 SPA（个人生活记录），PWA 离线可用 |
 | **存放路径** | `/Users/amarisgo/Documents/DeepSeek Harness/VidaOS` |
 | **Git 仓库** | 已初始化，`master` 分支，无 remote（历史都是本地的） |
-| **设计语言** | 暗夜书房：深色 + 用户自定义色板 + 烛光环境光 |
+| **设计语言** | 三书房主题：暗夜（默认）/ 白昼（日间）/ 猩红（独立深色），色板由用户亲自选定 |
 | **构建产物** | `dist/`（含 Service Worker + manifest，可 PWA 部署；**已加入 .gitignore**） |
 | **历史归档** | V2.1 旧应用已由用户备份并**从工作区删除**；git 历史中永久可取回（见第 6 节） |
 
@@ -52,19 +54,42 @@
   **删除了工作区副本**。需要对照这份可直接双击运行的原生应用时：
   `git checkout 4377d94 -- archive/v2`（任选一个提交里的该路径）。
 - **v3.0（2026-09-10）** —— 「暗夜书房」重构：推倒重写为 Vite + React + TS + Tailwind + Zustand + Dexie。
-- **v3.1 ~ v3.7（2026-09-11 ~ 09-12）** —— 修完 9 项 P0 缺陷、死代码清理、错误边界、
+- **v3.1 ~ v3.8（2026-09-11 ~ 09-12）** —— 修完 9 项 P0 缺陷、死代码清理、错误边界、
   动态评论/收藏/时间线/查找替换、图片插入正文、导出多选、本地快照备份、配色精进、
   皮肤实验（**已撤销**）、PDF 导出多轮返工（见第 12 节）、信件标题、目录整理。
   详见第 13 节变更日志。
+- **v3.9（2026-09-13）** —— `白昼书房` 日间主题；自托管字体（去 Google Fonts CDN，中文 Noto Serif SC）；
+  夸克旧内核兼容（legacy 构建 + 3.8s 挂载兜底）；全局查找替换覆盖层（⌘K）+ 三页面页内查找 +
+  命中跳转定位（focusRequest）；移动端编辑器改版、待办 textarea/自动置底/拖拽排序；
+  日历「今」按钮；评论输入时隐藏底栏与 FAB。
+- **v3.10（2026-09-14）** —— `猩红书房` 独立主题（液态玻璃卡片、光效锚点固定）；
+  背景预设精简为实色方案（仅保留「深紫」给猩红书房）；删除设置页「背景」区块；
+  **移动输入三连修**：重命名改应用内 Modal、查找面板聚焦释放滚动锁、栏色统一 `var(--bar-bg)`
+  （真机复测待确认）。
+- **v4.0（2026-09-16）** —— **信箱功能整体移除**（数据模型 v4），便签迁入主页宫格；
+  底栏改为 **主页 / 日记 / Agent / 数据 / 设置**（日记、Agent 为占位页）；
+  新增 **WebDAV 云同步**（gzip 快照上传、配置存设置）+ **端到端加密**（PBKDF2 + AES-256-GCM，
+  密文自包含）+ **云端取回**；数据页新增**「备份配置说明书」弹窗**（教程 / 失败详解 / 加密说明 / 提醒）。
 
 ---
 
 ## 3. 设计语言与色板（用户亲自选定，**不要擅自改**）
 
 ### 定位
-VidaOS 不是社交网络，是**私密的个人生活记录空间**。暗色优先，文字是绝对主角。
+VidaOS 不是社交网络，是**私密的个人生活记录空间**。文字是绝对主角。
+
+### 三主题机制（`src/lib/theme.ts` + `index.html` 内联脚本 + `globals.css`）
+- `ThemeMode = 'system' | 'day' | 'night' | 'scarlet'`；持久化键 `vidaos-theme`（localStorage）；
+- `index.html` 内联脚本在首帧前设置 `data-theme`（防刷新白屏闪烁）→ `main.tsx` 调用
+  `initTheme()` 校正 + 跟随系统监听（`system` 模式才挂 MediaQuery 监听，切换时先摘旧监听）；
+- 三个主题各自有 `meta theme-color` / 文档标题（`META_THEME_COLOR` / `DOC_TITLES`）。
+- **猩红书房是独立主题**（`resolveTheme` 之一），不再是「夜间 × 深紫预设」配方；
+  `SettingsPage` 兼容旧数据：夜间 + 深紫预设 + 无自定义图 → 自动识别为猩红书房；
+  退出猩红书房时会清掉深紫预设（回到主题实色方案）。
+- 日间主题（白昼书房）与暗夜书房的**可读性色板不同**，日间对比度调整见 09-13/14 提交。
 
 ### 屏幕色板（`tailwind.config.js` + `src/styles/globals.css` 的 `:root`）
+暗夜书房基准 token（猩红书房在其上叠加酒红渐变与液态玻璃变量）：
 
 | Token | 色值 | 用途 |
 |---|---|---|
@@ -88,16 +113,18 @@ VidaOS 不是社交网络，是**私密的个人生活记录空间**。暗色优
 `--card-border rgba(74,63,60,.55)`、`--card-glow rgba(232,195,158,.1)`。
 **改 token 要同时改 `tailwind.config.js` 与 `globals.css` 的 `:root`**（两处都要）。
 
-### 字体
+### 字体（全部本地自托管，无 CDN）
 - **显示/数字**：`JetBrains Mono`（时钟、英文小标）
 - **正文/标题**：`EB Garamond`（衬线，长文阅读）
+- **中文**：`Noto Serif SC`（@fontsource 本地 woff2，`public/fonts/`；EB Garamond/Inter/JetBrains Mono 不含中文）
 - **UI 元素**：`Inter`（无衬线）
-- 字体从 Google Fonts 加载（`index.html`），PWA 运行时缓存。
+- 09-13 起移除 Google Fonts CDN 依赖（`cf1bb7f`）。⚠️ `vite.config.ts` 里仍残留
+  `fonts.googleapis.com` 的 runtimeCaching 死配置（无害，可清理）。
 
 ### 排版基准（当前值）
 - 正文 `.prose-vidaos`：`1.1875rem`（19px）/ 行高 `1.95`
-- 文章/信件阅读页标题：`1.75rem`（sm 以上 `2rem`）
-- 动态正文 `.prose-moment`：`1rem` / 行高 `1.85`（比长文紧凑）
+- 文章阅读页标题：`1.75rem`（sm 以上 `2rem`）
+- 动态正文 `.prose-moment`：`1rem` / 行高 `1.85`（比长文紧凑），字间距 `0.06em`
 
 ### 打印/PDF 专用配色（与屏幕不同！）
 米色底 `#F2EBE0` + 正文 `#1B1A1F` + 小节标题酒红 `#6A080E` + 辅助 `#947D75`。
@@ -108,14 +135,16 @@ PDF 里**不要用屏幕的暗色 token**。
 ## 4. 关键设计决策
 
 ### 1) 分层
-`pages/`（路由页面）→ `components/`（layout / home / notes / editor / common）→
+`pages/`（路由页面）→ `components/`（layout / home / notes / editor / search / common）→
 `stores/`（状态）→ `lib/`（数据与工具）。路由与全局布局在 `App.tsx` 与 `main.tsx`。
 
 ### 2) 状态管理：三个 Zustand store
-- `useAppStore`：**业务数据**（profile / collections / articles / moments / letters /
-  favorites / notes / categories / tracks / settings）+ 全部 action。
+- `useAppStore`：**业务数据**（profile / collections / articles / moments / favorites /
+  notes / categories / tracks / settings）+ 全部 action。
   另外带一个**运行时标记 `hydrated`**（不持久化）。
-- `useUIStore`：UI 状态（currentTab / notesTab / **selectedDate** / editor / toasts / modal）。
+- `useUIStore`：UI 状态（currentTab / notesTab / **selectedDate** / editor / toasts / modal /
+  findPanel / commentInputFocused / focusRequest 等）。`modal.content` 是 **ReactNode**，
+  可直接传 JSX 构造弹窗内容。
 - `useMusicStore`：音乐播放（持有 `audio` 实例与 WebAudio 节点）。
 
 ### 3) 持久化（**曾有致命 bug，务必遵守**）
@@ -123,24 +152,33 @@ PDF 里**不要用屏幕的暗色 token**。
 **必须只用 `snapshot(store)` 取纯数据字段写库** —— 直接把 `get()` 交给 IndexedDB 会因为
 里面混着 action 函数而抛 `DataCloneError`，且被 try/catch 吞掉 → **数据静默不落库**（v3.0 真实事故）。
 `hydrated` 必须为真后才允许回写 `settings.lastTab`，否则会用初始值覆盖刚读出的持久化值。
+`loadState()` 做**兼容迁移**（v4）：
+- 剔除旧版内置音景轨道（`builtin` 标记，新版只保留用户导入的本地曲目）；
+- 剥离旧 `letters` 数据，并清掉引用已删信件的收藏（`refType === 'letter'`）；
+- `lastTab` 归一化：旧数据可能持久化了已不存在的 tab（如 `'notes'`），非法值回退 `'desk'`。
 
-### 4) 路由：HashRouter
-静态托管无需 SPA fallback。Tab 路由 `/desk /notes /data /settings`；
-子视图 `/space/collection/:id`、`/space/article/:id`、`/mailbox/letter/:id`。
-`TopBar` 依据 `location.pathname` 决定标题与返回键。
-**HashRouter 并不能让 `index.html` 用 `file://` 打开**（Vite 入口模板 + ES module 被 CORS 拦），
-v3.0 文档曾误称可以，已证伪。
+### 4) 路由：HashRouter（v4）
+Tab 路由 `/desk /diary /agent /data /settings`；子视图 `/notes /space /space/collection/:id`
+`/space/article/:id /moments /favorites`。
+`TopBar` 依据 `location.pathname` 决定标题/副题与返回键（`ROUTE_TITLES` + `matchTitle`；
+`/notes` 路由时底部「主页」高亮）。
+**HashRouter 并不能让 `index.html` 用 `file://` 打开**（Vite 入口模板 + ES module 被 CORS 拦），已证伪。
 
-### 5) 数据模型
+### 5) 数据模型（v4）
 见 `src/types/index.ts`。要点：
-- `Article.imageIds` / `Moment.imageIds` / `Letter.imageIds` 存 **fileId 引用**；
+- **无 `Letter`**；`TabKey = 'desk'|'diary'|'agent'|'data'|'settings'`；
+  `FeatureKey = 'space'|'moments'|'notes'|'favorites'`；
+- `AppState.version = 3`；`Favorite.refType` 仅 `'article' | 'moment'`；
+- `Article.imageIds` / `Moment.imageIds` 存 **fileId 引用**；
 - `Moment.comments?: MomentComment[]`（**旧数据可能没有，读取一律 `?? []`**）；
-- `Favorite` 是跨类型收藏（article / moment / letter）；
-- `Settings.lastTab` 记录上次所在 tab。
+- `Settings.lastTab` + `Settings.webdav?: WebDavConfig`
+  （`url` / `username` / `password` / `encrypted?` / `passphrase?`，见第 4 节之 15)）；
+- `Profile` 仍保留 `backgroundPreset` / `backgroundFileId` 字段（背景机制见第 4 节之 8)）。
 
 ### 6) 媒体文件与外链（fileId → objectURL）
 图片/音频以 Blob 存在 Dexie `files` 表。`src/lib/fileUrl.ts` 维护 `id → objectURL` 缓存
-（带失败缓存）。**`clearFileURLCache()` / `revokeFileURL()` 目前仍无人调用**（见第 8 节）。
+（带失败缓存）。`revokeFileURL()` 在 MusicPlayerCard 删除曲目时调用；
+**`clearFileURLCache()` 目前仍无人调用**（见第 8 节）。
 
 ### 7) 正文内嵌图片：`fileRef:` 语法
 正文里写 `![说明](fileRef:<fileId>)` 即可把本地图片插进正文。
@@ -148,23 +186,33 @@ v3.0 文档曾误称可以，已证伪。
 - 渲染必须走 **`<MarkdownView>`**（`components/common/MarkdownView.tsx`）：
   它渲染后再把 `img[src^="fileRef:"]` 换成 objectURL，文件缺失时显示「（这张图片已丢失）」；
 - 导出/备份必须通过 `collectFileIds()` 收集引用（它会扫 `imageIds` + `content` 里的 fileRef）；
-- 编辑器缩略图有「插入正文」按钮（在光标处插入）+ 拖拽排序。
+- 编辑器缩略图有「插入正文」按钮（在光标处插入）+ 拖拽排序（触屏长按 350ms 进入）。
 
-### 8) 背景与「栏色」
-`Background.tsx` 按 `profile.backgroundPreset` 渲染预设渐变，或按 `backgroundFileId`
-渲染自定义图（加 62% 暗色蒙版保可读性）。预设色卡在 `src/lib/backgrounds.ts`。
-**注意：背景只在卡片缝隙里露出一条（手机上约 16px），用户很难看出切换。**
-所以每个预设还带一个 `bar` 字段，驱动 `--bar-bg`，让**顶栏/底栏**跟着变色 —— 这才看得见。
+### 8) 背景与「栏色」（v3.10 实色方案）
+`src/lib/backgrounds.ts`：`PRESET_BACKGROUNDS` 只剩 `none`（默认，不叠加渐变，页面直接是
+主题 `--bg-base` 实色）与 `deep`（深紫渐变，**仅猩红书房**使用：
+`linear-gradient(135deg,#0F0A14, #341915 70%, #6A080E)`）。
+- `DEFAULT_BACKGROUND_PRESET = 'none'`；预设的 `bar` 字段驱动 `--bar-bg`
+  （`none` 时由 globals.css 按主题兜底），顶栏/底栏毛玻璃同步变色；
+- 触屏与桌面毛玻璃视觉统一，栏色不钉死固定色；
+- 设置页**已删除「背景」区块**（75b1fc9），主题切换在「外观」区块完成。
+- 背景层 `-z-10` 且 `body` 透明化，手机端切换背景/主题才能透出（89897e4）。
 
 ### 9) PDF 导出（**本项目最脆弱的部分，改动前请读第 12 节**）
-当前实现：`html2canvas` 把整篇渲成**一张长 canvas**，再按页切片贴到各页。
+当前实现（`4377d94` 重做版，仍生效）：`html2canvas` 把整篇渲成**一张长 canvas**，
+再按页切片贴到各页。
 - 页面几何：`PDF_RENDER_W = 720`、`PT_PER_PX = A4_W / 720`、
-  `MARGIN_TOP = 64` / `MARGIN_BOTTOM = 48`、`PAGE_CONTENT_PX` 为每页可用高度；
+  `MARGIN_TOP = 64` / `MARGIN_BOTTOM = 48`、`PAGE_CONTENT_PX` 为每页可用高度、
+  `PDF_BG = '#F2EBE0'`；
 - **切点由 `computePageCuts()` 直接在 canvas 像素上找行间空白带中点** ——
   与最终贴图出自同一张画布，避免「浏览器坐标预测 vs html2canvas 实际排版」的累积偏差；
-- 末页内容不足时垂直居中；每页有居中页码（`· n ·`）；单图上限为内容区高度减 24px；
-- 图片以 data URL 内嵌（`buildImageDataUrls`）；正文 `fileRef:` 由 `resolveInline()` 换成 data URL；
-- 排版沿用用户最喜欢的「最早那一版」观感：连续排版 + 等比铺满整页宽度。
+  行判定全宽扫描，短行不被误判为空白带；**保证不会把一行字切成两页**；
+- `RENDER_SCALE = 2`（html2canvas scale，保证像素级扫描精度）；
+- 末页内容不足时**垂直居中**（`y = MARGIN_TOP + (pageCapPt - contentH)/2`）；
+- 每页底部居中页码 `· n ·`（古铜色，y ≈ A4_H − MARGIN_BOTTOM/2 − 8 ≈ 810pt）；
+- 单图上限为内容区高度减 24px；图片以 data URL 内嵌（`buildImageDataUrls`）；
+  正文 `fileRef:` 由 `resolveInline()` 换成 data URL；丢失图片渲染「（图片已丢失）」占位；
+- 排版观感（用户钦定「最早那一版」）：720px 容器连续排版 + 等比铺满整页宽度。
 
 ### 10) 本地文件夹快照备份
 `src/lib/snapshot.ts`（File System Access API）。每份快照是一个文件夹：
@@ -174,7 +222,7 @@ v3.0 文档曾误称可以，已证伪。
 - 体积优化：state 用原生 `CompressionStream('gzip')`（实测约 36%），
   媒体文件按原 Blob 直存（**不做 base64**，省约 33%）；
 - 文件夹句柄存在 Dexie `meta` 表（db version 2）。
-- Safari/Firefox 不支持该 API，已给提示并引导用 JSON 导出。
+- Safari/Firefox 不支持该 API，已给提示并引导用 JSON 导出 / WebDAV 备份。
 
 ### 11) 错误边界（两层）
 `components/common/ErrorBoundary.tsx`：
@@ -183,20 +231,63 @@ v3.0 文档曾误称可以，已证伪。
   单页崩溃时顶栏与底部 Tab 仍可用，切路由自动复位。
 
 > 之所以必须加：v3.0 曾因 `App.tsx` 两个 effect 互相 ping-pong 触发
-> `Maximum update depth exceeded`，**点任意 Tab 就白屏**（已修）。
+> `Maximum update depth exceeded`，**点任意 Tab 就白屏**（已修，一次性守卫见 App.tsx）。
 
 ### 12) 音乐播放器
 内置音景用 WebAudio 实时合成（雨声 = 白噪声 + 低通；烛光 = 60/90Hz 叠加），
 本地音频用 `<audio>` + objectURL。`pause()` 保留 `audioEl` 以支持同曲续播。
+旧版内置音景轨道已随 v4 迁移剔除（`builtin` 字段过滤）。
 
 ### 13) 分类管理
 灵感/日程/待办各有 `categories: string[]`，支持筛选 + 双击重命名 + 删除 + 新增；
 删除分类保留便签（便签的 `category` 字段不变）。
 
 ### 14) 皮肤系统：**已撤销，不要再加**
-v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完全撤销**（配色回到原版）。
-`src/lib/skins.ts` 与相关 CSS 段已删除，`settings.skin` 字段也已移除。
-**不要再引入皮肤/主题切换**，除非用户明确要求。
+v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完全撤销**。
+**不要再引入皮肤/主题切换**扩展机制 —— 主题统一走 `theme.ts` 的三主题体系
+（暗夜/白昼/猩红），新增主题必须保证三套 token 齐全（见第 3 节）。
+
+### 15) WebDAV 云同步与端到端加密（v4.0，详见 `src/lib/webdav.ts`）
+- 备份文件固定名 `BACKUP_FILENAME = 'vidaos-backup.json.gz'`（每次同步**覆盖同一份**，
+  只保留最新）；
+- 上传链路：`snapshot()` 纯数据 → gzip（CompressionStream）→ `PUT`（先 `MKCOL` 建目录）；
+  下载链路：`GET` → 自动识别加密 → 解密 → 解析快照 → 确认后覆盖恢复；
+  恢复前**需要 passphrase 时抛 `NeedPassphraseError`**，DataPage 弹输入框；
+- **端到端加密**：`PBKDF2（150000 迭代，SHA-256）` 派生 AES-256-GCM 密钥；
+  密文容器 = `VDOS1` 魔数(5B) + salt(16B) + iv(12B) + 密文，**自包含、可独立解密**；
+  口令只存本机 `Settings.webdav.passphrase`，**绝不随备份上传**
+  （备份内的 `settings` 只保留 `lastTab`，导出/上传前会剥离 webdav 口令）；
+- 导出 API：`encryptBlob` / `decryptBlob` / `supportsCrypto`（Web Crypto 可用性，HTTP 非本地环境为 false）/
+  `hasWebDavConfig` / `hasEncryption` / `normalizeDavUrl`；
+- **硬性限制**：纯浏览器直连坚果云会被 **CORS 拦截**（坚果云未开放跨域头），
+  报错会明确提示是 CORS；**Tauri 桌面壳落地后自动解除、代码无需改动**；
+- UI：数据页「WebDAV 全量备份」区块（配置表单 url/账号/应用密码 + 加密开关与口令 +
+  保存配置 + 云端备份 + 云端恢复 + 注意事项）+ 区块下方**「备份配置说明书」小字链接**弹窗
+  （`BACKUP_GUIDE` 常量：配置教程 / 401/403/404/409/CORS/507/解密失败详解 /
+  加密原理与口令管理 / 多设备与流量限制提醒）；顶栏齿轮全部改为**云同步图标**，
+  未配置时点击跳 `/data` 并 toast 提示。
+
+### 16) 全局查找与替换（v3.9 起，勿回退结构）
+- **全局**：`GlobalFindReplaceCard.tsx` 全屏覆盖层，TopBar 放大镜或 **⌘K** 打开，
+  按钮为「替换」「全选」「反选」三段式（参照 Nookery FindBar，勿改回死板的多按钮）；
+  文字颜色由 `--find-fg` 驱动（夜间淡粉，日间深色）；
+  输入框聚焦期间**释放 body 滚动锁**（防滚动被锁死）；
+- **页内**：`PageFindBar.tsx` 三页面共用（文章阅读/动态/便签），配 `usePageFind` hook
+  与 `focusRequest.ts` 机制：点结果后跳转并**闪烁高亮定位**到第 N 个命中处
+  （子页面挂载后按 query 消费 focusRequest，别改成 setTimeout 猜时机）。
+
+### 17) 移动端输入（v3.10 三连修，勿回退，真机待复测）
+- 重命名**弃用原生 `prompt()`**（iOS PWA standalone 下不可用）→ 改 `useUIStore.showModal`
+  的 `inputMode` 应用内 Modal 输入；
+- 查找面板聚焦释放 body 滚动锁；TopBar / BottomTabBar / 评论输入框内联灰统一 `var(--bar-bg)`；
+- 三处毛玻璃栏加 `will-change: backdrop-filter`。
+- 待办/日程长按拖拽：排序模式 CSS 锁 `touch-action` 起手即拖；普通模式长按成立后
+  window 级原生 `touchmove(passive:false)` + `preventDefault` 接管。
+
+### 18) 兼容性（勿回退）
+- `@vitejs/plugin-legacy`（targets Chrome≥60 / Android≥6 / Safari≥10 / iOS≥10，modernPolyfills）+ 
+  dev 用 esbuild `target: 'es2018'` —— 夸克旧内核不支持 ES2020（可选链/?.）白屏的修复；
+- `index.html` 3.8s 挂载兜底层（夸克 UA 特判提示「关闭云加速/智能转码」+ 重试按钮）。
 
 ---
 
@@ -205,41 +296,49 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
 ```
 VidaOS/
 ├── 打开VidaOS.command          # ★ 双击启动（自动装依赖 → 起服务 → 开浏览器）
-├── index.html                   # Vite 入口模板（勿双击）
-├── src/                         # 50 个文件，唯一权威实现
-│   ├── main.tsx                 # 入口：ErrorBoundary(fullscreen) > HashRouter > App
+├── index.html                   # Vite 入口（主题防闪烁脚本 + 3.8s 挂载兜底，勿双击）
+├── src/                         # 56 个文件，唯一权威实现
+│   ├── main.tsx                 # 入口：ErrorBoundary(fullscreen) > initTheme > HashRouter > App
 │   ├── App.tsx                  # 全局布局 + 路由 + tab 同步 + Background + ErrorBoundary(inline)
-│   ├── styles/globals.css       # 全局样式 + 设计 token(:root) + Markdown 排版 + 工具类
-│   ├── types/index.ts           # 全部数据类型
+│   ├── styles/globals.css       # 三主题 token(:root/[data-theme=...]) + Markdown 排版 + 工具类
+│   ├── types/index.ts           # 全部数据类型（v4，含 WebDavConfig）
 │   ├── lib/
-│   │   ├── db.ts                # Dexie：state / files / meta（version 2）
+│   │   ├── db.ts                # Dexie：state / files / meta（version 2）+ loadState 迁移
+│   │   ├── theme.ts             # 三主题模式（localStorage 持久化 + 跟随系统）
+│   │   ├── backgrounds.ts       # 背景预设（none / deep·猩红专属）+ 栏色
 │   │   ├── fileUrl.ts           # Blob → objectURL 缓存
 │   │   ├── markdown.ts          # marked + DOMPurify（放开 fileRef: 协议）
-│   │   ├── exportImport.ts      # 导入导出：JSON/MD/TXT/PDF + 范围多选 + 分页切点
+│   │   ├── exportImport.ts      # 导入导出：JSON/MD/TXT/PDF + 范围多选 + 像素级分页切点
 │   │   ├── snapshot.ts          # 本地文件夹快照（≤10 份，gzip + 原 Blob）
-│   │   ├── backgrounds.ts       # 背景预设色卡 + 栏色
+│   │   ├── webdav.ts            # WebDAV 云同步 + 端到端加密（PBKDF2 + AES-256-GCM）
+│   │   ├── focusRequest.ts      # 查找跳转定位（query + 命中序号）
 │   │   └── utils.ts             # 时间/ID/压缩/文本工具
 │   ├── stores/                  # useAppStore / useUIStore / useMusicStore
 │   ├── components/
-│   │   ├── layout/              # Background / TopBar / BottomTabBar
-│   │   ├── home/                # ClockHeader / FeatureGrid / CalendarCard / DayScheduleCard / MusicPlayerCard
+│   │   ├── layout/              # Background / TopBar / BottomTabBar（5 Tab）
+│   │   ├── home/                # ClockHeader / FeatureGrid(4 宫格) / CalendarCard / DayScheduleCard / MusicPlayerCard
 │   │   ├── notes/               # SegmentedControl / CategoryChips / Inspiration / Schedule / Todo / ScheduleEditor
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
+│   │   ├── search/              # GlobalFindReplaceCard / PageFindBar / usePageFind
 │   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
 │   │                            #   + ErrorBoundary / MarkdownView
 │   └── pages/                   # 11 个路由页面
-│       DeskPage / NotesPage / DataPage / SettingsPage / SpacePage / CollectionPage /
-│       ArticleReaderPage / MomentsPage / MailboxPage / LetterReaderPage / FavoritesPage
+│       DeskPage / DiaryPage(占位) / AgentPage(占位) / NotesPage / DataPage / SettingsPage /
+│       SpacePage / CollectionPage / ArticleReaderPage / MomentsPage / FavoritesPage
 ├── public/                      # favicon.svg + icons/（PWA 图标，manifest 引用）
 ├── scripts/make-icons.mjs       # ⚠️ 生成 PWA 图标（依赖 sharp 但**未在 package.json 声明**，当前跑不了）
 ├── docs/
 │   ├── preview-v3-*.png         # 5 张界面截图（README「界面预览」引用中）
-│   └── palette-suggestion.html  # 色板依据（当前生效的颜色就来自它）
+│   └── palette-suggestion.html  # 色板依据（暗夜书房发散地）
 ├── PROJECT_MEMORY.md            # 本文件
 ├── README.md
-└── 配置：vite.config.ts(PWA+别名) / tailwind.config.js(色板) / postcss.config.js /
-        tsconfig.json(strict + noUnusedLocals，exclude 含 废案) / package.json / .gitignore
+└── 配置：vite.config.ts(PWA+legacy+别名+manualChunks) / tailwind.config.js(色板) /
+        postcss.config.js / tsconfig.json(strict + noUnusedLocals) / package.json / .gitignore
 ```
+
+### 路由表（App.tsx 实际注册）
+`/`（重定向到 currentTab）、`/desk`、`/notes`、`/data`、`/settings`、`/space`、
+`/space/collection/:id`、`/space/article/:id`、`/moments`、`/diary`、`/agent`、`/favorites`。
 
 ---
 
@@ -255,55 +354,73 @@ VidaOS/
 `.gitignore` 里仍保留 `/废案/` 一行（无害，防止以后临时堆放的文件进入版本库）。
 **不要**把当前在用的文件往那儿放。
 
+> ⚠️ **新坑（2026-09-16 真实发生）**：项目根目录有用户放的一个**未跟踪目录 `参考文件ventana/`**
+> （另一项目的参考材料）。`git add -A` / `git add .` 会把它**整个带进提交**（已踩过一次，
+> 用 `git reset --soft HEAD~1` + `git reset 参考文件ventana` 撤销）。它不属于 VidaOS 仓库，
+> **提交前用 `git status` 检查，别 `add -A`**；要不要写进 `.gitignore` 由用户决定。
+
 ---
 
-## 7. 已实现功能清单（当前）
+## 7. 已实现功能清单（当前，v4.0）
 
-- **桌面**：大时钟 Hero + 4 功能入口 + 双卡月历/当日日程（**点日期联动**）+ 音景播放器
-- **空间**：Markdown 长文 + 合集 + 标签 + 封面 + 配图（**可插入正文**、可拖拽排序）
+- **桌面**：大时钟 Hero + 4 功能宫格（空间/动态/便签/收藏夹）+ 双卡月历/当日日程
+  （**点日期联动**、**「今」按钮**）+ 音景播放器（同步控制台）
+- **空间**：Markdown 长文 + 合集 + 标签 + 封面 + 配图（**可插入正文**、可拖拽排序、
+  可在合集页直接编辑）
 - **动态**：**时间线**（日期分组 + 竖线节点）+ 头像/昵称 + **评论** + **收藏**
-  + **编辑（含改时间）** + Markdown 渲染 + **查找/替换**（高亮命中、上下跳转、替换/全部替换）
-- **信箱**：信件（**有标题**）+ 照片 + 火漆未读提示
-- **收藏夹**：跨类型聚合（文章 / 动态 / 信件）
+  + **编辑（含改时间）** + Markdown 渲染 + **查找/替换**（高亮命中、跳转、替换/全部替换）
 - **便签**：灵感/日程/待办分区滑块 + 分类管理（增删改）+ 日程与首页日历联动
-- **编辑器**：全屏 Markdown（工具栏 / 预览 / 图片 / **插入正文** / 字数 / 收藏星标）
+  + 待办**自动置底 / textarea 多行 / 长按拖拽排序**
+- **收藏夹**：跨类型聚合（文章 / 动态）
+- **日记 / Agent**：占位页（路由就绪，功能待开放）
+- **编辑器**：全屏 Markdown（工具栏 / 预览 / 图片 / **插入正文** / 字数 / 收藏星标 /
+  移动端大按钮 + 浮动格式条）
+- **全局查找替换**：桌面/移动通用覆盖层（⌘K）+ 三页面页内查找（focusRequest 定位闪烁）
 - **数据**：导出 JSON（含图片 Base64）/ TXT / MD / PDF，**范围可多选**
-  （文章 / 动态 / 信件 / 便签 / 收藏夹 / 个人资料）；PDF 内嵌图片 + 页码；
-  **本地文件夹快照备份**（≤10 份，自动清理最早）；导入 JSON / MD / TXT
-- **设置**：头像（压缩）/ 背景（5 预设 + 自定义，**栏色随之变化**）/ 昵称 / 签名
-- **全局**：错误边界（不再白屏）、PWA 离线、响应式、键盘焦点环、
-  `prefers-reduced-motion`、安全区适配
+  （文章 / 动态 / 便签 / 收藏夹 / 个人资料）；PDF 内嵌图片 + 居中页码 + **不切行**；
+  **本地文件夹快照备份**（≤10 份，自动清理最早）；**WebDAV 全量备份**（可选端到端加密 +
+  云端恢复 + 配置说明书弹窗）；导入 JSON / MD / TXT
+- **设置**：头像（压缩）/ 昵称/签名 / **外观（三主题卡 + 猩红书房方案卡）** / 关于
+- **主题**：暗夜 / 白昼 / 猩红（液态玻璃，光效锚点固定）；**自托管字体**（含中文）
+- **兼容与全局**：两层错误边界、PWA 离线、响应式、键盘焦点环、`prefers-reduced-motion`、
+  安全区适配、夸克旧内核兼容（legacy + 挂载兜底）
 
 ---
 
-## 8. 已知问题与待处理（真实未修项）
+## 8. 已知问题与待处理（真实未修项，截至 2026-09-16）
 
-> v3.8 已修掉三项：`SegmentedControl` 滑块 resize 错位、`ul > div` 非法嵌套 3 处、
-> 以及新发现的「文章配图渲染在正文上方」。明细见第 13 节。
-> 下面剩下的都仍是**真实未修**的。
-
+### 8.1 功能/代码缺陷
+- **`DataPage` 用 `useAppStore()` 订阅了整个 store**（`DataPage.tsx:127`）：任一字段
+  （含 `hydrated`）变化都会重渲染整页；且它把整个 store（混着 action 函数）传进
+  `exportJSON` / `saveSnapshot`，目前靠 `JSON.stringify` 静默丢弃函数才没出事 ——
+  与 v3.0 那次 `DataCloneError` 同源，建议统一改成传 `snapshot()` 的纯数据。
 - **`DataPage` 重置数据时未调用 `clearFileURLCache()`** → objectURL 缓存残留
-  （`fileUrl.ts` 里这两个函数目前 0 调用）。
-- **异步操作缺 try/catch**：`SettingsPage`（头像/背景上传）、`MarkdownEditor.handleImage`、
-  `MusicPlayerCard.handleImport` —— 失败会产生 unhandled rejection，
-  `handleImage` 失败时还会误报「已添加 N 张图片」。
-- **a11y**：`MediaImage` 多数调用未传 `alt`；`Card` 带 `onClick` 时渲染为 `div`（键盘不可达）；
-  `Toast` 无 `aria-live`；`Modal` 无 dialog 语义 / Escape。
-- **`date-fns` 是未使用依赖**（`src/` 0 引用），可移除。
-- **`scripts/make-icons.mjs` 跑不了**：依赖 `sharp` 但未写入 `package.json`
-  （node_modules 里那个 sharp 是孤儿安装，实测版本 0.35.4）。
-- **动态目前不能调整配图顺序**（只有文章编辑器有拖拽排序）。
-- **`DataPage` 用 `useAppStore()` 订阅了整个 store**：任一字段（含 `hydrated`）变化都会
-  重渲染整页；且它把整个 store（混着 action 函数）传进 `exportJSON` / `saveSnapshot`，
-  目前靠 `JSON.stringify` 静默丢弃函数才没出事 —— 与 v3.0 那次 `DataCloneError` 同源，
-  建议统一改成传 `snapshot()` 的纯数据。
+  （`fileUrl.ts` 里该函数目前 0 调用；`revokeFileURL` 已在 MusicPlayerCard 使用）。
+- **异步操作缺 try/catch**：`SettingsPage`（头像上传 `handleAvatar`）、
+  `MarkdownEditor.handleImage`（压缩/保存循环无包裹，失败会 unhandled rejection 且可能
+  已插入前几张图）、`MusicPlayerCard.handleImport` —— 会误报「已添加 N 张图片」或
+  产生未处理 rejection。
+- **a11y**：`MediaImage` 多数调用未传 `alt`；`Card` 带 `onClick` 时渲染为 `div`
+  （键盘不可达）；`Toast` 无 `aria-live`；`Modal` 无 dialog 语义 / Escape。
 - **时区隐患**：`ScheduleView.formatDateLabel`、`CalendarCard` 用 `new Date('YYYY-MM-DD')`
   解析（按 UTC 解析、再按本地显示）。UTC+8 下正确，UTC 以西会整体差一天。
 - **`TopBar` 返回用 `navigate(-1)`**：直接刷新在 `/space/article/:id` 这类深链接后按返回，
   可能退出应用而不是回到列表。
 - **收藏夹里的「动态」类收藏只跳到 `/moments`**，不定位到被收藏的那一条。
-- **版本号三处不一致**：`package.json`=3.0.0、设置页显示「v3.0 · night study」、文档=v3.8。
+- **`vite.config.ts` 残留 Google Fonts runtimeCaching 死配置**（自托管后无意义，可删）。
 - 低优先级设想：文章加密、静态站点导出、自定义主题色。
+
+### 8.2 平台 / 外部限制（如实告知用户）
+- **WebDAV 纯浏览器直连坚果云被 CORS 拦截**（坚果云未开放跨域头）；代码就绪，
+  **Tauri 桌面壳落地后自动解除**。当前可用备选：支持 CORS 的 WebDAV 服务。
+- **iOS 真机复测待确认**：v3.10 移动输入修复（重命名 Modal / 灰遮罩 / 输入框）在桌面与
+  模拟器验证通过，**真机未复测**。
+- **日记 / Agent 页为占位页**，功能需求待用户提供。
+- **多设备同时编辑同一 WebDAV 备份会互相覆盖**，说明书弹窗已提醒单设备编辑。
+
+### 8.3 版本号不一致
+`package.json` = 3.0.0、设置页显示「v3.0 · night study」、文档迭代 = v4.0。
+（低优，改设置页文案需要用户确认显示什么。）
 
 ---
 
@@ -338,17 +455,20 @@ VidaOS/
 | react / react-dom | ^18.3.1 | UI | MIT |
 | react-router-dom | ^6.26.2 | Hash 路由 | MIT |
 | zustand | ^4.5.5 | 状态管理 | MIT |
-| dexie | ^4.0.8 | IndexedDB 包装 | Apache-2.0 |
+| dexie | ^4.0.8 | IndexedDB 包装（version 2） | Apache-2.0 |
 | marked | ^14.1.2 | Markdown 渲染 | MIT |
 | dompurify | ^3.1.6 | HTML 净化 | MPL-2.0 |
 | jspdf | ^2.5.2 | PDF 生成 | MIT |
 | html2canvas | ^1.4.1 | DOM → canvas | MIT |
 | lucide-react | ^0.441.0 | 图标 | ISC |
+| @fontsource/eb-garamond / inter / jetbrains-mono / noto-serif-sc | ^5.3.0 | **自托管字体**（无 CDN） | OFL |
 | date-fns | ^4.1.0 | **未使用**（可移除） | MIT |
 | vite / @vitejs/plugin-react | ^5.4.3 / ^4.3.1 | 构建 | MIT |
-| typescript | ^5.5.4 | 类型 | Apache-2.0 |
+| @vitejs/plugin-legacy | ^5.4.3 | 旧内核 ES5 bundle（夸克等） | MIT |
+| typescript | ^5.5.4 | 类型（strict + noUnusedLocals） | Apache-2.0 |
 | tailwindcss / postcss / autoprefixer | ^3.4.10 / ^8.4.45 / ^10.4.20 | 样式管线 | MIT |
-| vite-plugin-pwa | ^0.20.5 | PWA（Workbox，预缓存 19 条） | MIT |
+| vite-plugin-pwa | ^0.20.5 | PWA（Workbox，预缓存 111 条） | MIT |
+| terser | ^5.51.2 | 生产压缩（devDep） | BSD-2-Clause |
 
 **未声明但被脚本引用**：`sharp`（`scripts/make-icons.mjs`）—— 见第 8 节。
 
@@ -370,18 +490,22 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
 |---|---|
 | 加一个页面 | `src/pages/` 新建 → `App.tsx` 注册路由 → 若是 Tab 还要改 `BottomTabBar.tsx` 的 `TABS`；子视图标题改 `TopBar.tsx` 的 `ROUTE_TITLES`/`matchTitle` |
 | 加一个字段 | `types/index.ts` → `lib/db.ts` 的 `defaultState()` → `stores/useAppStore.ts` 加 action → UI 调用 |
-| 改存档结构 | 注意 **`db.ts` 的 Dexie 版本号要 +1**，否则老用户数据读不出来 |
-| 改设计 token | `tailwind.config.js` 的 `colors` **和** `styles/globals.css` 的 `:root`（两处） |
+| 改存档结构 | 注意 **`db.ts` 的 Dexie 版本号要 +1**，否则老用户数据读不出来；迁移逻辑写在 `loadState()` |
+| 改设计 token | `tailwind.config.js` 的 `colors` **和** `styles/globals.css` 的 `:root` / `[data-theme=...]`（各主题都要过一遍） |
+| 加 / 改主题 | `lib/theme.ts`（模式枚举/解析/应用）+ `index.html` 内联脚本 + `globals.css` 主题变量 + 设置页主题卡 |
 | 改导出 / 备份 | `lib/exportImport.ts`（`SCOPES` 与 `scopedState`）；快照相关在 `lib/snapshot.ts` |
 | 改 PDF 版式 | `lib/exportImport.ts` 的 `exportPDF` + `computePageCuts` —— **先看第 12 节** |
+| 改 WebDAV / 加密 | `lib/webdav.ts`（协议/加密/取回）+ `pages/DataPage.tsx`（UI + BACKUP_GUIDE 文案） |
 | 改首页 | `pages/DeskPage.tsx` + `components/home/*` |
 | 改编辑器 | `components/editor/*` + `globals.css` 的 `.prose-vidaos` |
+| 改查找 | `components/search/*` + `lib/focusRequest.ts` + `useUIStore`（findPanel / focusRequest） |
 
 ### 怎么验证（本项目标准做法）
 1. `npm run typecheck` + `npm run build`（最低要求，**不等于修好了**）；
 2. **无头 Chrome 走真实 UI**：在项目根建一个临时 `__probe.html`（Vite 会伺服它），
    里面用 `iframe` 加载应用、用 JS 模拟点击/输入，再把结论 `POST` 给一个本地 HTTP 收集器；
-3. 用完**删掉探针文件**，别提交。
+   或复用本会话的 `/tmp/vidaos-verify/`（playwright-core 1.63.0 + 系统 Chrome 脚本）；
+3. 用完**删掉探针文件/临时目录**，别提交。
 
 ⚠️ **两个已踩过的坑**：
 - Chrome 的 `--virtual-time-budget` 会让 **IndexedDB 回调永不完成** →
@@ -392,8 +516,8 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
 
 ### Git 提交约定
 `feat:` / `fix:` / `style:`（不改逻辑）/ `refactor:` / `chore:` / `docs:`；
-大版本变更在 footer 写 `BREAKING CHANGE:`。提交前确保 `git status` 干净、
-`typecheck` 通过、临时探针已删除。
+大版本变更在 footer 写 `BREAKING CHANGE:`。提交前确保 `git status` 干净
+（**当心未跟踪的 `参考文件ventana/`，不要 `add -A`**）、`typecheck` 通过、临时探针已删除。
 
 ---
 
@@ -436,101 +560,94 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
     --disable-gpu --disable-software-rasterizer`。否则 Chrome 自己的 sandbox 初始化
     失败会直接 `SIGTRAP` 崩掉，表现为「DevTools 连上了又立刻断开」。
     仍然**不要加 `--virtual-time-budget`**（见第 11 节，会卡死 IndexedDB）。
+11. **`git add -A` 会带上未跟踪目录（2026-09-16 真实踩坑）**：项目根目录的
+    `参考文件ventana/` 与 VidaOS 无关但未 gitignore，一次 `git add -A` 把 1.4 万行
+    卷进了「数据页说明书弹窗」的提交里。撤销手法：`git reset --soft HEAD~1` →
+    `git reset <误提交的目录>` → 重新 `git add` 只该提交的文件。**提交前先 `git status` 看全。**
+12. **LSP 报错可能只是索引缓存过期**：删除文件后编辑器仍报该文件的 module not found
+    （如 `MailboxPage.tsx`），但 `npx tsc -b` 干净通过 —— 先跑真实编译再判断，别被
+    过期诊断带偏去重抄已删除的页面。
+13. **PDF 像素级验证法（4377d94 版式）**：用 PyMuPDF（fitz）把导出的 PDF 转 PNG，
+    逐页检查：内容上下留白是否对称（文字偏上 = 末页/内容页定位 bug）、
+    行是否被横切（找与文字行重叠的页面边界线）。浏览器坐标预测不可信，
+    以**同一张渲染 canvas 的像素扫描**为准（这就是 `computePageCuts` 的原理）。
 
 ---
 
 ## 13. 变更日志
 
+### [v4.0] - 2026-09-16 —— 信箱移除 + 云同步与端到端加密 + 说明书弹窗
+- **信箱功能整体移除**（`89a12ec`，BREAKING）：删 `Letter` 类型、信箱页/编辑器/搜索/收藏/
+  数据导出范围/备份链路/路由；**便签迁入主页宫格第 4 格**；`loadState` 自动迁移
+  （剥 letters、滤 letter 收藏、`lastTab` 归一化回退 `desk`）；
+  底栏改为 **主页/日记/Agent/数据/设置**（`TabKey` 重定义，`DiaryPage`/`AgentPage` 占位）。
+- **WebDAV 云同步**（`93afbde`）：`webdav.ts` 全量 gzip 快照（`CompressionStream`）、
+  MKCOL + PUT 上传、文件名 `vidaos-backup.json.gz` 固定覆盖、错误归因
+  （401/403/404/409/507/CORS/网络）；数据页新增「WebDAV 全量备份」区块（配置表单 +
+  云端备份 + 注意事项）；顶栏齿轮全部改为云同步图标（未配置跳 `/data` 提示）。
+- **端到端加密 + 云端取回**（`cb4934e`）：PBKDF2(150000) + AES-256-GCM，密文容器
+  `VDOS1`+salt(16B)+iv(12B) 自包含；加密开关 + 口令输入 + 丢失口令警示 +
+  「云端恢复」按钮（下载→自动识别加密→需口令→确认覆盖）；冒烟验证：正确口令往返一致、
+  错误口令失败、明文不被误判；关闭开关维持明文链路。
+- **备份配置说明书弹窗**（`7a89da7`）：WebDAV 区块下方小字链接「备份配置说明书」，
+  弹窗覆盖：配置教程（应用密码生成/地址填写/保存/备份/恢复）、失败详解
+  （401/404/409/CORS/507/解密失败）、端到端加密说明（原理/口令管理/丢失后果）、
+  重要提醒（单设备编辑/流量限制/恢复演练）。
+
+### [v3.10] - 2026-09-14 —— 猩红书房 + 背景实色方案 + 移动输入三连修
+- **猩红书房独立主题**（`6813fac` 方案卡 → `7e968ce` 封装为「特殊书房主题」→ `c08551e`
+  液态玻璃卡片 → `bed4e0e` 光效锚点固定，**移除鼠标跟随**，`liquidGlass.ts` 已删除）；
+  `ThemeMode` 增 `scarlet`；兼容旧配方（夜间 × 深紫 × 无自定义图）自动识别；
+- **背景预设精简**：`backgrounds.ts` 仅 `none`（默认实色）/ `deep`（深紫，猩红专属渐变），
+  `DEFAULT_BACKGROUND_PRESET='none'`；设置页「背景」区块删除（`75b1fc9`），
+  移除背景装饰遮罩、修日间对比度与外观预览色块（`e06f2c8`）；
+- **移动端输入修复**（`7a813f1` + `a2cc025`）：重命名弃用原生 `prompt()` 改应用内
+  `showModal` 的 inputMode；查找面板聚焦**释放 body 滚动锁**；栏色统一 `var(--bar-bg)`；
+  三处毛玻璃栏加 `will-change: backdrop-filter`。
+- **待办排序**（`3c82841`）：排序模式 CSS 锁 `touch-action`；普通模式长按成立后
+  window 级原生 touchmove(passive:false)+preventDefault 接管。
+- 合集操作按钮横排至标题栏下（`7e968ce`）。
+
+### [v3.9] - 2026-09-13 —— 白昼书房 + 自托管字体 + 夸克兼容 + 查找替换体系
+- **白昼书房日间主题**（`d5b9069`），三态并存（system/day/night）；编辑器日间文字
+  不可见修复 + 内联语法工具栏重写（`644b492`）；日间皮肤可读性与完成按钮强化
+  （`5773f10`、`e06f2c8` 部分）；日间白色查找框（`b1056f9`）；
+- **自托管 Web 字体**（`cf1bb7f` + `74baea0`）：@fontsource 本地 woff2，中文走
+  Noto Serif SC，移除 Google Fonts CDN；
+- **夸克兼容**（`d76c515`）：`@vitejs/plugin-legacy` + dev es2018 + index.html 3.8s
+  挂载兜底（夸克 UA 特判提示）；NO_QUARK 特判被移除；
+- **查找替换**（`6e75a4b` → `0b7a5b9`）：全局覆盖层面板（⌘K，按钮「替换/全选/反选」
+  复刻 Nookery）+ 三页面页内查找入口 + focusRequest 跳转定位闪烁（`80994ba`）；
+- **移动端编辑器改版**（`32f1c5d` + `a32870b` + `40f780a`）：底部双行大按钮/浮动格式条/
+  长按图片排序；「存」→「保存」；文件直接下载到系统下载文件夹；
+- **待办**（`04c8c13` textarea 回车=换行；`a7c5676` 已完成自动置底；`27be1cf`/`0d19175`
+  完成按钮边框与未完成态视觉强化）；
+- **桌面/日程**（`b1056f9`）：日程主页编辑按钮+自动排序；日历「今」按钮（`f9dbd73`）；
+  评论输入时隐藏底栏与 FAB + 触屏滚动优化（`2f1b0e8`）；
+- 手机端背景切换不生效修复（`89897e4`）：body 透明化让 `-z-10` 背景层透出；
+- 取消 `.dumate` 自动化测试快照跟踪（`f29d158`）。
+
 ### [v3.8] - 2026-09-12 —— 修掉三项实测确认的缺陷
-本轮先做了一次全量实测审计（无头 Chrome 走真实 UI，4 轮共 42 项检查），
-确认核心链路健康后，修掉以下三项。**修完复测 15 项全绿，其中 7 项是回归不变量。**
+（配图顺序 / SegmentedControl 滑块 resize / `ul > div` 非法嵌套 3 处 —— 与原版相同，
+修完复测 15 项全绿，其中 7 项是回归不变量。教训见第 12 节第 8 条。）
 
-- **文章配图渲染在正文上方**（新发现，文档此前未记录）：`ArticleReaderPage.tsx`
-  的 gallery 块写在 `<MarkdownView>` **之前**，而它自己的注释和 README 写的都是
-  「放在正文下方」。已把 gallery 移到正文之后、间距 `mb-8` → `mt-8`。
-  实测：修前 `proseTop=712 / figTops=[164]`（图在上方），修后
-  `prose=[200,530] / figTops=[562]`（图在下方），且「已插入正文的图不在下方重复」
-  的不变量仍成立。
-- **`SegmentedControl` 滑块 resize 后错位**：原来只在 `notesTab` 变化时测量。
-  改为 `measure()` + `ResizeObserver`（同时观察容器与三个按钮），并在 `setState`
-  前做值比较以防 ResizeObserver 首次回调导致自激。实测：1280px → 390px，
-  修前偏差 **218px**（指示器宽 322px 而按钮只有 105px），修后偏差 **1px**；
-  「resize 后再切分区」「放大回桌面」两个方向也都 1px。
-- **`ul > div` 非法嵌套 3 处**：`InspirationView` / `ScheduleView` / `TodoView` 的
-  编辑态直接返回 `<Card>`（div）而没包 `<li>`。已各补一层 `<li>`，
-  实测三处编辑态 `ul` 直接子元素全部为 `LI`，且编辑态「保存」仍生效。
+### [v3.7] - 2026-09-12 —— 目录整理（废案归档，用户已删除）
 
-> 教训见第 12 节第 8 条：**注释写的行为不等于代码的行为**，涉及 DOM 顺序/版式
-> 的断言必须用真实浏览器量坐标，不能靠读代码下结论。
-
-### [v3.7] - 2026-09-12 —— 目录整理
-- 新建 `废案/`，把 `archive/v2/`（git mv）与 `.dumate/`（上一轮 PDF 排查的临时产物，
-  51MB）移入；删除 `.DS_Store` / `tsconfig.tsbuildinfo` / `dist/`；
-  `.gitignore` 加 `/废案/`；`tsconfig.json` 的 exclude 由 `archive` 改为 `废案`。
-- 移入 `废案/` 的都是可安全删除的内容（旧应用在 git 历史中永久保留）。
-- **用户随后已备份并删除 `废案/`**；仓库中不再有该目录，V2.1 旧应用改由
-  `git checkout 4377d94 -- archive/v2` 取回。
-
-### [v3.6] - 2026-09-12 —— PDF 版式由另一位 agent 重做
-- 切点改为在渲染画布像素上找行间空白带中点（`computePageCuts`），行判定全宽扫描，
-  短行不再被误判为空白带；
-- 页边距统一为顶 64pt / 底 48pt，末页内容不足时垂直居中；
-- 新增页脚居中页码；单图上限改为内容区高度减 24px。
+### [v3.6] - 2026-09-12 —— PDF 版式重做（`4377d94`，当前仍生效）
+- 修复**文字整体偏上、单行跨页切割**：切点改为在渲染画布像素上找行间空白带中点
+  （`computePageCuts`），行判定全宽扫描，短行不再被误判为空白带；
+- 页边距统一为顶 64pt / 底 48pt，**末页内容不足时垂直居中**（不再悬在顶部）；
+- 新增页脚居中页码 `· n ·`；单图上限改为内容区高度减 24px。
 
 ### [v3.5] - 2026-09-11 —— PDF 排版回退到最早那一版（用户认为最好）
-- 恢复「720px 容器连续排版 + 一次渲成长图 + 按页切片」的观感；
-  移除逐页渲染 / 页面容器 / 按段落摊平与二分装箱等中间产物；
-  只保留「切点不切断文字行」与「内嵌图片」两项。
-
 ### [v3.4] - 2026-09-11 —— 信件标题 + PDF 每页只填一半
-- **信件没有标题输入框**：标题输入只在 `mode === 'article'` 渲染，而 `Letter` 有 `title` 字段 →
-  永远为空且无处可填。现文章与信件都显示标题输入框。
-- **PDF 每页只有上半部分**：曾按单元高度累加估算容量，但相邻段落 margin 会折叠 →
-  严重高估 → 每页塞满后又被收敛逻辑推走。改为用真实布局二分。
-
 ### [v3.3] - 2026-09-11 —— PDF 字号 / 空白页 / 格式 / 卡死
-- **导出把页面卡死**：分页循环每追加一个节点读一次 `scrollHeight` = 几千次同步重排。
-  改为批量测量。
-- **图片后面两大页空白**：图片限高 866 + 边距 28 = 894 > 每页 890 → 被判"超过一整页"，
-  而拆分函数对非文本节点 `return null` → **图片被丢弃并留下空白页**。
-- **正文太小**：正文 14 → 16px；**灵感/动态换行被吞**：`escapeHTML` 改为 `renderMarkdown`。
-- JPEG 质量 0.92 → 0.86。
-
 ### [v3.2] - 2026-09-11 —— 动态互动 / 导出多选 / 快照备份
-- 动态：头像 + 昵称 + **评论**（`Moment.comments`）+ **收藏**
-  （顺带让收藏夹里原本无法触发的「动态」分支可用）+ **时间线**（日期分组 + 竖线节点）
-  + **查找/替换**（`<mark>` 高亮、上下跳转、替换/全部替换）。
-- 导出范围**多选**；新增「收藏夹」（自包含：带上被收藏的文章/动态/信件及其合集）
-  与「个人资料」范围。
-- **本地文件夹快照备份**：≤10 份、超出删最早、手动导出不占额度；
-  state 走 gzip（约 36%）、媒体按原 Blob 直存（省约 33%）；
-  `db.ts` 升到 version 2（新增 `meta` 表存句柄）。
-
 ### [v3.1] - 2026-09-11 —— 动态 Markdown / 配图与 PDF / 配色精进
-- 动态支持 Markdown（`.prose-moment` 紧凑排版）；文章配图修复；
-  **图片可插入正文**（`fileRef:` + `MarkdownView`）；PDF 内嵌图片；文章标题/正文字号调整。
-- 配色精进（按 `docs/palette-suggestion.html`）：新增 `charcoal`（层级）、`line`（描边）、
-  `amber`（高亮）、`parchment`、`ash` 与三个语义色 `olive`/`sapphire`/`wine.bright`；
-  卡片底色由发褐的棕改为中性炭黑。
-  **皮肤系统（含浅色卡片）在下一版被用户要求完全撤销。**
-
-### [v3.0-修复与清理] - 2026-09-11
-- **错误边界**：两层（最外层全屏 + 页面级），渲染出错不再白屏。
-- **两个致命缺陷**：点任意 Tab 白屏（effect ping-pong）；数据持久化从未生效（`DataCloneError`）。
-- **9 项 P0 缺陷**：月历↔日程联动、首页新增日程写成灵感、背景设置无效、
-  音乐暂停实为重播、编辑器收藏星标不渲染、日期格式串 `M`/`D`、过去日程只显示一天、
-  不可达 mode、编辑器输入被清空。
-- **死代码清理**：开启 `noUnusedLocals`/`noUnusedParameters`；删除死导出 / 死 props /
-  死 CSS 类；**移除 `useAppStore` 内 38 处多余的 `set(... as any)`**。
-- **全量审计**：29 项问题（P0 9 / P1 12 / P2 8），带 `file:line`，摘要见第 9 节。
+（v3.1~v3.5 明细与原版相同，含：皮肤系统被用户要求完全撤销、配色新增 charcoal/line/
+amber/parchment/ash 与语义色、错误边界两层、9 项 P0 缺陷、死代码清理等。）
 
 ### [v3.0] - 2026-09-10 —— 暗夜书房重构
-V2.1 归档；设计语言改为深色「暗夜书房」+ 用户色板；技术栈升级为
-Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4；字体改为
-EB Garamond + JetBrains Mono + Inter；全屏 Markdown 编辑器重写；月历与日程双卡；
-WebAudio 音景；空间/动态/信箱/收藏/便签/数据/设置八大模块；
-PWA（vite-plugin-pwa + Workbox）。
-
 ### [v2.1] - 2026-09-08 —— 借鉴 InternalBeyond 重构首页
 ### [v2.0] - 2026-09-08 —— 整体重写（液态玻璃 + IndexedDB）
 ### [v1.0] - 2026-09-07 —— DuMate 初版（已被取代）
@@ -542,7 +659,7 @@ PWA（vite-plugin-pwa + Workbox）。
 - **项目归属**：用户个人项目
 - **V2.x 设计借鉴**：[Sui-IB / InternalBeyond-Mobile](https://github.com/Sui-IB/InternalBeyond-Mobile)
   （PolyForm Noncommercial 1.0.0；仅 V2 借用，V3 起完全自研）
-- **V3.x 设计哲学**：用户自定义「暗夜书房」色板与方向
-- **参与实现的 Agent**：Mavis（v3.0 重写）、本会话（v3.1~v3.7 修复与功能）、
-  另一位 agent（v3.6 PDF 版式重做）
-- **最后更新日期**：2026-09-12
+- **V3.x 设计哲学**：用户自定义「暗夜书房」色板与方向；三书房主题体系由用户推动
+- **参与实现的 Agent**：Mavis（v3.0 重写）、多个会话（v3.1~v4.0 修复与功能）、
+  另一位 agent（v3.6/v3.8 PDF 版式与缺陷修复）
+- **最后更新日期**：2026-09-16
