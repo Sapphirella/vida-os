@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { Plus, Trash2, Edit2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Trash2, Edit2, Search } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
 import { EmptyState } from '@/components/common/EmptyState';
 import { CategoryChips } from './CategoryChips';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { usePageFind } from '@/components/search/usePageFind';
+import { PageFindBar } from '@/components/search/PageFindBar';
+import { useGlobalFocus } from '@/lib/focusRequest';
 import { relativeTime } from '@/lib/utils';
 import type { InspirationNote } from '@/types';
 
@@ -15,6 +18,7 @@ export function InspirationView() {
   const updateInspiration = useAppStore((s) => s.updateInspiration);
   const deleteInspiration = useAppStore((s) => s.deleteInspiration);
   const showToast = useUIStore((s) => s.showToast);
+  const focusRequest = useUIStore((s) => s.focusRequest);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [composing, setComposing] = useState<{ content: string; category: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -23,12 +27,49 @@ export function InspirationView() {
     ? inspiration.filter((i) => i.category === selectedCat)
     : inspiration;
 
+  // 全局查找跳到灵感时，清空分类筛选保证目标可见
+  useEffect(() => {
+    if (focusRequest?.kind === 'inspiration') setSelectedCat(null);
+  }, [focusRequest]);
+
+  // 页内查找替换：灵感正文即目标
+  const targets = useMemo(
+    () =>
+      inspiration.map((i) => ({
+        id: i.id,
+        title: '',
+        content: i.content,
+        replaceContent: (next: string) => updateInspiration(i.id, { content: next }),
+      })),
+    [inspiration, updateInspiration],
+  );
+  const find = usePageFind<HTMLUListElement>(targets, {
+    onToast: (msg, type) => showToast(msg, type),
+  });
+  useGlobalFocus('inspiration', undefined, () => find.listRef.current);
+
   const handleAdd = () => {
     setComposing({ content: '', category: selectedCat || '随想' });
   };
 
   return (
     <div>
+      {/* 工具行：查找替换 + 计数 */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => find.toggleOpen()}
+          className="px-2.5 py-1 rounded-pill text-[11px] font-mono tracking-wider transition-colors flex items-center gap-1 text-[color:var(--find-fg-dim)] hover:text-[color:var(--find-fg)] bg-bronze/10"
+        >
+          <Search size={11} strokeWidth={1.6} />
+          查找替换
+        </button>
+        <span className="flex-1" />
+        <span className="font-mono text-[10px] text-bronze-deep tracking-wider">
+          共 {inspiration.length} 条
+        </span>
+      </div>
+      <PageFindBar find={find} />
+
       <CategoryChips
         which="inspiration"
         selected={selectedCat}
@@ -95,7 +136,7 @@ export function InspirationView() {
           }
         />
       ) : (
-        <ul className="space-y-3">
+        <ul ref={find.listRef} className="space-y-3">
           {filtered.map((item) => (
             <InspirationItem
               key={item.id}
@@ -110,6 +151,8 @@ export function InspirationView() {
               onDelete={() => {
                 if (confirm('删除这条灵感？')) deleteInspiration(item.id);
               }}
+              contentHtml={find.hlText(item.content, item.id, 'content')}
+              findCardProps={find.findCardProps(item.id)}
             />
           ))}
         </ul>
@@ -140,9 +183,12 @@ interface ItemProps {
   onCancel: () => void;
   onSave: (content: string) => void;
   onDelete: () => void;
+  /** 页内查找高亮后的正文 HTML */
+  contentHtml: string;
+  findCardProps: Record<string, string>;
 }
 
-function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete }: ItemProps) {
+function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, contentHtml, findCardProps }: ItemProps) {
   const [draft, setDraft] = useState(item.content);
 
   if (isEditing) {
@@ -177,11 +223,13 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete }
   }
 
   return (
-    <li>
+    <li {...findCardProps}>
       <Card className="p-4 sm:p-5 group hover:scale-[1.005] transition-transform">
-        <p className="font-serif text-reading text-paper whitespace-pre-wrap" style={{ lineHeight: 1.95 }}>
-          {item.content}
-        </p>
+        <p
+          className="font-serif text-reading text-paper whitespace-pre-wrap"
+          style={{ lineHeight: 1.95 }}
+          dangerouslySetInnerHTML={{ __html: contentHtml }}
+        />
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-bronze/10">
           <Tag>{item.category}</Tag>
           <span className="font-mono text-[10px] text-bronze-deep tracking-wider">

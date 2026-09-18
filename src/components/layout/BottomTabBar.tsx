@@ -6,7 +6,7 @@ import type { TabKey } from '@/types';
 
 const TABS: { key: TabKey; label: string; icon: typeof Home; path: string }[] = [
   { key: 'desk', label: '主页', icon: Home, path: '/desk' },
-  { key: 'diary', label: '日记', icon: NotebookPen, path: '/diary' },
+  { key: 'diary', label: '碎片', icon: NotebookPen, path: '/diary' },
   { key: 'agent', label: 'Agent', icon: Bot, path: '/agent' },
   { key: 'data', label: '数据', icon: Database, path: '/data' },
   { key: 'settings', label: '设置', icon: SettingsIcon, path: '/settings' },

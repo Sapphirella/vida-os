@@ -13,7 +13,7 @@ const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/settings': { title: '设置', sub: '个人主页 · 主题' },
   '/space': { title: '空间', sub: '长文与合集' },
   '/moments': { title: '动态', sub: '生活碎碎念' },
-  '/diary': { title: '日记', sub: 'Daily · Journal' },
+  '/diary': { title: '碎片', sub: 'Fragments · Stream' },
   '/agent': { title: 'Agent', sub: 'AI · Assistant' },
   '/favorites': { title: '收藏夹', sub: '收藏的项目' },
 };
