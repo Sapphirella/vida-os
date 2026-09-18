@@ -33,6 +33,10 @@ interface UIStore {
   notesTab: 'inspiration' | 'schedule' | 'todo';
   setNotesTab: (tab: 'inspiration' | 'schedule' | 'todo') => void;
 
+  // Agent 当前打开的会话（临时 UI 状态，不持久化）
+  agentSessionId: string | null;
+  setAgentSessionId: (id: string | null) => void;
+
   // 首页选中的日期（YYYY-MM-DD）：月历与当日日程卡共用，保证两卡联动
   selectedDate: string;
   setSelectedDate: (date: string) => void;
@@ -52,7 +56,7 @@ interface UIStore {
 
   // 全局查找「跳转到命中处」：目标页挂载后读取并定位/高亮
   focusRequest: {
-    kind: 'article' | 'moment';
+    kind: 'article' | 'moment' | 'fragment' | 'inspiration';
     id: string;
     query: string;
     ignoreCase: boolean;
@@ -88,6 +92,9 @@ export const useUIStore = create<UIStore>((set) => ({
 
   notesTab: 'inspiration',
   setNotesTab: (tab) => set({ notesTab: tab }),
+
+  agentSessionId: null,
+  setAgentSessionId: (id) => set({ agentSessionId: id }),
 
   selectedDate: todayKey(),
   setSelectedDate: (date) => set({ selectedDate: date }),

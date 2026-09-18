@@ -90,6 +90,67 @@ export interface Track {
   createdAt: number;
 }
 
+/** 碎片（日记页的微信式碎片流条目） */
+export interface FragmentEntry {
+  id: string;
+  content: string;
+  /** 图片 fileId 列表（复用 files 表） */
+  imageIds: string[];
+  /** 可选标签（# 开头自动解析） */
+  tags: string[];
+  /** 星标 = 值得整理 */
+  starred: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Agent 会话消息 */
+export interface AgentMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'sys';
+  content: string;
+  createdAt: number;
+  /** 开场白：渲染但不出现在发送给模型的上下文里 */
+  greet?: boolean;
+}
+
+/** Agent 会话（多会话：列表 → 点进聊天） */
+export interface AgentSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  archived: boolean;
+  messages: AgentMessage[];
+}
+
+/** Agent 连接配置（Key 只存本机 IndexedDB） */
+export interface AgentConfig {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  /** 人格 / system prompt */
+  persona: string;
+}
+
+/** Agent 资料库文档（文本，≤400KB） */
+export interface AgentDoc {
+  id: string;
+  name: string;
+  content: string;
+  createdAt: number;
+}
+
+/** Agent 记忆馆条目（AI 自写摘要） */
+export interface AgentMemory {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  /** 新记忆标记，看过即消 */
+  read: boolean;
+}
+
 export interface Categories {
   inspiration: string[];
   schedule: string[];
@@ -129,6 +190,11 @@ export interface AppState {
   };
   categories: Categories;
   tracks: Track[];
+  fragments: FragmentEntry[];
+  agentSessions: AgentSession[];
+  agentConfig: AgentConfig;
+  agentDocs: AgentDoc[];
+  agentMemories: AgentMemory[];
   settings: Settings;
 }
 

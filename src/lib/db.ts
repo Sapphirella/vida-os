@@ -52,6 +52,19 @@ export async function loadState(): Promise<AppState | null> {
         // 运行时旧数据可能含 letter 收藏（类型已收窄，需按 string 比较）
         (f) => (f.refType as string) !== 'letter',
       ),
+      // v4.2：碎片流 + Agent 会话/配置/资料库/记忆馆（旧数据无这些字段，给默认空值）
+      fragments: (row.data as { fragments?: unknown }).fragments as AppState['fragments'] ?? [],
+      agentSessions:
+        ((row.data as { agentSessions?: unknown }).agentSessions as AppState['agentSessions'] | undefined) ?? [],
+      agentConfig: {
+        baseUrl: '',
+        apiKey: '',
+        model: '',
+        persona: '',
+        ...((row.data as { agentConfig?: unknown }).agentConfig as Partial<AppState['agentConfig']> | undefined),
+      },
+      agentDocs: ((row.data as { agentDocs?: unknown }).agentDocs as AppState['agentDocs'] | undefined) ?? [],
+      agentMemories: ((row.data as { agentMemories?: unknown }).agentMemories as AppState['agentMemories'] | undefined) ?? [],
       settings: { ...row.data.settings, lastTab },
     };
     return data;
@@ -115,6 +128,16 @@ export function defaultState(): AppState {
       todo: ['生活', '工作', '学习'],
     },
     tracks: [],
+    fragments: [],
+    agentSessions: [],
+    agentConfig: {
+      baseUrl: '',
+      apiKey: '',
+      model: '',
+      persona: '',
+    },
+    agentDocs: [],
+    agentMemories: [],
     settings: {
       lastTab: 'desk',
     },

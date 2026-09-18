@@ -124,6 +124,12 @@ function pickState(s: AppState): AppState {
     notes: s.notes,
     categories: s.categories,
     tracks: s.tracks,
+    fragments: s.fragments,
+    agentSessions: s.agentSessions,
+    // 备份不携带本机密钥：API Key 只存本机，不随备份上传
+    agentConfig: { ...s.agentConfig, apiKey: '' },
+    agentDocs: s.agentDocs,
+    agentMemories: s.agentMemories,
     // 备份不携带本机 WebDAV 配置（含密码），避免分享备份时泄露
     settings: { lastTab: s.settings.lastTab },
   };

@@ -14,6 +14,10 @@ import type {
   Track,
   Settings,
   TabKey,
+  FragmentEntry,
+  AgentSession,
+  AgentMessage,
+  AgentConfig,
 } from '@/types';
 import { defaultState, loadState, saveState } from '@/lib/db';
 import { debounce, uid, now } from '@/lib/utils';
@@ -88,6 +92,28 @@ interface Actions {
   addTrack: (track: Omit<Track, 'id' | 'createdAt'>) => string;
   deleteTrack: (id: string) => void;
 
+  // 碎片
+  addFragment: (f: { content: string; imageIds?: string[]; tags?: string[] }) => string;
+  updateFragment: (id: string, patch: Partial<FragmentEntry>) => void;
+  deleteFragment: (id: string) => void;
+  toggleFragmentStar: (id: string) => void;
+
+  // Agent：会话
+  createAgentSession: (title?: string) => string;
+  updateAgentSession: (id: string, patch: Partial<AgentSession>) => void;
+  deleteAgentSession: (id: string) => void;
+  appendAgentMessage: (sessionId: string, msg: Omit<AgentMessage, 'id' | 'createdAt'>) => string;
+  replaceAgentMessage: (sessionId: string, messageId: string, patch: Partial<AgentMessage>) => void;
+  removeAgentMessage: (sessionId: string, messageId: string) => void;
+
+  // Agent：配置 / 资料库 / 记忆馆
+  updateAgentConfig: (patch: Partial<AgentConfig>) => void;
+  addAgentDoc: (name: string, content: string) => string;
+  deleteAgentDoc: (id: string) => void;
+  addAgentMemory: (title: string, content: string) => void;
+  deleteAgentMemory: (id: string) => void;
+  markAgentMemoriesRead: () => void;
+
   // 设置
   setLastTab: (tab: TabKey) => void;
   updateSettings: (patch: Partial<Settings>) => void;
@@ -119,6 +145,11 @@ function snapshot(s: Store): AppState {
     notes: s.notes,
     categories: s.categories,
     tracks: s.tracks,
+    fragments: s.fragments,
+    agentSessions: s.agentSessions,
+    agentConfig: s.agentConfig,
+    agentDocs: s.agentDocs,
+    agentMemories: s.agentMemories,
     settings: s.settings,
   };
 }
@@ -485,6 +516,172 @@ export const useAppStore = create<Store>((set, get) => ({
     persist(get());
   },
 
+  // 碎片
+  addFragment: (f) => {
+    const id = uid('frg_');
+    set((s) => ({
+      fragments: [
+        ...s.fragments,
+        {
+          id,
+          content: f.content,
+          imageIds: f.imageIds ?? [],
+          tags: f.tags ?? [],
+          starred: false,
+          createdAt: now(),
+          updatedAt: now(),
+        },
+      ],
+    }));
+    persist(get());
+    return id;
+  },
+  updateFragment: (id, patch) => {
+    set((s) => ({
+      fragments: s.fragments.map((x) =>
+        x.id === id ? { ...x, ...patch, updatedAt: now() } : x,
+      ),
+    }));
+    persist(get());
+  },
+  deleteFragment: (id) => {
+    set((s) => ({
+      fragments: s.fragments.filter((x) => x.id !== id),
+    }));
+    persist(get());
+  },
+  toggleFragmentStar: (id) => {
+    set((s) => ({
+      fragments: s.fragments.map((x) =>
+        x.id === id ? { ...x, starred: !x.starred, updatedAt: now() } : x,
+      ),
+    }));
+    persist(get());
+  },
+
+  // Agent：会话
+  createAgentSession: (title) => {
+    const id = uid('ags_');
+    const t = Date.now();
+    set((s) => ({
+      agentSessions: [
+        {
+          id,
+          title: title ?? '新会话',
+          createdAt: t,
+          updatedAt: t,
+          archived: false,
+          messages: [],
+        },
+        ...s.agentSessions,
+      ],
+    }));
+    persist(get());
+    return id;
+  },
+  updateAgentSession: (id, patch) => {
+    set((s) => ({
+      agentSessions: s.agentSessions.map((x) =>
+        x.id === id ? { ...x, ...patch, updatedAt: now() } : x,
+      ),
+    }));
+    persist(get());
+  },
+  deleteAgentSession: (id) => {
+    set((s) => ({
+      agentSessions: s.agentSessions.filter((x) => x.id !== id),
+    }));
+    persist(get());
+  },
+  appendAgentMessage: (sessionId, msg) => {
+    const id = uid('agm_');
+    set((s) => ({
+      agentSessions: s.agentSessions.map((x) =>
+        x.id === sessionId
+          ? {
+              ...x,
+              updatedAt: now(),
+              messages: [...x.messages, { ...msg, id, createdAt: now() }],
+            }
+          : x,
+      ),
+    }));
+    persist(get());
+    return id;
+  },
+  replaceAgentMessage: (sessionId, messageId, patch) => {
+    set((s) => ({
+      agentSessions: s.agentSessions.map((x) =>
+        x.id === sessionId
+          ? {
+              ...x,
+              updatedAt: now(),
+              messages: x.messages.map((m) =>
+                m.id === messageId ? { ...m, ...patch } : m,
+              ),
+            }
+          : x,
+      ),
+    }));
+    persist(get());
+  },
+  removeAgentMessage: (sessionId, messageId) => {
+    set((s) => ({
+      agentSessions: s.agentSessions.map((x) =>
+        x.id === sessionId
+          ? {
+              ...x,
+              updatedAt: now(),
+              messages: x.messages.filter((m) => m.id !== messageId),
+            }
+          : x,
+      ),
+    }));
+    persist(get());
+  },
+
+  // Agent：配置 / 资料库 / 记忆馆
+  updateAgentConfig: (patch) => {
+    set((s) => ({ agentConfig: { ...s.agentConfig, ...patch } }));
+    persist(get());
+  },
+  addAgentDoc: (name, content) => {
+    const id = uid('agd_');
+    set((s) => ({
+      agentDocs: [...s.agentDocs, { id, name, content, createdAt: now() }],
+    }));
+    persist(get());
+    return id;
+  },
+  deleteAgentDoc: (id) => {
+    set((s) => ({
+      agentDocs: s.agentDocs.filter((x) => x.id !== id),
+    }));
+    persist(get());
+  },
+  addAgentMemory: (title, content) => {
+    const id = uid('agm_');
+    set((s) => ({
+      agentMemories: [
+        { id, title, content, createdAt: now(), read: false },
+        ...s.agentMemories,
+      ],
+    }));
+    persist(get());
+  },
+  deleteAgentMemory: (id) => {
+    set((s) => ({
+      agentMemories: s.agentMemories.filter((x) => x.id !== id),
+    }));
+    persist(get());
+  },
+  markAgentMemoriesRead: () => {
+    set((s) => ({
+      agentMemories: s.agentMemories.map((x) => ({ ...x, read: true })),
+    }));
+    persist(get());
+  },
+
   // 设置
   setLastTab: (tab) => {
     set((s) => ({ settings: { ...s.settings, lastTab: tab } }));
@@ -524,6 +721,18 @@ export const useAppStore = create<Store>((set, get) => ({
         },
         categories: cur.categories,
         tracks: mergeById(cur.tracks, incoming.tracks),
+        fragments: mergeById(cur.fragments, incoming.fragments),
+        agentSessions: mergeById(cur.agentSessions, incoming.agentSessions),
+        // 备份不带 API Key：合并时若 incoming 为空 key，保留本机已有的 key
+        agentConfig: {
+          ...cur.agentConfig,
+          ...(incoming.agentConfig ?? {}),
+          apiKey: incoming.agentConfig?.apiKey
+            ? incoming.agentConfig.apiKey
+            : cur.agentConfig.apiKey,
+        },
+        agentDocs: mergeById(cur.agentDocs, incoming.agentDocs),
+        agentMemories: mergeById(cur.agentMemories, incoming.agentMemories),
         settings: cur.settings,
       };
       set(merged);
