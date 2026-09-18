@@ -15,7 +15,7 @@ const FEATURES: {
   { key: 'space', label: '空间', en: 'Space', icon: BookOpen, path: '/space', desc: '长文与合集' },
   { key: 'moments', label: '动态', en: 'Moments', icon: MessageCircle, path: '/moments', desc: '朋友圈碎片' },
   { key: 'notes', label: '便签', en: 'Notes', icon: StickyNote, path: '/notes', desc: '灵感 · 日程 · 待办' },
-  { key: 'favorites', label: '收藏夹', en: 'Favorites', icon: Star, path: '/favorites', desc: '喜欢的一切' },
+  { key: 'favorites', label: '收藏夹', en: 'Favorites', icon: Star, path: '/favorites', desc: '收藏的项目' },
 ];
 
 export function FeatureGrid() {

@@ -15,7 +15,7 @@ const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/moments': { title: '动态', sub: '生活碎碎念' },
   '/diary': { title: '日记', sub: 'Daily · Journal' },
   '/agent': { title: 'Agent', sub: 'AI · Assistant' },
-  '/favorites': { title: '收藏夹', sub: '喜欢的一切' },
+  '/favorites': { title: '收藏夹', sub: '收藏的项目' },
 };
 
 function matchTitle(pathname: string): { title: string; sub?: string; canBack: boolean } {
