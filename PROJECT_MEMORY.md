@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-18（v4.1 主页待办模块 + Obsidian 风格双链 + 收藏夹副标题改名）
+> 最后更新：2026-09-18（v4.2 碎片页 + Agent 多会话助手 + 全局查找范围扩展）
 
 ---
 
@@ -74,6 +74,12 @@
   支持 **Obsidian 风格双链** `[[文章标题]]`（渲染可点击跳转 / 目标不存在自动创建，
   文章页新增反向链接 + 正向链接，编辑器新增「双链」插入按钮与文章选择器）；
   收藏夹副标题「喜欢的一切」改为「收藏的项目」。
+- **v4.2（2026-09-18）** —— **日记页改为「碎片」页**：微信式气泡流（无对方回复、底部固定
+  输入、文字+多图+标签、星标、长按菜单、日期吸顶、只看星标筛选、页内查找替换）；
+  **Agent 页落地**：照抄 `参考文件ventana` 聊天界面 React 化（会话列表 → 点进 → 聊天的
+  多会话模式、气泡流、流式回复、演示模式、资料库 `[[读:文档]]` 按需读取、记忆馆
+  `[[记:]]`/`[[忆:]]`、会话归档/导出），适配三版书房皮肤（无黑白皮肤），数据全本地；
+  **全局查找替换范围新增「碎片」「灵感」**，碎片页与灵感页均有页内查找替换按钮。
 
 ---
 
@@ -579,6 +585,42 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
 ---
 
 ## 13. 变更日志
+
+### [v4.2] - 2026-09-18 —— 碎片页 + Agent 多会话助手 + 全局查找范围扩展
+- **碎片页**（`137ae3f`，数据层 `f3f801d`）：
+  - 底栏与顶栏「日记」→「碎片」（Fragments · Stream）；`DiaryPage` 整体重写为
+    **微信式气泡流**：右侧酒红气泡（--wine 底 --moon 字），按天分组（今天/昨天/M月D日）
+    日期吸顶，`MarkdownView` 渲染正文（双链自动生效），多图（MediaImage），
+    标签/星标/更多按钮，**长按**弹出编辑/星标/复制/转文章/删除菜单；
+  - 底部 fixed 输入区（Enter 发送 / Shift+Enter 换行、图片选择、pending 预览）；
+    「只看星标」筛选；空态「今天想说点什么？」自动聚焦输入框；
+  - **页内查找替换**：工具行「查找替换」按钮 + `PageFindBar` + `usePageFind<HTMLUListElement>`
+    + `useGlobalFocus('fragment')`，命中高亮/上下跳转/替换/全部替换；
+  - `globals.css` 新增 `.frag-bubble` 系列覆盖 `.prose-vidaos` 颜色为 --moon（气泡内文本）。
+- **Agent 页**（`6aaafcf`）：
+  - `src/lib/agentEngine.ts`：chatEndpoint 规范化（已含 /chat/completions 原样；
+    /v 数字结尾补 /chat/completions；否则补 /v1/chat/completions）、buildMessages
+    （system=人格+资料库索引+使用约定+历史）、docsIndexText（含内置「碎片」虚拟文档）、
+    fragmentsIndexText（最近 40 条）、resolveDoc/resolveMemory（精确→模糊）、
+    snippetFor（>6000 字中文滑窗截取，extractTerms 中文按 2~4 字片段切分提升命中）、
+    scanMarkers（剥 `[[读:]]`/`[[忆:]]`）、extractWriteMemory（`[[记:标题]]` 正文 → 记忆）、
+    streamChatCompletion（SSE 流式）、demoReply/demoStream（演示模式）、sessionToTxt、
+    GREETING/DEFAULT_PERSONA、hasApiConfig、MAX_TOOL_ROUNDS=3、DOC_MAX_BYTES=400KB；
+  - `AgentChatView.tsx`：两区布局（气泡流+底部输入）、顶栏返回/重命名/API 或演示徽标/
+    导出/记忆馆（未读红点）/设置；sys 系统事件灰丸、AI 回复非盒子 `.agent-reply`
+    渲染 Markdown+流式光标、用户酒红气泡；气泡 acts（复制/重新生成/删除）；
+    演示模式逐字流式；runTurn 支持多轮工具标记循环（读文档/记忆回填→续写）；
+    `[[记:]]` 自动写记忆馆并插 sys 消息；停止按钮；配置侧边抽屉（连接三输入+自检+清除/
+    人格上传覆盖/资料库上传≤400KB/记忆馆展开/归档管理）；重命名/导出/归档/删除；
+  - `AgentPage.tsx`：无选中会话时显示**会话列表**（新建会话自动带 GREETING greet 消息、
+    空态、归档抽屉展开/恢复/导出/删除）；多会话 = 会话列表 → 点进 → 聊天；
+  - 数据：AppState.version=3 不动，loadState 兜底默认值；`apiKey` 只存本机，
+    **WebDAV 备份剔除 apiKey 与 WebDAV 密码**，导入合并时若备份无 key 保留本机 key；
+  - 引擎纯逻辑测试 26/26 PASS（esbuild bundle + node 断言）。
+- **全局查找扩展**（`137ae3f`）：ScopeKey/HitKind 扩为 article|moment|fragment|inspiration，
+  SCOPES 加「碎片」「灵感」；fragment 命中跳转 /diary，inspiration 命中跳转 /notes
+  （NotesPage 自动切到灵感块并清空分类筛选）；灵感页（InspirationView）新增工具行
+  「查找替换」按钮 + 页内查找。
 
 ### [v4.1] - 2026-09-18 —— 主页待办模块 + Obsidian 风格双链 + 收藏夹副标题改名
 - **主页待办模块**（`369d14c`）：`TodoSummaryCard` 挂在主页日程模块下方（DeskPage），
