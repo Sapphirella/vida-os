@@ -28,6 +28,7 @@ import {
   Clock,
   CornerUpLeft,
   GripVertical,
+  Waypoints,
 } from 'lucide-react';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { compressImage, uid, clsx, formatDate } from '@/lib/utils';
@@ -96,6 +97,10 @@ export function MarkdownEditor({
   );
   const [mode_, setMode] = useState<'edit' | 'preview'>('edit');
   const [showCollections, setShowCollections] = useState(false);
+  /** 双链文章选择器是否打开（桌面工具栏） */
+  const [wikiOpen, setWikiOpen] = useState(false);
+  /** 打开选择器时记录的选区（点击工具栏后 textarea 失焦，selectionStart 会失效） */
+  const wikiSelRef = useRef<{ start: number; end: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /** 插入文本后要恢复到的光标位置（渲染完成后再设，避免跳到文首） */
   const caretRef = useRef<number | null>(null);
@@ -109,6 +114,7 @@ export function MarkdownEditor({
   /** 缩略图元素引用（长按移动时计算目标下标） */
   const thumbRefs = useRef<(HTMLDivElement | null)[]>([]);
   const collections = useAppStore((s) => s.collections);
+  const articles = useAppStore((s) => s.articles);
   const isFavorited = useAppStore((s) =>
     favoriteId ? s.isFavorited(favoriteId.refType, favoriteId.refId) : false,
   );
@@ -127,6 +133,7 @@ export function MarkdownEditor({
       .replace(/```[\s\S]*?```/g, ' ')
       .replace(/`[^`]*`/g, ' ')
       .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g, '$1')
       .replace(/\[[^\]]*\]\([^)]*\)/g, '$1')
       .replace(/[#>*_~|-]/g, '')
       .replace(/[ \t\r\n]+/g, '');
@@ -307,6 +314,33 @@ export function MarkdownEditor({
     insert('[', '](https://)', '链接文字');
   };
 
+  /** 双链：桌面端先弹文章选择器，移动端/无文章时直接插入占位 */
+  const insertWiki = () => {
+    const ta = textareaRef.current;
+    const start = ta?.selectionStart ?? content.length;
+    const end = ta?.selectionEnd ?? start;
+    wikiSelRef.current = { start, end };
+    const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (articles.length > 0 && isDesktop) {
+      setWikiOpen(true);
+    } else {
+      insert('[[', ']]', '文章标题');
+    }
+  };
+
+  /** 把选中的文章标题以 [[标题]] 形式插到之前记录的选区位置 */
+  const applyWiki = (title: string) => {
+    setWikiOpen(false);
+    const pos = wikiSelRef.current;
+    const text = `[[${title}]]`;
+    if (pos) {
+      caretRef.current = pos.start + text.length;
+      setContent(content.slice(0, pos.start) + text + content.slice(pos.end));
+    } else {
+      setContent((c) => c + text);
+    }
+  };
+
   if (!open) return null;
 
   return (
@@ -387,6 +421,7 @@ export function MarkdownEditor({
         <ToolbarBtn onClick={() => insert('`', '`', 'code')} icon={<Code size={14} />} title="行内代码" />
         <ToolbarBtn onClick={() => insert('\n```\n', '\n```\n', 'code block')} icon={<Code2 size={14} />} title="代码块" />
         <ToolbarBtn onClick={insertLink} icon={<LinkIcon size={14} />} title="链接" />
+        <ToolbarBtn onClick={insertWiki} icon={<Waypoints size={14} />} title="双链" />
         <ToolbarBtn
           onClick={() => fileInputRef.current?.click()}
           icon={<ImageIcon size={14} />}
@@ -420,6 +455,42 @@ export function MarkdownEditor({
 
       {/* 编辑区：标题/标签与正文在同一滚动容器内，随内容一起滚动（移动端释放固定栏空间） */}
       <div className="flex-1 overflow-hidden flex relative">
+        {/* 双链选择器：桌面点击「双链」后弹出，选文章标题插入 [[标题]] */}
+        {wikiOpen && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setWikiOpen(false)} />
+            <div className="absolute top-3 left-3 sm:left-1/2 sm:-translate-x-1/2 z-30 w-72 max-w-[calc(100%-24px)]">
+              <div className="glass-card p-2 animate-slide-up">
+                <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase px-2 pt-1 pb-2">
+                  链接到文章 · 双链
+                </p>
+                <ul className="max-h-60 overflow-y-auto space-y-0.5">
+                  {articles.map((a) => (
+                    <li key={a.id}>
+                      <button
+                        onClick={() => applyWiki(a.title)}
+                        className="w-full text-left px-2.5 py-1.5 text-sm font-serif text-paper hover:bg-bronze/10 rounded transition-colors truncate"
+                      >
+                        {a.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="pt-1.5 mt-1 border-t border-bronze/10">
+                  <button
+                    onClick={() => {
+                      setWikiOpen(false);
+                      insert('[[', ']]', '文章标题');
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-bronze hover:text-candle transition-colors rounded"
+                  >
+                    手动输入标题…
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
         {mode_ === 'edit' && (
           <div className="flex-1 overflow-y-auto vd-editor-scroll">
             <div className="max-w-3xl mx-auto w-full px-4 sm:px-8 py-4 sm:py-6">
@@ -528,7 +599,7 @@ export function MarkdownEditor({
               </div>
             )}
             {content.trim() ? (
-              <MarkdownView markdown={content} />
+              <MarkdownView markdown={content} wikiLinks={false} />
             ) : (
               <p className="text-bronze-deep italic text-center mt-12">还没有内容</p>
             )}
@@ -548,6 +619,7 @@ export function MarkdownEditor({
               <FloatBtn onClick={() => insert('**', '**', '粗体')} icon={<Bold size={16} />} label="粗体" />
               <FloatBtn onClick={() => insert('*', '*', '斜体')} icon={<Italic size={16} />} label="斜体" />
               <FloatBtn onClick={insertLink} icon={<LinkIcon size={16} />} label="链接" />
+              <FloatBtn onClick={insertWiki} icon={<Waypoints size={16} />} label="双链" />
               <FloatBtn onClick={() => insert('> ', '', '引用')} icon={<Quote size={16} />} label="引用" />
             </div>
           </div>
@@ -576,6 +648,7 @@ export function MarkdownEditor({
             <SBtn onClick={() => insert('1. ', '', '列表项')} icon={<ListOrdered size={15} strokeWidth={1.5} />} label="有序列表" />
             <SBtn onClick={() => insert('\n---\n', '', '')} icon={<Minus size={15} strokeWidth={1.5} />} label="分割线" />
             <SBtn onClick={insertLink} icon={<LinkIcon size={15} strokeWidth={1.5} />} label="链接" />
+            <SBtn onClick={insertWiki} icon={<Waypoints size={15} strokeWidth={1.5} />} label="双链" />
             <SBtn
               onClick={() => fileInputRef.current?.click()}
               icon={<ImageIcon size={15} strokeWidth={1.5} />}

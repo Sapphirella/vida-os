@@ -260,6 +260,7 @@ export function plainText(md: string): string {
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`[^`]*`/g, '')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g, '$1') // 双链 [[标题|别名]] → 标题
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/[#>*_~]+/g, '')
     .replace(/\n+/g, ' ')

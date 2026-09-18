@@ -755,6 +755,25 @@ textarea, input, [contenteditable] {
 .prose-vidaos a:hover {
   text-decoration-color: var(--candle);
 }
+/* Obsidian 风格双链 [[...]]：琥珀色虚线，目标不存在时弱化为灰色虚线 */
+.prose-vidaos a.vd-wiki-link {
+  color: var(--amber);
+  text-decoration: underline dotted;
+  text-decoration-color: rgb(var(--amber-rgb) / 0.5);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.prose-vidaos a.vd-wiki-link:hover {
+  color: var(--candle);
+  text-decoration-color: var(--candle);
+}
+.prose-vidaos a.vd-wiki-link.vd-wiki-missing {
+  color: var(--bronze);
+  text-decoration-color: rgb(var(--bronze-rgb) / 0.4);
+}
+.prose-vidaos a.vd-wiki-link.vd-wiki-missing:hover {
+  color: var(--candle);
+}
 .prose-vidaos blockquote {
   border-left: 2px solid var(--wine);
   padding: 4px 0 4px 18px;
