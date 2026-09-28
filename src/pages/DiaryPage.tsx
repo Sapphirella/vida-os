@@ -220,7 +220,7 @@ export function DiaryPage() {
         <PageFindBar find={find} />
 
         {/* 工具行：只看星标 + 查找替换 */}
-        <div className="pt-[calc(56px+env(safe-area-inset-top)+12px)] pb-3 flex items-center gap-2">
+        <div className="pt-[calc(56px+env(safe-area-inset-top))] pb-3 flex items-center gap-2">
           <button
             onClick={() => setStarredOnly((v) => !v)}
             className={clsx(
