@@ -312,7 +312,7 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const apiMode = hasApiConfig(config);
 
   return (
-    <div className="view-enter h-full">
+    <div className="h-full">
       {/* 头部：返回 + 标题 + 操作 */}
       <div
         className="fixed inset-x-0 z-30 border-b border-bronze/10"

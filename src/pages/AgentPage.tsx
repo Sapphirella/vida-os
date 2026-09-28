@@ -43,7 +43,7 @@ export function AgentPage() {
 
   return (
     <div className="px-4 sm:px-6 view-enter">
-      <div className="max-w-2xl mx-auto pb-10 pt-[calc(56px+env(safe-area-inset-top))]">
+      <div className="max-w-2xl mx-auto pb-10">
         <div className="flex items-center gap-3 mb-4">
           <div
             className="w-11 h-11 rounded-full flex items-center justify-center border border-bronze/20 flex-none"

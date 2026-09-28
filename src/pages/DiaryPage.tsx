@@ -215,12 +215,12 @@ export function DiaryPage() {
   });
 
   return (
-    <div className="px-3 sm:px-6 view-enter">
+    <div className="px-3 sm:px-6">
       <div className="max-w-2xl mx-auto">
         <PageFindBar find={find} />
 
         {/* 工具行：只看星标 + 查找替换 */}
-        <div className="pt-[calc(56px+env(safe-area-inset-top))] pb-3 flex items-center gap-2">
+        <div className="pb-3 flex items-center gap-2">
           <button
             onClick={() => setStarredOnly((v) => !v)}
             className={clsx(
