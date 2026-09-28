@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-18（v4.2 碎片页 + Agent 多会话助手 + 全局查找范围扩展）
+> 最后更新：2026-09-28（v4.2 接手文档校正：数据模型/文件结构/功能清单与 Agent 架构对齐当前代码）
 
 ---
 
@@ -9,12 +9,12 @@
 
 | 项目 | 说明 |
 |---|---|
-| **是什么** | 纯前端、纯本地的个人生活记录 PWA（主页/日记/便签/文章/动态/收藏/音乐/云备份） |
+| **是什么** | 纯前端、纯本地的个人生活记录 PWA（主页/碎片/便签/文章/动态/收藏/音乐/云备份/Agent） |
 | **在哪里** | `/Users/amarisgo/Documents/DeepSeek Harness/VidaOS`（**父目录含空格，命令里要带引号**） |
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
-| **当前版本** | package.json 写的是 `3.0.0`、设置页显示「v3.0 · night study」；文档按迭代日志记到 **v4.0** |
+| **当前版本** | package.json 写的是 `3.0.0`、设置页显示「v3.0 · night study」；文档按迭代日志记到 **v4.2** |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -150,11 +150,13 @@ PDF 里**不要用屏幕的暗色 token**。
 
 ### 2) 状态管理：三个 Zustand store
 - `useAppStore`：**业务数据**（profile / collections / articles / moments / favorites /
-  notes / categories / tracks / settings）+ 全部 action。
+  notes / categories / tracks / settings / **fragments / agentSessions / agentConfig /
+  agentDocs / agentMemories**）+ 全部 action。
   另外带一个**运行时标记 `hydrated`**（不持久化）。
 - `useUIStore`：UI 状态（currentTab / notesTab / **selectedDate** / editor / toasts / modal /
-  findPanel / commentInputFocused / focusRequest 等）。`modal.content` 是 **ReactNode**，
-  可直接传 JSX 构造弹窗内容。
+  findPanel / commentInputFocused / focusRequest / **agentSessionId** 等）。
+  `modal.content` 是 **ReactNode**，可直接传 JSX 构造弹窗内容；
+  `agentSessionId` 是**临时 UI 状态，不持久化**（刷新后回会话列表）。
 - `useMusicStore`：音乐播放（持有 `audio` 实例与 WebAudio 节点）。
 
 ### 3) 持久化（**曾有致命 bug，务必遵守**）
@@ -165,7 +167,9 @@ PDF 里**不要用屏幕的暗色 token**。
 `loadState()` 做**兼容迁移**（v4）：
 - 剔除旧版内置音景轨道（`builtin` 标记，新版只保留用户导入的本地曲目）；
 - 剥离旧 `letters` 数据，并清掉引用已删信件的收藏（`refType === 'letter'`）；
-- `lastTab` 归一化：旧数据可能持久化了已不存在的 tab（如 `'notes'`），非法值回退 `'desk'`。
+- `lastTab` 归一化：旧数据可能持久化了已不存在的 tab（如 `'notes'`），非法值回退 `'desk'`；
+- v4.2 起 `fragments / agentSessions / agentConfig / agentDocs / agentMemories`
+  用 `defaultState()` 兜底默认空值（`AppState.version` 仍是 3，**未升 Dexie version**）。
 
 ### 4) 路由：HashRouter（v4）
 Tab 路由 `/desk /diary /agent /data /settings`；子视图 `/notes /space /space/collection/:id`
@@ -183,7 +187,15 @@ Tab 路由 `/desk /diary /agent /data /settings`；子视图 `/notes /space /spa
 - `Moment.comments?: MomentComment[]`（**旧数据可能没有，读取一律 `?? []`**）；
 - `Settings.lastTab` + `Settings.webdav?: WebDavConfig`
   （`url` / `username` / `password` / `encrypted?` / `passphrase?`，见第 4 节之 15)）；
-- `Profile` 仍保留 `backgroundPreset` / `backgroundFileId` 字段（背景机制见第 4 节之 8)）。
+- `Profile` 仍保留 `backgroundPreset` / `backgroundFileId` 字段（背景机制见第 4 节之 8)）；
+- **v4.2 新增**：
+  - `FragmentEntry{id, content, imageIds[], tags[], starred, createdAt, updatedAt}`（碎片流）；
+  - `AgentSession{id, title, createdAt, updatedAt, archived, messages: AgentMessage[]}`，
+    `AgentMessage{id, role:'user'|'assistant'|'sys', content, createdAt, greet?}`；
+  - `AgentConfig{baseUrl, apiKey, model, persona}`（**apiKey 只存本机**，见第 4 节之 19)）；
+  - `AgentDoc{id, name, content, createdAt}`（资料库，≤400KB）、
+    `AgentMemory{id, title, content, createdAt, read}`（记忆馆）；
+  - `FocusKind = 'article'|'moment'|'fragment'|'inspiration'`（第 4 节之 16)）。
 
 ### 6) 媒体文件与外链（fileId → objectURL）
 图片/音频以 Blob 存在 Dexie `files` 表。`src/lib/fileUrl.ts` 维护 `id → objectURL` 缓存
@@ -282,9 +294,13 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
   按钮为「替换」「全选」「反选」三段式（参照 Nookery FindBar，勿改回死板的多按钮）；
   文字颜色由 `--find-fg` 驱动（夜间淡粉，日间深色）；
   输入框聚焦期间**释放 body 滚动锁**（防滚动被锁死）；
-- **页内**：`PageFindBar.tsx` 三页面共用（文章阅读/动态/便签），配 `usePageFind` hook
+  **v4.2 范围扩为 空间 / 动态 / 碎片 / 灵感**（`ScopeKey`/`HitKind` 四值），
+  fragment 命中跳 `/diary`、inspiration 命中跳 `/notes`（自动切灵感块并清空分类筛选）；
+- **页内**：`PageFindBar.tsx` 共用（文章阅读/动态/便签/碎片/灵感），配 `usePageFind` hook
   与 `focusRequest.ts` 机制：点结果后跳转并**闪烁高亮定位**到第 N 个命中处
   （子页面挂载后按 query 消费 focusRequest，别改成 setTimeout 猜时机）。
+  碎片页 `usePageFind<HTMLUListElement>` + `useGlobalFocus('fragment')`、
+  灵感页 `useGlobalFocus('inspiration')`；碎片命中替换会更新对应 `FragmentEntry.content`。
 
 ### 17) 移动端输入（v3.10 三连修，勿回退，真机待复测）
 - 重命名**弃用原生 `prompt()`**（iOS PWA standalone 下不可用）→ 改 `useUIStore.showModal`
@@ -299,6 +315,25 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
   dev 用 esbuild `target: 'es2018'` —— 夸克旧内核不支持 ES2020（可选链/?.）白屏的修复；
 - `index.html` 3.8s 挂载兜底层（夸克 UA 特判提示「关闭云加速/智能转码」+ 重试按钮）。
 
+### 19) Agent 对话引擎（v4.2，`src/lib/agentEngine.ts` 纯函数层）
+- **无新增 npm 依赖**：真实对话走浏览器 `fetch` + SSE 流式解析，不引入 SDK；
+- **端点规范化** `chatEndpoint()`：已含 `/chat/completions` 原样用；以 `/v数字` 结尾补
+  `/chat/completions`；否则补 `/v1/chat/completions`（兼容 OpenAI 兼容服务）；
+- **消息组装** `buildMessages()`：system = 人格（`DEFAULT_PERSONA`，可被资料库「人格」文档
+  覆盖）+ 资料库索引（`docsIndexText`，含内置「碎片」虚拟文档：最近 40 条碎片摘要）+
+  使用约定（`[[读:文档]]`/`[[忆:]]`/`[[记:]]` 三标记）+ 最近 N 条会话历史；
+- **按需读取**：`resolveDoc`/`resolveMemory`（精确标题 → 模糊包含）；长文档用 `snippetFor`
+  （>6000 字按滑动窗口计分截取，`extractTerms` 对中文按 2~4 字连续片段切分提升命中率）；
+- **工具标记**：`scanMarkers()` 从 AI 回复剥出 `[[读:x]]` / `[[忆:x]]`（喂回上下文的
+  系统消息由 `buildMessages` 注入），`extractWriteMemory()` 把 `[[记:标题]]正文` 转为
+  记忆条目写入记忆馆；`runTurn` 最多 `MAX_TOOL_ROUNDS=3` 轮循环；
+- **演示模式**：`hasApiConfig()` 三项齐全才走真实 API，否则 `demoReply`/`demoStream`
+  本地模板回复（逐字流式），交互全可用；SSE 请求支持 `AbortController` 停止；
+- **导出**：`sessionToTxt()` 把会话导出为 txt（导出/归档共用）；
+- **隐私边界**：`apiKey` 只存本机 IndexedDB；`snapshot()`/WebDAV 备份**剔除 apiKey 与
+  WebDAV 密码**；导入合并时若备份无 key 则保留本机 key（`useAppStore.importState`）；
+- **引擎可单测**：esbuild bundle 后 Node 跑断言（见第 11 节），v4.2 时 26/26 PASS。
+
 ---
 
 ## 5. 文件结构与职责
@@ -307,17 +342,18 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
 VidaOS/
 ├── 打开VidaOS.command          # ★ 双击启动（自动装依赖 → 起服务 → 开浏览器）
 ├── index.html                   # Vite 入口（主题防闪烁脚本 + 3.8s 挂载兜底，勿双击）
-├── src/                         # 56 个文件，唯一权威实现
+├── src/                         # 58 个文件，唯一权威实现
 │   ├── main.tsx                 # 入口：ErrorBoundary(fullscreen) > initTheme > HashRouter > App
 │   ├── App.tsx                  # 全局布局 + 路由 + tab 同步 + Background + ErrorBoundary(inline)
-│   ├── styles/globals.css       # 三主题 token(:root/[data-theme=...]) + Markdown 排版 + 工具类
-│   ├── types/index.ts           # 全部数据类型（v4，含 WebDavConfig）
+│   ├── styles/globals.css       # 三主题 token(:root/[data-theme=...]) + Markdown 排版 + 工具类 + .frag-bubble
+│   ├── types/index.ts           # 全部数据类型（v4.2，含 WebDavConfig / Fragment / Agent 系）
 │   ├── lib/
 │   │   ├── db.ts                # Dexie：state / files / meta（version 2）+ loadState 迁移
 │   │   ├── theme.ts             # 三主题模式（localStorage 持久化 + 跟随系统）
 │   │   ├── backgrounds.ts       # 背景预设（none / deep·猩红专属）+ 栏色
 │   │   ├── fileUrl.ts           # Blob → objectURL 缓存
-│   │   ├── markdown.ts          # marked + DOMPurify（放开 fileRef: 协议）
+│   │   ├── markdown.ts          # marked + DOMPurify（放开 fileRef: / wiki: 协议）
+│   │   ├── agentEngine.ts       # ★ Agent 对话引擎（纯函数：端点/消息/索引/截取/标记/演示模式）
 │   │   ├── exportImport.ts      # 导入导出：JSON/MD/TXT/PDF + 范围多选 + 像素级分页切点
 │   │   ├── snapshot.ts          # 本地文件夹快照（≤10 份，gzip + 原 Blob）
 │   │   ├── webdav.ts            # WebDAV 云同步 + 端到端加密（PBKDF2 + AES-256-GCM）
@@ -326,14 +362,15 @@ VidaOS/
 │   ├── stores/                  # useAppStore / useUIStore / useMusicStore
 │   ├── components/
 │   │   ├── layout/              # Background / TopBar / BottomTabBar（5 Tab）
-│   │   ├── home/                # ClockHeader / FeatureGrid(4 宫格) / CalendarCard / DayScheduleCard / MusicPlayerCard
+│   │   ├── home/                # ClockHeader / FeatureGrid(4 宫格) / CalendarCard / DayScheduleCard / MusicPlayerCard / TodoSummaryCard
 │   │   ├── notes/               # SegmentedControl / CategoryChips / Inspiration / Schedule / Todo / ScheduleEditor
+│   │   ├── agent/               # ★ AgentChatView（气泡流 + 输入区 + 配置/资料库/记忆馆抽屉）
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
 │   │   ├── search/              # GlobalFindReplaceCard / PageFindBar / usePageFind
 │   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
 │   │                            #   + ErrorBoundary / MarkdownView
 │   └── pages/                   # 11 个路由页面
-│       DeskPage / DiaryPage(占位) / AgentPage(占位) / NotesPage / DataPage / SettingsPage /
+│       DeskPage / DiaryPage(碎片流) / AgentPage(会话列表+聊天) / NotesPage / DataPage / SettingsPage /
 │       SpacePage / CollectionPage / ArticleReaderPage / MomentsPage / FavoritesPage
 ├── public/                      # favicon.svg + icons/（PWA 图标，manifest 引用）
 ├── scripts/make-icons.mjs       # ⚠️ 生成 PWA 图标（依赖 sharp 但**未在 package.json 声明**，当前跑不了）
@@ -371,21 +408,29 @@ VidaOS/
 
 ---
 
-## 7. 已实现功能清单（当前，v4.0）
+## 7. 已实现功能清单（当前，v4.2）
 
 - **桌面**：大时钟 Hero + 4 功能宫格（空间/动态/便签/收藏夹）+ 双卡月历/当日日程
-  （**点日期联动**、**「今」按钮**）+ 音景播放器（同步控制台）
+  （**点日期联动**、**「今」按钮**）+ 主页**待办模块**（未完成待办、快速添加/勾选）+ 音景播放器
 - **空间**：Markdown 长文 + 合集 + 标签 + 封面 + 配图（**可插入正文**、可拖拽排序、
-  可在合集页直接编辑）
+  可在合集页直接编辑）+ **Obsidian 风格双链**（`[[标题]]` 渲染/跳转/自动创建、
+  正反向链接、编辑器「双链」插入按钮）
 - **动态**：**时间线**（日期分组 + 竖线节点）+ 头像/昵称 + **评论** + **收藏**
   + **编辑（含改时间）** + Markdown 渲染 + **查找/替换**（高亮命中、跳转、替换/全部替换）
 - **便签**：灵感/日程/待办分区滑块 + 分类管理（增删改）+ 日程与首页日历联动
   + 待办**自动置底 / textarea 多行 / 长按拖拽排序**
-- **收藏夹**：跨类型聚合（文章 / 动态）
-- **日记 / Agent**：占位页（路由就绪，功能待开放）
+- **收藏夹**：跨类型聚合（文章 / 动态）；副标题「收藏的项目」
+- **碎片**：**微信式气泡流**（按天分组吸顶、右侧酒红气泡、文字+多图+标签、星标、
+  长按菜单编辑/星标/复制/转文章/删除、底部固定输入、只看星标、空态自动聚焦）+
+  **页内查找替换**；正文 Markdown 渲染（**双链在碎片内同样生效**）
+- **Agent**：**多会话聊天**（会话列表 → 点进 → 聊天，新建自动开场白）；气泡流界面
+  （借鉴 Ventana React 化，适配三版书房皮肤）；**演示模式**兜底（未配置 API 可全交互体验）；
+  资料库 `[[读:文档]]` 按需读取 + 记忆馆 `[[记:]]`/`[[忆:]]`；会话重命名/归档/导出 txt/删除；
+  连接配置（Base URL / API Key / 模型）存本机
 - **编辑器**：全屏 Markdown（工具栏 / 预览 / 图片 / **插入正文** / 字数 / 收藏星标 /
   移动端大按钮 + 浮动格式条）
-- **全局查找替换**：桌面/移动通用覆盖层（⌘K）+ 三页面页内查找（focusRequest 定位闪烁）
+- **全局查找替换**：桌面/移动通用覆盖层（⌘K），**范围：空间 / 动态 / 碎片 / 灵感** +
+  页内查找（focusRequest 定位闪烁）
 - **数据**：导出 JSON（含图片 Base64）/ TXT / MD / PDF，**范围可多选**
   （文章 / 动态 / 便签 / 收藏夹 / 个人资料）；PDF 内嵌图片 + 居中页码 + **不切行**；
   **本地文件夹快照备份**（≤10 份，自动清理最早）；**WebDAV 全量备份**（可选端到端加密 +
@@ -397,7 +442,7 @@ VidaOS/
 
 ---
 
-## 8. 已知问题与待处理（真实未修项，截至 2026-09-16）
+## 8. 已知问题与待处理（真实未修项，截至 2026-09-28）
 
 ### 8.1 功能/代码缺陷
 - **`DataPage` 用 `useAppStore()` 订阅了整个 store**（`DataPage.tsx:127`）：任一字段
@@ -418,18 +463,24 @@ VidaOS/
   可能退出应用而不是回到列表。
 - **收藏夹里的「动态」类收藏只跳到 `/moments`**，不定位到被收藏的那一条。
 - **`vite.config.ts` 残留 Google Fonts runtimeCaching 死配置**（自托管后无意义，可删）。
+- **Agent SSE 请求无超时**：`streamChatCompletion` 只支持用户手动「停止」（AbortController），
+  网络挂起时没有自动超时上限（低优，可加 AbortSignal.timeout）。
+- **Agent 演示模式是本地模板回复**：未配置 API 时 `demoReply` 只能按关键词给固定话术，
+  不读真实资料库内容（已如实告知用户，演示 ≠ 真实对话）。
 - 低优先级设想：文章加密、静态站点导出、自定义主题色。
 
 ### 8.2 平台 / 外部限制（如实告知用户）
 - **WebDAV 纯浏览器直连坚果云被 CORS 拦截**（坚果云未开放跨域头）；代码就绪，
   **Tauri 桌面壳落地后自动解除**。当前可用备选：支持 CORS 的 WebDAV 服务。
 - **iOS 真机复测待确认**：v3.10 移动输入修复（重命名 Modal / 灰遮罩 / 输入框）在桌面与
-  模拟器验证通过，**真机未复测**。
-- **日记 / Agent 页为占位页**，功能需求待用户提供。
+  模拟器验证通过，**真机未复测**；碎片页/Agent 页移动端布局同样未真机复测。
+- **Agent 依赖外部对话 API**：需用户自填 Base URL / API Key / 模型（Key 只存本机）；
+  未配置自动演示模式。部分 OpenAI 兼容服务可能要求额外 header 或不同端点规范，自检按钮
+  可先验证连通性。
 - **多设备同时编辑同一 WebDAV 备份会互相覆盖**，说明书弹窗已提醒单设备编辑。
 
 ### 8.3 版本号不一致
-`package.json` = 3.0.0、设置页显示「v3.0 · night study」、文档迭代 = v4.0。
+`package.json` = 3.0.0、设置页显示「v3.0 · night study」、文档迭代 = v4.2。
 （低优，改设置页文案需要用户确认显示什么。）
 
 ---
@@ -508,14 +559,26 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
 | 改 WebDAV / 加密 | `lib/webdav.ts`（协议/加密/取回）+ `pages/DataPage.tsx`（UI + BACKUP_GUIDE 文案） |
 | 改首页 | `pages/DeskPage.tsx` + `components/home/*` |
 | 改编辑器 | `components/editor/*` + `globals.css` 的 `.prose-vidaos` |
-| 改查找 | `components/search/*` + `lib/focusRequest.ts` + `useUIStore`（findPanel / focusRequest） |
+| 改查找 | `components/search/*` + `lib/focusRequest.ts` + `useUIStore`（findPanel / focusRequest / FocusKind） |
+| 改碎片页 | `pages/DiaryPage.tsx`（气泡流/输入/长按/星标）+ `globals.css` 的 `.frag-bubble` + `types` 的 `FragmentEntry` + `useAppStore` 的 fragment actions |
+| 改 Agent 对话 | `lib/agentEngine.ts`（纯函数：端点/消息/索引/截取/标记/演示模式）+ `components/agent/AgentChatView.tsx`（UI）+ `pages/AgentPage.tsx`（会话列表）——**逻辑改完跑引擎单测** |
 
 ### 怎么验证（本项目标准做法）
 1. `npm run typecheck` + `npm run build`（最低要求，**不等于修好了**）；
 2. **无头 Chrome 走真实 UI**：在项目根建一个临时 `__probe.html`（Vite 会伺服它），
    里面用 `iframe` 加载应用、用 JS 模拟点击/输入，再把结论 `POST` 给一个本地 HTTP 收集器；
    或复用本会话的 `/tmp/vidaos-verify/`（playwright-core 1.63.0 + 系统 Chrome 脚本）；
-3. 用完**删掉探针文件/临时目录**，别提交。
+   ⚠️ 当前环境 GUI 自动化可能不可用（BU 平面禁用 / 用户占用 Chrome 时 CU 被拒），
+   此时退化为「构建 + 生产包字符串 + 纯逻辑测试」，并如实告知用户浏览器实测未做；
+3. **Agent 引擎单测**（纯逻辑层，不依赖浏览器）：
+   ```bash
+   cd "/Users/amarisgo/Documents/DeepSeek Harness/VidaOS"
+   npx esbuild src/lib/agentEngine.ts --bundle --format=esm \
+     --outfile=/tmp/vidaos-agent-engine.mjs --alias:@=./src
+   node -e "import('/tmp/vidaos-agent-engine.mjs').then(m=>{ /* 断言：端点/索引/截取/标记/导出/演示 */ })"
+   ```
+   v4.2 基线 26 项断言全 PASS；
+4. 用完**删掉探针文件/临时目录**，别提交。
 
 ⚠️ **两个已踩过的坑**：
 - Chrome 的 `--virtual-time-budget` 会让 **IndexedDB 回调永不完成** →
@@ -621,6 +684,10 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
   SCOPES 加「碎片」「灵感」；fragment 命中跳转 /diary，inspiration 命中跳转 /notes
   （NotesPage 自动切到灵感块并清空分类筛选）；灵感页（InspirationView）新增工具行
   「查找替换」按钮 + 页内查找。
+- **接手文档校正**（2026-09-28）：第 0/2/4/5/7/8/11/14 节与当前代码对齐 ——
+  补齐 v4.2 数据模型（Fragment/Agent 系）、文件结构（agentEngine/agent 组件目录、
+  src 58 文件）、新增第 4 节之 19) Agent 对话引擎架构、功能清单去掉占位页、
+  已知问题补 Agent SSE 无超时等，版本号统一 v4.2。
 
 ### [v4.1] - 2026-09-18 —— 主页待办模块 + Obsidian 风格双链 + 收藏夹副标题改名
 - **主页待办模块**（`369d14c`）：`TodoSummaryCard` 挂在主页日程模块下方（DeskPage），
@@ -726,5 +793,6 @@ amber/parchment/ash 与语义色、错误边界两层、9 项 P0 缺陷、死代
   （PolyForm Noncommercial 1.0.0；仅 V2 借用，V3 起完全自研）
 - **V3.x 设计哲学**：用户自定义「暗夜书房」色板与方向；三书房主题体系由用户推动
 - **参与实现的 Agent**：Mavis（v3.0 重写）、多个会话（v3.1~v4.0 修复与功能）、
-  另一位 agent（v3.6/v3.8 PDF 版式与缺陷修复）
-- **最后更新日期**：2026-09-18
+  另一位 agent（v3.6/v3.8 PDF 版式与缺陷修复）、v4.1/v4.2 会话（主页待办/双链/收藏夹改名/
+  碎片页/Agent 多会话/全局查找扩展与本次接手文档校正）
+- **最后更新日期**：2026-09-28
