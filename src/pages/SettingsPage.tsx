@@ -17,7 +17,7 @@ const THEME_OPTIONS: { key: ThemeMode; label: string; hint: string }[] = [
 // 主题皮肤预览色：用真实主题色（页面底 + 卡面），色块区纯色展示，
 // 与下方文字区分离——文字永远落在当前主题实色卡面上，不叠色块
 const PREVIEW_COLORS: Record<'day' | 'night' | 'scarlet', { bg: string; card: string }> = {
-  day:  { bg: '#fdf2e1', card: '#e7cfd4' },   // 真实页面底 / 真实卡面
+  day:  { bg: '#fdf2e1', card: '#f7cfd7' },   // 真实页面底 / 真实卡面
   night: { bg: '#171A1B', card: '#32302B' },
   scarlet: { bg: '#17121A', card: '#312B2F' }, // 猩红书房独立主题的底色 / 紫调卡面
 };
