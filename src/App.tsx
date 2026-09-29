@@ -79,8 +79,8 @@ function App() {
       <Background />
       <TopBar />
 
-      <main className="flex-1 min-h-0 flex flex-col overflow-y-auto pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(72px+env(safe-area-inset-bottom))]">
-        <div className="flex-1 min-h-0 flex flex-col">
+      <main className="flex-1 min-h-0 flex flex-col overflow-y-auto pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(80px+env(safe-area-inset-bottom))]">
+        <div className="flex flex-col">
           <ErrorBoundary variant="inline" resetKey={location.pathname}>
             <Routes>
             <Route path="/" element={<DeskPage />} />
