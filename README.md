@@ -2,7 +2,7 @@
 
 > 你的私密生活记录空间 —— **暗夜书房**风格，纯本地离线运行，数据完全属于你自己。
 
-![Version](https://img.shields.io/badge/version-4.2-6A080E?style=flat-square) ![Tech](https://img.shields.io/badge/stack-React%20%2B%20TS%20%2B%20Tailwind-947D75?style=flat-square) ![License](https://img.shields.io/badge/license-Personal-BCAAA8?style=flat-square)
+![Version](https://img.shields.io/badge/version-4.3-6A080E?style=flat-square) ![Tech](https://img.shields.io/badge/stack-React%20%2B%20TS%20%2B%20Tailwind-947D75?style=flat-square) ![License](https://img.shields.io/badge/license-Personal-BCAAA8?style=flat-square)
 
 ---
 

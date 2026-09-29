@@ -66,9 +66,11 @@ interface Actions {
   isFavorited: (refType: Favorite['refType'], refId: string) => boolean;
 
   // 灵感
-  addInspiration: (content: string, category?: string) => string;
+  addInspiration: (content: string, category?: string, imageIds?: string[]) => string;
   updateInspiration: (id: string, patch: Partial<InspirationNote>) => void;
   deleteInspiration: (id: string) => void;
+  toggleInspirationStar: (id: string) => void;
+  convertInspirationToArticle: (id: string) => string;
 
   // 日程
   addSchedule: (item: Omit<ScheduleNote, 'id' | 'createdAt' | 'updatedAt' | 'done'>) => string;
@@ -310,13 +312,13 @@ export const useAppStore = create<Store>((set, get) => ({
   },
 
   // 灵感
-  addInspiration: (content, category = '随想') => {
+  addInspiration: (content, category = '随想', imageIds = []) => {
     const id = uid('ins_');
     set((s) => ({
       notes: {
         ...s.notes,
         inspiration: [
-          { id, content, category, createdAt: now(), updatedAt: now() },
+          { id, content, category, starred: false, imageIds, createdAt: now(), updatedAt: now() },
           ...s.notes.inspiration,
         ],
       },
@@ -343,6 +345,41 @@ export const useAppStore = create<Store>((set, get) => ({
       },
     }));
     persist(get());
+  },
+  toggleInspirationStar: (id) => {
+    set((s) => ({
+      notes: {
+        ...s.notes,
+        inspiration: s.notes.inspiration.map((n) =>
+          n.id === id ? { ...n, starred: !n.starred, updatedAt: now() } : n,
+        ),
+      },
+    }));
+    persist(get());
+  },
+  convertInspirationToArticle: (id) => {
+    const ins = get().notes.inspiration.find((n) => n.id === id);
+    if (!ins) return '';
+    const artId = uid('art_');
+    const title = ins.content.split('\n')[0].slice(0, 50) || '来自灵感的文章';
+    set((s) => ({
+      articles: [
+        {
+          id: artId,
+          title,
+          content: ins.content,
+          excerpt: ins.content.slice(0, 120),
+          tags: ins.category ? [ins.category] : [],
+          imageIds: ins.imageIds,
+          collectionId: undefined,
+          createdAt: now(),
+          updatedAt: now(),
+        },
+        ...s.articles,
+      ],
+    }));
+    persist(get());
+    return artId;
   },
 
   // 日程

@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-28 深夜（v4.2.1 日间色板定稿：背景 #fdf2e1 + 卡片 #fce8dd；同日早前已做 v4.2 接手文档校正）
+> 最后更新：2026-09-29（v4.3：Agent/碎片页进入卡顿改 fixed→flex；灵感星标/转文章/图片上传）
 
 ---
 
@@ -14,7 +14,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
-| **当前版本** | package.json 写的是 `3.0.0`、设置页显示「v3.0 · night study」；文档按迭代日志记到 **v4.2.1**（日间色板定稿） |
+| **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3**（2026-09-29） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -84,6 +84,14 @@
   `#fdf2e1`；日间卡片底色经 6 版反馈迭代定稿为低饱和杏粉 `#fce8dd`
   （`rgba(252,232,221,0.92)`），设置页主题卡预览同步；浮层色 `--card-bg-elevated`
   保持 `rgba(245,230,222,0.96)` 不动。详见第 3 节日间色板与第 13 节变更日志。
+- **v4.3（2026-09-29）** —— **进入页面布局卡顿修复**：Agent 会话页与碎片页的
+  头部/底部输入框从 `fixed + env(safe-area-inset-*)` 改为 flex 流内布局
+  （App.tsx 根容器 `h-[100dvh] overflow-hidden`，页内 `flex-1 min-h-0` 滚区），
+  消除 WebKit 对 fixed + env() 的双重布局计算延迟（**view-enter 动画移除无效**，
+  见第 17 节 fixed→flex 记录）；**灵感页功能补全**：便签-灵感支持星标
+  （`toggleInspirationStar`）、一键转文章（`convertInspirationToArticle`，生成本地
+  Article 进入空间）、撰写/编辑时多图上传（复用碎片 compressImage + putFile + MediaImage），
+  数据模型 `InspirationNote` 新增 `starred: boolean` 与 `imageIds: string[]`。
 
 ---
 

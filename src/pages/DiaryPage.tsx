@@ -215,12 +215,12 @@ export function DiaryPage() {
   });
 
   return (
-    <div className="px-3 sm:px-6">
-      <div className="max-w-2xl mx-auto">
+    <div className="flex-1 min-h-0 flex flex-col px-3 sm:px-6">
+      <div className="max-w-2xl mx-auto w-full flex-1 min-h-0 flex flex-col">
         <PageFindBar find={find} />
 
         {/* 工具行：只看星标 + 查找替换 */}
-        <div className="pb-3 flex items-center gap-2">
+        <div className="pb-3 flex items-center gap-2 flex-none">
           <button
             onClick={() => setStarredOnly((v) => !v)}
             className={clsx(
@@ -246,9 +246,9 @@ export function DiaryPage() {
           </span>
         </div>
 
-        {/* 消息流 */}
+        {/* 消息流 —— flex-1 自动占满 */}
         {fragments.length === 0 ? (
-          <div className="py-24 flex flex-col items-center text-center gap-3">
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 min-h-0 overflow-y-auto">
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center border border-bronze/20"
               style={{ background: 'rgba(106, 8, 14, 0.15)' }}
@@ -261,11 +261,13 @@ export function DiaryPage() {
             </p>
           </div>
         ) : groups.length === 0 ? (
-          <div className="py-20 text-center text-bronze italic text-sm">暂无星标碎片</div>
+          <div className="flex-1 flex items-center justify-center min-h-0 overflow-y-auto">
+            <p className="text-bronze italic text-sm">暂无星标碎片</p>
+          </div>
         ) : (
           <ul
             ref={find.listRef}
-            className="pb-[calc(150px+env(safe-area-inset-bottom)+56px)] space-y-4"
+            className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4"
           >
             {groups.map((g) => (
               <li key={g.key}>
@@ -413,11 +415,8 @@ export function DiaryPage() {
           </>
         )}
 
-        {/* 底部固定输入区 */}
-        <div
-          className="fixed inset-x-0 z-30 px-3 sm:px-6"
-          style={{ bottom: 'calc(56px + env(safe-area-inset-bottom) + 8px)' }}
-        >
+        {/* 底部输入区 —— flex-none 贴底 */}
+        <div className="flex-none z-30 pb-2">
           <div
             className="mx-auto max-w-2xl rounded-card border border-bronze/15 px-3 py-2.5 shadow-card-elevated"
             style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px) saturate(140%)' }}

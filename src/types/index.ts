@@ -57,6 +57,10 @@ export interface InspirationNote {
   id: string;
   content: string;
   category: string;
+  /** 星标 = 值得整理 */
+  starred: boolean;
+  /** 图片 fileId 列表（复用 files 表） */
+  imageIds: string[];
   createdAt: number;
   updatedAt: number;
 }

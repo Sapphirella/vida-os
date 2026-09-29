@@ -75,15 +75,14 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-screen flex flex-col">
+    <div className="relative h-[100dvh] flex flex-col overflow-hidden">
       <Background />
       <TopBar />
 
-      <main className="flex-1 pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(72px+env(safe-area-inset-bottom))]">
-        {/* 页面级边界：单个页面崩溃时顶栏与底部 Tab 仍然可用，可以切走；
-            resetKey 传路由，切换 tab 后自动复位 */}
-        <ErrorBoundary variant="inline" resetKey={location.pathname}>
-          <Routes>
+      <main className="flex-1 min-h-0 flex flex-col overflow-y-auto pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(72px+env(safe-area-inset-bottom))]">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <ErrorBoundary variant="inline" resetKey={location.pathname}>
+            <Routes>
             <Route path="/" element={<DeskPage />} />
             <Route path="/desk" element={<DeskPage />} />
             <Route path="/notes" element={<NotesPage />} />
@@ -98,7 +97,8 @@ function App() {
             <Route path="/favorites" element={<FavoritesPage />} />
           </Routes>
         </ErrorBoundary>
-      </main>
+      </div>
+    </main>
 
       <BottomTabBar />
       <EditorOverlay />

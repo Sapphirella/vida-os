@@ -312,12 +312,11 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const apiMode = hasApiConfig(config);
 
   return (
-    <div className="h-full">
-      {/* 头部：返回 + 标题 + 操作 */}
+    <div className="flex-1 min-h-0 flex flex-col">
+      {/* 头部：返回 + 标题 + 操作 —— 随 flex 流定位，不再 fixed */}
       <div
-        className="fixed inset-x-0 z-30 border-b border-bronze/10"
+        className="flex-none z-30 border-b border-bronze/10"
         style={{
-          top: 'calc(56px + env(safe-area-inset-top))',
           background: 'var(--bar-bg)',
           backdropFilter: 'blur(20px) saturate(140%)',
           WebkitBackdropFilter: 'blur(20px) saturate(140%)',
@@ -382,13 +381,13 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      {/* 消息流 */}
+      {/* 消息流 —— flex-1 自动占满剩余空间，scroll 内部 */}
       <div
         ref={logRef}
-        className="pt-[calc(100px+env(safe-area-inset-top))] pb-[calc(120px+env(safe-area-inset-bottom)+56px)] overflow-y-auto"
+        className="flex-1 min-h-0 overflow-y-auto"
         style={{ scrollbarWidth: 'thin' }}
       >
-        <div className="max-w-2xl mx-auto px-3 sm:px-6 space-y-4">
+        <div className="max-w-2xl mx-auto px-3 sm:px-6 space-y-4 pb-6">
           {messages.length === 0 && (
             <div className="py-24 text-center text-bronze italic text-sm">
               说点什么，开始你们的对话吧。
@@ -473,11 +472,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      {/* 底部输入区 */}
-      <div
-        className="fixed inset-x-0 z-30 px-3 sm:px-6"
-        style={{ bottom: 'calc(56px + env(safe-area-inset-bottom) + 8px)' }}
-      >
+      {/* 底部输入区 —— flex-none 贴底，随容器流定位 */}
+      <div className="flex-none z-30 px-3 sm:px-6 pb-2">
         <div
           className="mx-auto max-w-2xl rounded-card border border-bronze/15 px-3 py-2.5 shadow-card-elevated"
           style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px) saturate(140%)' }}
