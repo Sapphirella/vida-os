@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-29（v4.3.1：修复桌面端主页/数据/设置页底部被底栏遮挡；Agent/碎片页进入卡顿改 fixed→flex；灵感星标/转文章/图片上传）
+> 最后更新：2026-09-29（v4.3.2：统一布局链 —— 内容页不再被底栏遮挡，碎片/Agent 页恢复贴底输入与内部滚动）
 
 ---
 
@@ -14,7 +14,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3.1**（2026-09-29） |
+ | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3.2**（2026-09-29） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -98,6 +98,12 @@
   `flex-1 min-h-0 flex flex-col`（flex 压缩）且 padding-bottom 不足。修复：内部 div
   改为 `flex flex-col`（移除 flex-1/min-h-0），`<main>` padding-bottom 调为
   `pb-[calc(80px+env(safe-area-inset-bottom))]`，确保内容完整露出在底栏上方。
+- **v4.3.2（2026-09-29）** —— **布局链统一**：v4.3.1 的修法把碎片页/Agent 页的
+  「确定高度」弄丢了（输入框浮到屏幕中间、消息流不再内部滚动、新碎片被底栏切掉 40px）。
+  改为把 `overflow-y-auto` 与 80px 避让一起下沉到内层 div（保留 `flex-1 min-h-0`），
+  `main` 只负责给固定顶栏让位；新增 `.app-shell`（`100vh` + `100dvh` 双写）兜住旧内核。
+  13 项页面 × 2 视口实测无内容被遮，两页聊天布局贴底且内部滚动。详见第 4 节之 20)
+  与第 12 节教训 17、18。
 
 ---
 
@@ -363,6 +369,31 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
   WebDAV 密码**；导入合并时若备份无 key 则保留本机 key（`useAppStore.importState`）；
 - **引擎可单测**：esbuild bundle 后 Node 跑断言（见第 11 节），v4.2 时 26/26 PASS。
 
+### 20) 布局链：内容页 vs 聊天页（v4.3.2，**改这两行前务必读完**）
+```
+.app-shell（100vh + 100dvh 双写，globals.css）
+└─ main           flex-1 min-h-0 flex flex-col pt-[56px+safe-top]      ← 只给固定 TopBar 让位
+   └─ 内层 div     flex-1 min-h-0 flex flex-col overflow-y-auto pb-[80px+safe-bottom]
+      └─ 页面根    内容页＝普通块；碎片/Agent＝flex-1 min-h-0 flex flex-col
+```
+内层 div 必须**同时**满足两件事，缺一件就有一类页面坏掉（都有实测数据）：
+
+| 内层 div 写法 | 内容页（主页/数据/设置…） | 聊天页（碎片/Agent） |
+|---|---|---|
+| `flex flex-col`（高度由内容决定，v4.3.1 提交态） | ✅ 无遮挡 | ❌ 输入框浮到屏幕中间（底边 371 / 视口 900），消息流永不内部滚动 |
+| `flex-1 min-h-0` + main 滚动（v4.3 那版） | ❌ 滚到底「清空所有数据」被底栏遮 12px；移动端「歌曲列表（0）」遮 6px | ✅ 输入框贴底 |
+| **`flex-1 min-h-0` + 自己 `overflow-y-auto pb-[80px]`（当前）** | ✅ 无遮挡 | ✅ 输入框距底栏 42px，消息流内部可滚，新碎片完整可见 |
+
+- **为什么滚动不能留在 main**：内层有确定高度时，子元素溢出的内容**不会**让 main 的
+  `padding-bottom` 计入滚动范围（实测 mainSH 1863 → 1783，正好少那 80px），滚到底时最后
+  一个元素压在固定定位的 `BottomTabBar`（56px）下面。
+- **为什么内层不能是 auto 高度**：`flex-1` 在 auto 高度容器里分不到剩余空间，碎片/Agent 的
+  消息流高度＝内容高度、永远不成滚动容器（`scrollTop = scrollHeight` 变空操作），
+  且新发的碎片会被底栏切掉 40px（实测末条底 827 > 底栏顶 787）。
+- **`h-[100dvh]` 必须带 `100vh` 回退**（`.app-shell`）：旧内核（iOS <15.4 / 夸克）丢弃 dvh
+  会让根容器高度变 auto，上面整条链一起退化。
+- 验证口径见第 12 节教训 17、18；`BottomTabBar` 保持 `fixed`（不要改成流内）。
+
 ---
 
 ## 5. 文件结构与职责
@@ -474,6 +505,31 @@ VidaOS/
 ## 8. 已知问题与待处理（真实未修项，截至 2026-09-28）
 
 ### 8.1 功能/代码缺陷
+- **【数据丢失风险】灵感与碎片的图片不进任何备份**：`collectFileIds`
+  （`lib/exportImport.ts:124-142`）只收集 `articles` / `moments` / `profile` 引用的文件，
+  不含 `notes.inspiration[].imageIds`（v4.3 新增，`InspirationView.tsx:67,273` 落库）
+  也不含 `fragments[].imageIds`。而三条备份路径都用它挑文件：导出 JSON
+  （`exportImport.ts:26-37`）、WebDAV（`webdav.ts:222`）、本地快照（`snapshot.ts:164`）。
+  → 备份里只有条目没有图，换机/清缓存后导入得到**永久灰块**（`MediaImage` 对缺失文件
+  无失败兜底），且原图不可恢复；而界面文案写的是「含图片 / 音频」（`DataPage.tsx:469`）。
+- **【导入即崩】三条恢复路径绕过 `loadState` 的迁移兜底**：`starred`/`imageIds` 的兜底
+  只写在 `lib/db.ts:57-71`，而 `parseJSONImport`（`exportImport.ts:641-648`）、
+  WebDAV 取回（`webdav.ts:324-339`）、快照恢复（`snapshot.ts:234-256`）都是原样返回
+  `state`，`useAppStore.importState`（`useAppStore.ts:733-736` / `754-758`）直接灌进 store。
+  → 导入 v4.2 及更早的备份后进「便签·灵感」，`InspirationView.tsx:374` 读
+  `item.imageIds.length` 抛 TypeError，错误边界接管；**「重试」无效**（内存里仍是旧数据），
+  只有刷新才会被 `loadState` 修好。修法应在导入/取回/恢复三处统一走一次「归一化」函数。
+- **灵感编辑态草稿取消后不复位**：`InspirationView.tsx:262-263` 的 `draft`/`draftImages`
+  只初始化一次（组件按 `key={item.id}` 常驻），「取消」只清 `editingId`
+  （`InspirationView.tsx:335-337`）。→ 改完取消、再进编辑、保存 = 被取消的改动写回；
+  图片草稿同理，且 `putFile` 落库的 blob 变成无引用的孤儿。
+- **「转文章」没有重复保护**：`useAppStore.ts:360-383` 每次调用都新建文章；
+  `InspirationView.tsx:391-398` 是裸 `onClick`，触屏上双击图标会生成两篇相同文章。
+- **启动脚本的端口判定会「自信地」打开错误的页面**：`打开VidaOS.command:51` 的
+  `curl -s -o /dev/null` 不带 `-f`（4xx/5xx 也返回 0），而 `vite.config.ts` 有
+  `port: 5173` 却**没有 `strictPort`** → 5173 被别的程序占用时 vite 静默换到 5174，
+  脚本只轮询 5173，于是要么打开别人的应用、要么打印「✅ 已就绪 地址 5173」而真实端口是
+  5174。修法：加 `strictPort: true`，并把探测改成校验响应内容（`curl -sf` + 匹配特征串）。
 - **`DataPage` 用 `useAppStore()` 订阅了整个 store**（`DataPage.tsx:127`）：任一字段
   （含 `hydrated`）变化都会重渲染整页；且它把整个 store（混着 action 函数）传进
   `exportJSON` / `saveSnapshot`，目前靠 `JSON.stringify` 静默丢弃函数才没出事 ——
@@ -510,6 +566,10 @@ VidaOS/
 
 ### 8.3 已修复
 - **版本号不一致**（v4.2 → v4.3.1）：package.json / 设置页 / README badge / 本文档已同步。
+- **布局链两难**（v4.3.2）：内容页被底栏遮挡 ↔ 碎片/Agent 输入框不贴底，两个方向的
+  修法互相冲突（v4.3 与 v4.3.1 各修坏一个）。已按第 4 节之 20) 的结构统一：滚动与
+  80px 避让一起下沉到内层 div，`.app-shell` 补 `100vh` 回退。13 项页面 × 2 视口实测
+  无内容被遮，两页聊天布局贴底且消息流内部滚动。
 
 ---
 
@@ -694,10 +754,47 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
     描述只有相对含义，直接按直觉跳级改容易过头（#fdebeb 被评"太白了"）。更稳的做法：
     在用户当前满意色的基础上给 **2~3 个同方向候选色值**（附 RGB 差异说明）让他一次选，
     减少往返。
+17. **滚动容器的 `padding-bottom` 不是永远算进滚动范围（v4.3.2 实测）**：同一条
+    `pb-[calc(80px+…)]` 写在 `main` 上时，
+    - 子元素高度由内容决定（v4.3.1 提交态）→ `scrollHeight` = 内容高 + 80（1863），滚到底安全；
+    - 子元素有确定高度、内容从它内部溢出（v4.3 那版）→ 溢出内容撑开滚动范围，但**那 80px
+      没被算进去**（1783 = 56 + 内容高 1727），滚到底时最后一屏内容落在 `BottomTabBar`
+      下面。
+    所以「避让固定底栏」这件事不能只靠给祖先加 padding，必须让**滚动容器自己的** padding
+    生效（把滚动下沉到真正有 padding 的那一层）。判断依据要用「滚到底后有没有内容元素
+    （或文字叶子）的底边超过底栏顶边」，不能只看 `scrollHeight` 的数字大小。
+18. **探针指标第三次说谎：把「滚动容器自己的盒子」当成被遮内容（v4.3.2）**：
+    「滚到底后扫描所有 bottom > 底栏顶的元素」这条规则，在滚动容器正好铺满视口时会把
+    **滚动容器自身**报成被遮（它的盒子当然到 y=900），于是把「其实没问题」的结构判成坏。
+    修正：扫描时排除 `overflow-y: auto/scroll` 的盒子（它们只是布局骨架，不是内容），
+    并区分「容器被遮」（布局骨架）与「文字叶子被遮」（真正的展示不全）两个口径。
+    **自检指标写完要拿一个已知好 + 一个已知坏的结构各跑一次**，两边都能区分才算可用
+    （呼应第 2、9 条）。
 
 ---
 
 ## 13. 变更日志
+
+### [v4.3.2] - 2026-09-29 —— 布局链统一（内容页不遮挡 + 聊天页贴底）
+- **背景**：v4.3 把碎片页/Agent 页从 `fixed` 改成 flex 流内布局，依赖祖先是「确定高度」；
+  v4.3.1 为修内容页被底栏遮挡把内层 div 的 `flex-1 min-h-0` 去掉，于是那两页的
+  `flex-1` 分不到剩余空间 → 消息流不再是滚动容器、输入框浮到屏幕中间、新发的碎片被
+  底栏切掉 40px。两个方向互相冲突，本轮用同一次实测把两者一起解决。
+- **根因（实测）**：内层 div 有确定高度时，其子元素溢出的内容**不会**把 `main` 的
+  `padding-bottom` 算进滚动范围 —— `main.scrollHeight` 1863 → 1783，正好少 80px，
+  滚到底时最后一个元素压在固定底栏下（实测「清空所有数据」按钮被遮 12px）。
+- **修法**：`App.tsx` 把 `overflow-y-auto` 与 `pb-[calc(80px+env(safe-area-inset-bottom))]`
+  一起从 `main` 下沉到内层 div，内层保留 `flex-1 min-h-0`；`main` 只留
+  `pt-[calc(56px+env(safe-area-inset-top))]` 给固定顶栏让位。新增 `.app-shell`
+  （`globals.css`：`height:100vh; height:100dvh`）兜住旧内核丢弃 `dvh` 的情况。
+- **实测口径**（无头 Chrome，1280×900 与 390×844×3）：
+  - 13 项页面 × 2 视口：滚到底「文字被遮 / 容器被遮」全为无（此前 v4.3 那版在
+    `/data` 桌面遮 12px、`/desk` 移动遮 6px）；
+  - 碎片页（25 条数据）输入框底边 801 / 底栏顶 843（移动 745 / 787），消息流
+    `clientHeight 655 ↔ scrollHeight 2048` 内部可滚，新碎片完整可见；
+  - Agent 会话页同口径通过；真重载后数据仍在；无 console / page 错误。
+- **同时排查但未修**（已记入第 8.1 节）：备份漏收灵感/碎片图片、导入绕过迁移兜底、
+  灵感草稿不复位、转文章无去重、启动脚本端口判定 —— 均已给出文件:行号与失败场景。
 
 ### [v4.2] - 2026-09-18 —— 碎片页 + Agent 多会话助手 + 全局查找范围扩展
 - **碎片页**（`137ae3f`，数据层 `f3f801d`）：

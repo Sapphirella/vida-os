@@ -319,6 +319,16 @@ body {
   min-height: 100dvh;
 }
 
+/* 应用外壳高度（App.tsx 根节点）。
+   先 100vh 兜底再 100dvh：iOS 15.4 / Chrome 108 之前的旧内核（本项目声明支持
+   iOS ≥ 10、夸克等）不认识 dvh，会把整条 height 声明丢掉，根容器高度变 auto，
+   下面整条布局链（main flex-1 → 内层 flex-1 → 页内滚动区）会一起退化。
+   两条一起写：旧内核取 vh，新内核取 dvh，与 body / #root 的写法保持一致。 */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* 滚动条 */
 ::-webkit-scrollbar {
   width: 6px;

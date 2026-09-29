@@ -75,12 +75,22 @@ function App() {
   }
 
   return (
-    <div className="relative h-[100dvh] flex flex-col overflow-hidden">
+    <div className="relative app-shell flex flex-col overflow-hidden">
       <Background />
       <TopBar />
 
-      <main className="flex-1 min-h-0 flex flex-col overflow-y-auto pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(80px+env(safe-area-inset-bottom))]">
-        <div className="flex flex-col">
+      <main className="flex-1 min-h-0 flex flex-col pt-[calc(56px+env(safe-area-inset-top))]">
+        {/* 布局链说明（改这两行前请先读 PROJECT_MEMORY 第 4 节之 20) 与第 12 节教训 17）：
+            这一层必须同时满足两个互相拉扯的需求，实测数据见第 12 节教训 17。
+            1) flex-1 min-h-0：给它一个「确定高度」。碎片页与 Agent 会话页依赖
+               「flex-1 + min-h-0 + overflow-y-auto」把消息流做成内部滚动、输入框贴底；
+               高度变成由内容决定（auto）时 flex-grow 无剩余空间可分，消息流高度=内容高度、
+               永远不成为滚动容器，输入框就会退到列表末尾浮在屏幕中间（实测过）。
+            2) 滚动与「避让底栏」的 padding 都放在这一层：内容页是长内容，若把滚动交给
+               main，子元素高度确定时 main 的 padding-bottom 不会被计入滚动范围
+               （1863 变 1783，正好少 80px），滚到底时最后一个元素会压在固定定位的
+               BottomTabBar 下面 —— 实测「清空所有数据」按钮被遮 12px。 */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-[calc(80px+env(safe-area-inset-bottom))]">
           <ErrorBoundary variant="inline" resetKey={location.pathname}>
             <Routes>
             <Route path="/" element={<DeskPage />} />
