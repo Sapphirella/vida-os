@@ -20,8 +20,9 @@ import { MomentsPage } from '@/pages/MomentsPage';
 import { FavoritesPage } from '@/pages/FavoritesPage';
 import { ArticleReaderPage } from '@/pages/ArticleReaderPage';
 import { CollectionPage } from '@/pages/CollectionPage';
-import { DiaryPage } from '@/pages/DiaryPage';
 import { AgentPage } from '@/pages/AgentPage';
+import { LibraryPage } from '@/pages/LibraryPage';
+import { ReaderPage } from '@/pages/ReaderPage';
 
 function App() {
   const hydrate = useAppStore((s) => s.hydrate);
@@ -102,7 +103,8 @@ function App() {
             <Route path="/space/collection/:id" element={<CollectionPage />} />
             <Route path="/space/article/:id" element={<ArticleReaderPage />} />
             <Route path="/moments" element={<MomentsPage />} />
-            <Route path="/diary" element={<DiaryPage />} />
+            <Route path="/library" element={<LibraryPage />} />
+            <Route path="/library/book/:id" element={<ReaderPage />} />
             <Route path="/agent" element={<AgentPage />} />
             <Route path="/favorites" element={<FavoritesPage />} />
           </Routes>

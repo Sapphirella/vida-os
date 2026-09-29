@@ -76,7 +76,7 @@ export function AgentPage() {
             </div>
             <p className="font-serif text-headline text-xl">和 Agent 聊点什么</p>
             <p className="text-bronze text-sm leading-relaxed max-w-xs">
-              它可以帮你整理碎片与资料、生成文章，也能聊生活、学习和身边的事。数据只存在本机。
+              它可以帮你整理馆藏与资料、生成文章，也能聊生活、学习和身边的事。数据只存在本机。
             </p>
             <button onClick={newSession} className="btn-primary">
               <Plus size={14} strokeWidth={1.6} /> 开启第一个会话

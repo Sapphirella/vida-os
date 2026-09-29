@@ -1,12 +1,13 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, NotebookPen, Bot, Database, Settings as SettingsIcon } from 'lucide-react';
+import { Home, StickyNote, Bot, Database, Settings as SettingsIcon } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { clsx } from '@/lib/utils';
 import type { TabKey } from '@/types';
 
 const TABS: { key: TabKey; label: string; icon: typeof Home; path: string }[] = [
   { key: 'desk', label: '主页', icon: Home, path: '/desk' },
-  { key: 'diary', label: '碎片', icon: NotebookPen, path: '/diary' },
+  // v4.4：碎片流移除，便签上位到这一格
+  { key: 'notes', label: '便签', icon: StickyNote, path: '/notes' },
   { key: 'agent', label: 'Agent', icon: Bot, path: '/agent' },
   { key: 'data', label: '数据', icon: Database, path: '/data' },
   { key: 'settings', label: '设置', icon: SettingsIcon, path: '/settings' },
@@ -35,9 +36,9 @@ export function BottomTabBar() {
       <div className="max-w-5xl mx-auto h-[56px] px-2 flex items-stretch">
         {TABS.map(({ key, label, icon: Icon, path }) => {
           const active =
+            // v4.4：便签上位到底栏后，/notes 归「便签」这一格，主页只认 /desk 与根路径
             location.pathname.startsWith(path) ||
-            (path === '/desk' &&
-              (location.pathname === '/' || location.pathname.startsWith('/notes')));
+            (path === '/desk' && location.pathname === '/');
           return (
             <button
               key={key}

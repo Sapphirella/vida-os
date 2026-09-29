@@ -78,7 +78,7 @@ export function focusNthQuery(
   return true;
 }
 
-type FocusKind = 'article' | 'moment' | 'fragment' | 'inspiration';
+type FocusKind = 'article' | 'moment' | 'inspiration';
 
 /** 目标页全局聚焦 hook：匹配 kind+id 的 focusRequest 时，把命中处滚入视野并高亮 */
 export function useGlobalFocus(

@@ -21,35 +21,18 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { saveText, formatDate, relativeTime, clsx } from '@/lib/utils';
-import {
-  AgentContext,
-  ChatMessage,
-  buildMessages,
-  hasApiConfig,
-  streamChatCompletion,
-  demoReply,
-  demoStream,
-  scanMarkers,
-  extractWriteMemory,
-  resolveDoc,
-  resolveMemory,
-  snippetFor,
-  sessionToTxt,
-  MAX_TOOL_ROUNDS,
-  DOC_MAX_BYTES,
-} from '@/lib/agentEngine';
+// 逐轮回复的实现已抽到 lib/agentTurn.ts（与馆藏「共读」抽屉共用），
+// 这里只留这个组件自己还要用的几个（自检连通性 / 导出 / 资料库上传大小限制）
+import { hasApiConfig, sessionToTxt, DOC_MAX_BYTES } from '@/lib/agentEngine';
+import { runAgentTurn } from '@/lib/agentTurn';
 import type { AgentMessage, AgentDoc } from '@/types';
 
 export function AgentChatView({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.agentSessions.find((x) => x.id === sessionId));
   const config = useAppStore((s) => s.agentConfig);
   const memories = useAppStore((s) => s.agentMemories);
-  const appendAgentMessage = useAppStore((s) => s.appendAgentMessage);
-  const replaceAgentMessage = useAppStore((s) => s.replaceAgentMessage);
-  const removeAgentMessage = useAppStore((s) => s.removeAgentMessage);
   const updateAgentSession = useAppStore((s) => s.updateAgentSession);
   const addAgentDoc = useAppStore((s) => s.addAgentDoc);
-  const addAgentMemory = useAppStore((s) => s.addAgentMemory);
   const markAgentMemoriesRead = useAppStore((s) => s.markAgentMemoriesRead);
   const setAgentSessionId = useUIStore((s) => s.setAgentSessionId);
   const showModal = useUIStore((s) => s.showModal);
@@ -82,112 +65,29 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
     if (unreadMemories > 0) markAgentMemoriesRead();
   };
 
-  /** 执行一轮回复：可带工具标记循环（读文档/记忆 → 回填 → 续写） */
+  /** 执行一轮回复（流式 + 记忆写入 + 工具标记循环）
+   *  具体流程抽在 lib/agentTurn.ts —— 与馆藏阅读器的「共读」抽屉共用同一份实现，
+   *  避免两处各写一份走样。这里只负责 UI 状态（流式光标、停止按钮）。 */
   const runTurn = useCallback(
     async (userText: string, replaceMsgId?: string) => {
-      const st = useAppStore.getState();
-      const sess = st.agentSessions.find((x) => x.id === sessionId);
-      if (!sess) return;
-      const ctx: AgentContext = {
-        config: st.agentConfig,
-        docs: st.agentDocs,
-        memories: st.agentMemories,
-        fragments: st.fragments,
-      };
       const ctrl = new AbortController();
       stopRef.current = ctrl;
       setStreaming(true);
-      const msgId = replaceMsgId ?? st.appendAgentMessage(sessionId, { role: 'assistant', content: '' });
-      setStreamMsgId(msgId);
-      if (replaceMsgId) {
-        st.replaceAgentMessage(sessionId, msgId, { content: '' });
-      }
       try {
-        let history: ChatMessage[] = (
-          useAppStore.getState().agentSessions.find((x) => x.id === sessionId)?.messages ?? []
-        )
-          .filter((m) => m.id !== msgId && !m.greet && m.content)
-          .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }));
-
-        let finalText = '';
-        let rounds = 0;
-        for (;;) {
-          const messages = buildMessages(ctx.config.persona, history, ctx);
-          const onAcc = (acc: string) => {
-            useAppStore.getState().replaceAgentMessage(sessionId, msgId, { content: acc });
-          };
-          let out: string;
-          if (hasApiConfig(ctx.config)) {
-            out = await streamChatCompletion(
-              ctx.config.baseUrl,
-              ctx.config.apiKey,
-              ctx.config.model,
-              messages,
-              ctrl.signal,
-              onAcc,
-            );
-          } else {
-            const reply = rounds === 0 ? demoReply(userText) : '（演示模式下不执行工具标记，继续。配置 API 后此步会真正读取。）';
-            out = await demoStream(reply, ctrl.signal, onAcc);
-          }
-
-          // 记忆写入：[[记:标题]]正文 → 存入记忆馆并从对话中剥离
-          const wm = extractWriteMemory(out);
-          if (wm) {
-            st.addAgentMemory(wm.title, wm.body);
-            st.appendAgentMessage(sessionId, { role: 'sys', content: `已记入记忆馆「${wm.title}」` });
-            out = wm.rest;
-          }
-
-          const { display, reads, memReads } = scanMarkers(out);
-          let pendingTool: ChatMessage | null = null;
-          if (reads.length > 0) {
-            const doc = resolveDoc(reads[0], ctx);
-            if (doc) {
-              st.appendAgentMessage(sessionId, { role: 'sys', content: `读取资料库「${doc.name}」…` });
-              pendingTool = {
-                role: 'user',
-                content: `【资料库·${doc.name}】\n${snippetFor(doc.content, userText)}`,
-              };
-            } else {
-              st.appendAgentMessage(sessionId, { role: 'sys', content: `未找到文档「${reads[0]}」` });
-            }
-          } else if (memReads.length > 0) {
-            const mem = resolveMemory(memReads[0], ctx);
-            if (mem) {
-              st.appendAgentMessage(sessionId, { role: 'sys', content: `读取记忆「${mem.title}」…` });
-              pendingTool = { role: 'user', content: `【记忆馆·${mem.title}】\n${mem.content}` };
-            } else {
-              st.appendAgentMessage(sessionId, { role: 'sys', content: `未找到记忆「${memReads[0]}」` });
-            }
-          }
-
-          finalText += display;
-          if (pendingTool) {
-            history = [...history, { role: 'assistant', content: out }, pendingTool];
-            rounds++;
-            if (rounds >= MAX_TOOL_ROUNDS) break;
-            continue;
-          }
-          break;
-        }
-        st.replaceAgentMessage(sessionId, msgId, { content: finalText || '（无内容）' });
-      } catch (e: any) {
-        if (e?.name === 'AbortError') return;
-        const msg = e?.message ? String(e.message) : '未知错误';
-        useAppStore.getState().appendAgentMessage(sessionId, { role: 'sys', content: `请求出错：${msg}` });
-        const cur = useAppStore.getState().agentSessions.find((x) => x.id === sessionId)?.messages;
-        const acc = cur?.find((m) => m.id === msgId);
-        if (acc && !acc.content) {
-          useAppStore.getState().removeAgentMessage(sessionId, msgId);
-        }
+        await runAgentTurn({
+          sessionId,
+          userText,
+          replaceMsgId,
+          signal: ctrl.signal,
+          onAssistantCreated: setStreamMsgId,
+        });
       } finally {
         setStreaming(false);
         setStreamMsgId(null);
         stopRef.current = null;
       }
     },
-    [sessionId, appendAgentMessage, replaceAgentMessage, removeAgentMessage, addAgentMemory],
+    [sessionId],
   );
 
   const send = () => {
@@ -237,7 +137,9 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   };
 
   const delMsg = (m: AgentMessage) => {
-    if (confirm('删除这条消息？')) removeAgentMessage(sessionId, m.id);
+    if (confirm('删除这条消息？')) {
+      useAppStore.getState().removeAgentMessage(sessionId, m.id);
+    }
   };
 
   const exportTxt = () => {
@@ -673,7 +575,7 @@ function PanelInner({
           value={config.persona}
           onChange={(e) => updateAgentConfig({ persona: e.target.value })}
           rows={4}
-          placeholder="给 Agent 设定一个人格（可选）。留空使用默认人格：能读碎片与资料库、可聊天可整理。"
+          placeholder="给 Agent 设定一个人格（可选）。留空使用默认人格：能读馆藏与资料库、可聊天可整理。"
           className="w-full px-3 py-2 rounded-card text-sm font-serif text-paper placeholder:text-bronze-deep outline-none border border-bronze/15 focus:border-candle/40 bg-transparent resize-none"
           style={{ lineHeight: 1.7 }}
         />

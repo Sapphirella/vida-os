@@ -785,56 +785,6 @@ textarea, input, [contenteditable] {
   color: var(--candle);
 }
 
-/* 碎片气泡内的 markdown：整段亮字，链接/双链跟随气泡前景色 */
-.frag-bubble .prose-vidaos,
-.frag-bubble .prose-vidaos p,
-.frag-bubble .prose-vidaos strong,
-.frag-bubble .prose-vidaos em,
-.frag-bubble .prose-vidaos ul,
-.frag-bubble .prose-vidaos ol,
-.frag-bubble .prose-vidaos li {
-  color: var(--moon);
-}
-.frag-bubble .prose-vidaos {
-  font-size: 0.9375rem;
-  line-height: 1.65;
-}
-.frag-bubble .prose-vidaos p {
-  margin: 0 0 0.5em;
-}
-.frag-bubble .prose-vidaos p:last-child {
-  margin-bottom: 0;
-}
-.frag-bubble .prose-vidaos h1,
-.frag-bubble .prose-vidaos h2,
-.frag-bubble .prose-vidaos h3,
-.frag-bubble .prose-vidaos h4 {
-  color: var(--moon);
-  margin: 0.8em 0 0.4em;
-}
-.frag-bubble .prose-vidaos a,
-.frag-bubble .prose-vidaos a.vd-wiki-link {
-  color: var(--moon);
-  text-decoration: underline;
-  text-decoration-color: rgb(var(--moon-rgb) / 0.55);
-  text-underline-offset: 3px;
-}
-.frag-bubble .prose-vidaos a.vd-wiki-link {
-  text-decoration-style: dotted;
-}
-.frag-bubble .prose-vidaos a.vd-wiki-link.vd-wiki-missing {
-  opacity: 0.72;
-  text-decoration-style: dashed;
-}
-.frag-bubble .prose-vidaos code {
-  color: var(--moon);
-  background: rgb(var(--moon-rgb) / 0.14);
-}
-.frag-bubble .prose-vidaos blockquote {
-  color: var(--moon);
-  border-left-color: rgb(var(--moon-rgb) / 0.5);
-  background: rgb(var(--moon-rgb) / 0.08);
-}
 .prose-vidaos blockquote {
   border-left: 2px solid var(--wine);
   padding: 4px 0 4px 18px;
@@ -905,6 +855,61 @@ textarea, input, [contenteditable] {
 }
 .prose-vidaos strong { color: var(--headline); font-weight: 600; }
 .prose-vidaos em { color: var(--candle); }
+
+/* ── 馆藏阅读器（v4.4） ──
+   正文排版复用 .prose-vidaos（Markdown 产物），这里只补三件事：
+   ① 阅读宽度与行距更松；② 块级锚点的滚动留白（sticky 工具行 + 固定顶栏）；
+   ③ 划线 / 高亮的两种视觉，以及「从书签跳过来」时的闪烁提示。 */
+.vd-book {
+  font-family: 'EB Garamond', 'Noto Serif SC', serif;
+  font-size: 1.0625rem;
+  line-height: 1.98;
+  color: var(--paper);
+  max-width: 42rem;
+}
+/* txt 书籍：段内换行原样保留（textContent 与原文一致，锚点偏移才对得上） */
+.vd-book-txt .vd-block {
+  white-space: pre-wrap;
+}
+/* 滚动定位到某一块时，给它留出顶栏 + sticky 工具行的高度 */
+.vd-book [data-block-idx] {
+  scroll-margin-top: calc(112px + env(safe-area-inset-top));
+}
+.vd-book .vd-block + .vd-block {
+  margin-top: 1.05em;
+}
+
+/* 划线：正文颜色不变，只加一条酒红下划线 */
+.vd-mk-underline {
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--wine-light);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+/* 高亮：琥珀底色，暗色主题下降低透明度避免刺眼 */
+.vd-mk-highlight {
+  background: rgba(201, 160, 99, 0.26);
+  color: inherit;
+  border-radius: 2px;
+  box-shadow: inset 0 -1px 0 rgba(201, 160, 99, 0.35);
+}
+/* 从书签跳过来时闪一下（两种标注通用，所以用描边而不是改底色） */
+.vd-mk-flash {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 3px;
+  animation: vd-mark-flash 1.2s ease-out;
+}
+@keyframes vd-mark-flash {
+  0% { outline-color: var(--amber); }
+  100% { outline-color: transparent; }
+}
+/* 阅读器里的选中色：跟随主题，别用浏览器默认蓝 */
+.vd-book ::selection {
+  background: rgba(106, 8, 14, 0.35);
+}
 
 /* 工具：单行省略 */
 /* ── 全屏编辑器（editor-shell） ──

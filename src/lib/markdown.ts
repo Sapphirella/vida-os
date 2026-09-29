@@ -55,6 +55,14 @@ marked.use({ extensions: [wikiLinkExtension] });
 export function renderMarkdown(md: string): string {
   if (!md) return '';
   const html = marked.parse(md, { async: false }) as string;
+  return sanitizeHtml(html);
+}
+
+/**
+ * 净化一段已经是 HTML 的字符串（marked 的产物、或逐 token 渲染的结果）。
+ * 馆藏阅读器按 token 逐块渲染，需要单独净化每一块，所以把配置抽出来共用。
+ */
+export function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
     ADD_ATTR: ['target', 'rel'],
     // 允许 fileRef: 与 wiki: 协议，否则 DOMPurify 会把正文内嵌图片 / 双链 href 直接删掉

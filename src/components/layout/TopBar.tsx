@@ -13,12 +13,15 @@ const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/settings': { title: '设置', sub: '个人主页 · 主题' },
   '/space': { title: '空间', sub: '长文与合集' },
   '/moments': { title: '动态', sub: '生活碎碎念' },
-  '/diary': { title: '碎片', sub: 'Fragments · Stream' },
+  '/library': { title: '馆藏', sub: 'Library · 书架与阅读' },
   '/agent': { title: 'Agent', sub: 'AI · Assistant' },
   '/favorites': { title: '收藏夹', sub: '收藏的项目' },
 };
 
 function matchTitle(pathname: string): { title: string; sub?: string; canBack: boolean } {
+  if (pathname.startsWith('/library/book/')) {
+    return { title: '阅读', sub: 'Library · Reader', canBack: true };
+  }
   if (pathname.startsWith('/space/collection/')) {
     return { title: '合集', sub: 'Space · Collection', canBack: true };
   }

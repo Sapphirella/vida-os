@@ -1,31 +1,32 @@
-// Agent 对话引擎：OpenAI 兼容接口流式对话 + 演示模式 + 资料库/碎片/记忆馆按需读取
+// Agent 对话引擎：OpenAI 兼容接口流式对话 + 演示模式 + 资料库/馆藏/记忆馆按需读取
 // 移植自「参考文件ventana」的 app.js 核心约定：
 // - 三项配置（Base URL + API Key + 模型名）齐全才走真实 API，否则演示模式
 // - 资料库索引随请求下发，正文用 [[读:文档名]] 按需读取（>6000 字按相关性截取）
 // - 记忆馆用 [[忆:标题]] 读、[[记:标题]]正文 写
 // - 所有数据只存在本机 IndexedDB，调用外部 API 时仅发送必要上下文
-import type { AgentMessage, AgentConfig, AgentDoc, AgentMemory, FragmentEntry } from '@/types';
+// v4.4：碎片流已整体移除，它的生态位由「馆藏」接手（索引列书名，[[读:书名]] 读正文）
+import type { AgentMessage, AgentConfig, AgentDoc, AgentMemory, LibraryBook } from '@/types';
 import { formatDate } from '@/lib/utils';
 
 export const MAX_TOOL_ROUNDS = 3;
 export const DOC_SNIPPET_LIMIT = 6000;
 export const DOC_MAX_BYTES = 400 * 1024;
 
-/** 默认人格：空人格时兜底，让 Agent 知道它能读碎片/资料库 */
+/** 默认人格：空人格时兜底，让 Agent 知道它能读馆藏/资料库 */
 export const DEFAULT_PERSONA =
-  '你是 VidaOS 的 Agent，一个住在用户本地生活库里的助手。你能读取用户的碎片流（碎片）、资料库文档与记忆馆，' +
+  '你是 VidaOS 的 Agent，一个住在用户本地生活库里的助手。你能读取用户的馆藏书籍、资料库文档与记忆馆，' +
   '帮助整理成结构化文章，也擅长聊生活、学习与身边的事。保持自然、亲切、简洁；需要资料时按约定读取，' +
   '不要编造用户记录中不存在的内容。回复使用简体中文，段落之间空一行。';
 
 export const GREETING =
-  '你好，我是 **VidaOS Agent**。\n\n我可以帮你整理碎片流和资料库、生成空间文章，也能像朋友一样聊生活、学习和身边的事。' +
-  '需要读你最近的碎片时，说一句 `[[读:碎片]]` 即可；资料与记忆也都按需读取，一切只保存在本机。';
+  '你好，我是 **VidaOS Agent**。\n\n我可以帮你整理馆藏与资料库、生成空间文章，也能像朋友一样聊生活、学习和身边的事。' +
+  '需要读你的书时，说一句 `[[读:书名]]` 即可；资料与记忆也都按需读取，一切只保存在本机。';
 
 export interface AgentContext {
   config: AgentConfig;
   docs: AgentDoc[];
   memories: AgentMemory[];
-  fragments: FragmentEntry[];
+  books: LibraryBook[];
 }
 
 export interface ChatMessage {
@@ -50,24 +51,25 @@ function plainHead(s: string, n: number): string {
   return s.replace(/\s+/g, ' ').slice(0, n);
 }
 
-/** 碎片流时间线文本（最近 40 条，旧→新） */
-export function fragmentsIndexText(fragments: FragmentEntry[]): string {
-  const recent = [...fragments].sort((a, b) => a.createdAt - b.createdAt).slice(-40);
-  return recent
-    .map((f) => {
-      const imgs = f.imageIds.length ? ` [图片×${f.imageIds.length}]` : '';
-      const tags = f.tags.length ? ` #${f.tags.join(' #')}` : '';
-      return `[${formatDate(f.createdAt, 'YYYY-MM-DD HH:mm')}] ${plainHead(f.content, 120)}${imgs}${tags}`;
+/** 馆藏书架索引：书名 + 字数 + 读到哪（正文用 [[读:书名]] 按需读取） */
+export function booksIndexText(books: LibraryBook[]): string {
+  if (!books.length) return '';
+  return books
+    .map((b) => {
+      const marks = b.marks?.length ? ` 划线/高亮 ${b.marks.length} 处` : '';
+      return `《${b.title}》 ${b.charCount} 字${marks}`;
     })
     .join('\n');
 }
 
-/** 资料库索引（含内置「碎片」虚拟文档），随每次请求下发 */
+/** 资料库索引（含内置「馆藏」虚拟文档），随每次请求下发 */
 export function docsIndexText(ctx: AgentContext): string {
   const lines: string[] = [];
   for (const d of ctx.docs) lines.push(`- ${d.name}：${plainHead(d.content, 60)}`);
-  const fragText = fragmentsIndexText(ctx.fragments);
-  lines.push(`- 碎片：${plainHead(fragText, 60)}（我的碎片流时间线，用 [[读:碎片]] 读取正文）`);
+  const bookText = booksIndexText(ctx.books ?? []);
+  if (bookText) {
+    lines.push(`- 馆藏：${plainHead(bookText, 60)}（我的书架，用 [[读:书名]] 读取某本书正文）`);
+  }
   return lines.join('\n');
 }
 
@@ -79,7 +81,7 @@ export function buildMessages(persona: string, history: ChatMessage[], ctx: Agen
   const idx = docsIndexText(ctx).trim();
   if (idx) parts.push(`【资料库索引】\n${idx}`);
   parts.push(
-    '【使用约定】需要资料/碎片详细内容时，在回复中直接输出 [[读:文档名]]（文档名可以是「碎片」或资料库文档名）；' +
+    '【使用约定】需要资料/书籍详细内容时，在回复中直接输出 [[读:文档名]]（文档名可以是资料库文档名或《书名》）；' +
       '需要读取记忆正文用 [[忆:标题]]；需要长期记住一条信息用 [[记:标题]]正文。' +
       '工具标记单独成行输出即可，不要解释。',
   );
@@ -87,14 +89,23 @@ export function buildMessages(persona: string, history: ChatMessage[], ctx: Agen
   return msgs;
 }
 
-/** 按需读取文档（含内置「碎片」）；先精确匹配，再大小写不敏感包含匹配 */
+/** 按需读取文档：资料库 → 馆藏书籍（书名）；先精确匹配，再大小写不敏感包含匹配 */
 export function resolveDoc(name: string, ctx: AgentContext): { name: string; content: string } | null {
   const n = name.trim();
   if (!n) return null;
-  if (n === '碎片' || n.includes('碎片')) {
-    const text = fragmentsIndexText(ctx.fragments);
+  // 书名允许写成《书名》或直接写书名；先剥书名号
+  const bare = n.replace(/^《|》$/g, '').trim();
+  const books = ctx.books ?? [];
+  const book =
+    books.find((b) => b.title === bare) ??
+    books.find((b) => b.title.includes(bare)) ??
+    books.find((b) => bare.includes(b.title));
+  if (book) return { name: `《${book.title}》`, content: book.content };
+  // 「馆藏」是书架索引（不是某一本书）
+  if (bare === '馆藏') {
+    const text = booksIndexText(books);
     if (!text) return null;
-    return { name: '碎片', content: text };
+    return { name: '馆藏', content: text };
   }
   const exact = ctx.docs.find((d) => d.name === n);
   if (exact) return { name: exact.name, content: exact.content };
@@ -277,24 +288,24 @@ function trunc(s: string, n: number): string {
 export function demoReply(userText: string): string {
   const t = userText.trim();
   if (/^(你好|嗨|hi|hello|哈喽|在吗)/i.test(t)) {
-    return '你好呀。我是 VidaOS 的 Agent——你的碎片流、资料库和记忆馆都对我开放。想让我帮你整理点什么，或者随便聊聊，都行。';
+    return '你好呀。我是 VidaOS 的 Agent——你的馆藏、资料库和记忆馆都对我开放。想让我帮你整理点什么，或者随便聊聊，都行。';
   }
   if (/整理|总结|归纳/.test(t)) {
-    return '好，我来整理。\n\n我可以先 `[[读:碎片]]` 读取最近的碎片流，再按主题归纳主线、生成结构化文案，还能一键存成空间文章。\n\n（当前是演示模式，配置 API 后我就能真正读取你的数据了。）';
+    return '好，我来整理。\n\n我可以先 `[[读:馆藏]]` 看一遍书架，再按主题归纳主线、生成结构化文案，还能一键存成空间文章。\n\n（当前是演示模式，配置 API 后我就能真正读取你的数据了。）';
   }
-  if (/碎片/.test(t)) {
-    return '碎片流是我的重要输入。让我 `[[读:碎片]]` 读取最近 40 条，按日期或主题归纳；需要的话还能把整理结果生成一篇文章存进空间。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';
+  if (/馆藏|书|阅读|划线/.test(t)) {
+    return '馆藏是我的重要输入。让我 `[[读:书名]]` 读取某本书的正文，可以按章节归纳、解释难句，也能把读书笔记整理成文章存进空间。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';
   }
   if (/谢谢|感谢|辛苦/.test(t)) {
     return '不客气。随时需要整理、回忆或只是聊聊天，我都在。';
   }
   if (/你(是|叫|是谁|叫什么)/.test(t)) {
-    return '我是 VidaOS 的 Agent——你本地生活库的整理助手。我读得到你的碎片、资料库和记忆馆，一切数据都只留在本机。';
+    return '我是 VidaOS 的 Agent——你本地生活库的整理助手。我读得到你的馆藏、资料库和记忆馆，一切数据都只留在本机。';
   }
   if (t.length <= 24) {
-    return `收到：「${t}」。\n\n想让我继续深入这个话题，或者帮你把相关碎片整理成文章，随时说。`;
+    return `收到：「${t}」。\n\n想让我继续深入这个话题，或者帮你把相关藏书整理成文章，随时说。`;
   }
-  return `关于「${trunc(t, 20)}」——\n\n我可以从三个角度帮你：\n1. 检索碎片流里相关的内容（说一声 \`[[读:碎片]]\`）；\n2. 结合资料库整理成结构化文章；\n3. 就当作聊天，陪你理清思路。\n\n（当前是演示模式：在 Agent 配置里填入 API 后，我才能真正读到你的数据。）`;
+  return `关于「${trunc(t, 20)}」——\n\n我可以从三个角度帮你：\n1. 检索馆藏里相关的内容（说一声 \`[[读:书名]]\`）；\n2. 结合资料库整理成结构化文章；\n3. 就当作聊天，陪你理清思路。\n\n（当前是演示模式：在 Agent 配置里填入 API 后，我才能真正读到你的数据。）`;
 }
 
 /** 演示模式：按流式节奏逐字吐出 */

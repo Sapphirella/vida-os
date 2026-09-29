@@ -14,7 +14,8 @@ import type {
   Track,
   Settings,
   TabKey,
-  FragmentEntry,
+  LibraryBook,
+  BookMark,
   AgentSession,
   AgentMessage,
   AgentConfig,
@@ -94,11 +95,15 @@ interface Actions {
   addTrack: (track: Omit<Track, 'id' | 'createdAt'>) => string;
   deleteTrack: (id: string) => void;
 
-  // 碎片
-  addFragment: (f: { content: string; imageIds?: string[]; tags?: string[] }) => string;
-  updateFragment: (id: string, patch: Partial<FragmentEntry>) => void;
-  deleteFragment: (id: string) => void;
-  toggleFragmentStar: (id: string) => void;
+  // 馆藏（v4.4：取代已移除的碎片流）
+  addBook: (b: { title: string; format: 'txt' | 'md'; content: string; charCount: number }) => string;
+  updateBook: (id: string, patch: Partial<LibraryBook>) => void;
+  deleteBook: (id: string) => void;
+  /** 划线 / 高亮：写入本书 marks 并返回新标注 id */
+  addBookMark: (bookId: string, mark: Omit<BookMark, 'id' | 'createdAt'>) => string;
+  deleteBookMark: (bookId: string, markId: string) => void;
+  /** 记录阅读位置（连续滚动，下次接着读） */
+  setBookProgress: (bookId: string, lastBlockIndex: number) => void;
 
   // Agent：会话
   createAgentSession: (title?: string) => string;
@@ -147,7 +152,7 @@ function snapshot(s: Store): AppState {
     notes: s.notes,
     categories: s.categories,
     tracks: s.tracks,
-    fragments: s.fragments,
+    books: s.books,
     agentSessions: s.agentSessions,
     agentConfig: s.agentConfig,
     agentDocs: s.agentDocs,
@@ -578,45 +583,67 @@ export const useAppStore = create<Store>((set, get) => ({
     persist(get());
   },
 
-  // 碎片
-  addFragment: (f) => {
-    const id = uid('frg_');
+  // 馆藏（v4.4：取代已移除的碎片流）
+  addBook: (b) => {
+    const id = uid('book_');
+    const t = now();
     set((s) => ({
-      fragments: [
-        ...s.fragments,
+      books: [
         {
           id,
-          content: f.content,
-          imageIds: f.imageIds ?? [],
-          tags: f.tags ?? [],
-          starred: false,
-          createdAt: now(),
-          updatedAt: now(),
+          title: b.title,
+          format: b.format,
+          content: b.content,
+          charCount: b.charCount,
+          marks: [],
+          createdAt: t,
+          updatedAt: t,
         },
+        ...s.books,
       ],
     }));
     persist(get());
     return id;
   },
-  updateFragment: (id, patch) => {
+  updateBook: (id, patch) => {
     set((s) => ({
-      fragments: s.fragments.map((x) =>
-        x.id === id ? { ...x, ...patch, updatedAt: now() } : x,
+      books: s.books.map((b) =>
+        b.id === id ? { ...b, ...patch, updatedAt: now() } : b,
       ),
     }));
     persist(get());
   },
-  deleteFragment: (id) => {
+  deleteBook: (id) => {
+    set((s) => ({ books: s.books.filter((b) => b.id !== id) }));
+    persist(get());
+  },
+  addBookMark: (bookId, mark) => {
+    const id = uid('bmk_');
     set((s) => ({
-      fragments: s.fragments.filter((x) => x.id !== id),
+      books: s.books.map((b) =>
+        b.id === bookId
+          ? { ...b, marks: [...b.marks, { ...mark, id, createdAt: now() }], updatedAt: now() }
+          : b,
+      ),
+    }));
+    persist(get());
+    return id;
+  },
+  deleteBookMark: (bookId, markId) => {
+    set((s) => ({
+      books: s.books.map((b) =>
+        b.id === bookId
+          ? { ...b, marks: b.marks.filter((m) => m.id !== markId), updatedAt: now() }
+          : b,
+      ),
     }));
     persist(get());
   },
-  toggleFragmentStar: (id) => {
+  setBookProgress: (bookId, lastBlockIndex) => {
+    // 阅读位置变化很频繁（滚动即写），只更新内存 + 走既有的 debounce 落库，
+    // 不要在这里动 updatedAt —— 否则书架排序会被「翻了几页」刷成最新
     set((s) => ({
-      fragments: s.fragments.map((x) =>
-        x.id === id ? { ...x, starred: !x.starred, updatedAt: now() } : x,
-      ),
+      books: s.books.map((b) => (b.id === bookId ? { ...b, lastBlockIndex } : b)),
     }));
     persist(get());
   },
@@ -785,7 +812,7 @@ export const useAppStore = create<Store>((set, get) => ({
         },
         categories: cur.categories,
         tracks: mergeById(cur.tracks, incoming.tracks),
-        fragments: mergeById(cur.fragments, incoming.fragments),
+        books: mergeById(cur.books, incoming.books),
         agentSessions: mergeById(cur.agentSessions, incoming.agentSessions),
         // 备份不带 API Key：合并时若 incoming 为空 key，保留本机已有的 key
         agentConfig: {

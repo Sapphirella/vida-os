@@ -100,16 +100,39 @@ export interface Track {
   createdAt: number;
 }
 
-/** 碎片（日记页的微信式碎片流条目） */
-export interface FragmentEntry {
+/** 馆藏 · 一条划线或高亮（锚点 = 块索引 + 块内字符偏移） */
+export interface BookMark {
   id: string;
+  kind: 'underline' | 'highlight';
+  /** 选中的原文（存下来，书签面板直接展示，不必回正文再取） */
+  text: string;
+  /** 所在块索引（与 lib/library.ts parseBook 产出的块顺序一致） */
+  blockIndex: number;
+  /** 块内字符偏移，相对该块渲染后的 textContent */
+  start: number;
+  end: number;
+  createdAt: number;
+}
+
+/**
+ * 馆藏 · 一本书（用户从本地导入的 txt / md 文本）
+ * 正文直接存进主数据（state）：单本建议 ≤1 万字，再长渲染与标注都会卡。
+ */
+export interface LibraryBook {
+  id: string;
+  title: string;
+  /** 来源格式，决定阅读器是否按 Markdown 渲染 */
+  format: 'txt' | 'md';
+  /** 正文原文（md 保留标记，渲染时再解析） */
   content: string;
-  /** 图片 fileId 列表（复用 files 表） */
-  imageIds: string[];
-  /** 可选标签（# 开头自动解析） */
-  tags: string[];
-  /** 星标 = 值得整理 */
-  starred: boolean;
+  /** 纯文本字数（口径与编辑器一致：剥掉 Markdown 标记后统计） */
+  charCount: number;
+  /** 上次读到的块索引 —— 连续滚动，下次打开接着读 */
+  lastBlockIndex?: number;
+  /** 本书的划线 / 高亮（阅读器右上角「书签」面板的数据源） */
+  marks: BookMark[];
+  /** 共读抽屉上次用的 Agent 会话 id（下次直接续上） */
+  coreadSessionId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -200,7 +223,8 @@ export interface AppState {
   };
   categories: Categories;
   tracks: Track[];
-  fragments: FragmentEntry[];
+  /** 馆藏（v4.4 新增，取代已移除的碎片流） */
+  books: LibraryBook[];
   agentSessions: AgentSession[];
   agentConfig: AgentConfig;
   agentDocs: AgentDoc[];
@@ -212,7 +236,8 @@ export interface AppState {
 // 运行时辅助
 // ============================================================
 
-export const TAB_KEYS = ['desk', 'diary', 'agent', 'data', 'settings'] as const;
+/** 底栏 Tab（v4.4：碎片移除，便签上位到第三格） */
+export const TAB_KEYS = ['desk', 'notes', 'agent', 'data', 'settings'] as const;
 export type TabKey = (typeof TAB_KEYS)[number];
 
 export const isTabKey = (v: unknown): v is TabKey =>
@@ -220,7 +245,8 @@ export const isTabKey = (v: unknown): v is TabKey =>
 
 export type NoteTabKey = 'inspiration' | 'schedule' | 'todo';
 
-export type FeatureKey = 'space' | 'moments' | 'notes' | 'favorites';
+/** 主页宫格入口（v4.4：便签上位到底栏，宫格位置改为馆藏） */
+export type FeatureKey = 'space' | 'moments' | 'library' | 'favorites';
 
 export interface MediaFile {
   id: string;

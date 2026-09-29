@@ -136,14 +136,11 @@ export function collectFileIds(state: AppState): Set<string> {
     m.imageIds.forEach((id) => ids.add(id));
     scanText(m.content);
   });
-  // 碎片与灵感便签的图片同样是「state 里引用了」的文件，必须一起收：
+  // 灵感便签的图片同样是「state 里引用了」的文件，必须一起收：
   // 漏掉的话三条备份路径（导出 JSON / WebDAV / 本地快照）都只备份条目不备份图，
   // 换机或清缓存后导入，图片变成永远加载不出来的灰块，原图不可恢复（v4.3.3 修）。
   // 用 ?? [] 兜旧数据：v4.3 之前落库的灵感没有 imageIds 字段。
-  (state.fragments ?? []).forEach((f) => {
-    (f.imageIds ?? []).forEach((id) => ids.add(id));
-    scanText(f.content);
-  });
+  // （v4.4 起碎片流已移除，这里不再需要收 fragments 的图）
   (state.notes?.inspiration ?? []).forEach((n) => {
     (n.imageIds ?? []).forEach((id) => ids.add(id));
     scanText(n.content);

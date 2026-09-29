@@ -76,8 +76,14 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
       schedule: r.notes?.schedule ?? [],
       todo: r.notes?.todo ?? [],
     },
-    // v4.2：碎片流 + Agent 会话/配置/资料库/记忆馆（旧数据无这些字段）
-    fragments: r.fragments ?? [],
+    // 馆藏（v4.4）：碎片流已移除，旧数据里的 fragments 字段**故意不迁移**
+    // （用户确认彻底删除）；逐本兜底 marks / charCount，防止历史数据缺字段炸渲染
+    books: (r.books ?? []).map((b) => ({
+      ...b,
+      marks: b.marks ?? [],
+      charCount: b.charCount ?? b.content?.length ?? 0,
+      format: b.format === 'md' ? 'md' : 'txt',
+    })),
     agentSessions: r.agentSessions ?? [],
     agentConfig: { ...d.agentConfig, ...(r.agentConfig ?? {}) },
     agentDocs: r.agentDocs ?? [],
@@ -140,7 +146,8 @@ export function defaultState(): AppState {
       todo: ['生活', '工作', '学习'],
     },
     tracks: [],
-    fragments: [],
+    // 馆藏（v4.4）：碎片流已整体移除，这一格换成书架
+    books: [],
     agentSessions: [],
     agentConfig: {
       baseUrl: '',

@@ -1,7 +1,8 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-29（v4.3.3：备份/恢复的数据安全修复 —— 灵感与碎片图片不再漏备份、导入旧备份不再崩；另含 v4.3.2 布局链统一）
+> 最后更新：2026-09-29（v4.4.0：**馆藏上线** —— 书架 + 阅读器（导入 txt/md、划线高亮、引用问 AI 的
+> 共读抽屉）；**碎片整体下线**（数据一并删除）；底栏改 主页/便签/Agent/数据/设置，主页宫格便签位改馆藏）
 
 ---
 
@@ -9,15 +10,17 @@
 
 | 项目 | 说明 |
 |---|---|
-| **是什么** | 纯前端、纯本地的个人生活记录 PWA（主页/碎片/便签/文章/动态/收藏/音乐/云备份/Agent） |
+| **是什么** | 纯前端、纯本地的个人生活记录 PWA（主页/便签/文章/动态/收藏/音乐/云备份/**馆藏**/Agent） |
 | **在哪里** | `/Users/amarisgo/Documents/DeepSeek Harness/VidaOS`（**父目录含空格，命令里要带引号**） |
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3.3**（2026-09-29） |
+ | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.4.0**（2026-09-29） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
+| **底栏** | 主页 / **便签** / Agent / 数据 / 设置（v4.4：便签顶替了原「碎片」那格） |
+| **主页宫格** | 空间 / 动态 / **馆藏** / 收藏夹（v4.4：便签那格改成馆藏） |
 | **云同步** | WebDAV（坚果云等）可选端到端加密；**注意纯浏览器直连坚果云被 CORS 拦截**（见第 8 节） |
 
 ### ⚠️ 改动前必读的四条
@@ -98,6 +101,16 @@
   `flex-1 min-h-0 flex flex-col`（flex 压缩）且 padding-bottom 不足。修复：内部 div
   改为 `flex flex-col`（移除 flex-1/min-h-0），`<main>` padding-bottom 调为
   `pb-[calc(80px+env(safe-area-inset-bottom))]`，确保内容完整露出在底栏上方。
+- **v4.4.0（2026-09-29）** —— **馆藏上线、碎片下线**：
+  ① **碎片功能整体删除**：`DiaryPage` / `FragmentEntry` / store actions / 全局查找的「碎片」范围 /
+  Agent 内置「碎片」虚拟文档 / `.frag-bubble` 样式全部清掉；旧 `fragments` 字段**不迁移、直接丢弃**
+  （用户明确选择彻底删除）。**注意**：碎片条目的图片 blob 仍留在 `files` 表里没人引用（没自动删，
+  怕误删），要清理需要单独做一次「孤儿文件回收」。
+  ② **底栏**「碎片」那格换成 **便签** → 主页 / 便签 / Agent / 数据 / 设置。
+  ③ **主页宫格**「便签」那格换成 **馆藏** → 空间 / 动态 / 馆藏 / 收藏夹。
+  ④ **馆藏**：导入本地 txt / md 成书（正文存主数据、md 按 Markdown 渲染、连续滚动 + 记住读到哪）；
+  阅读器里长按选中 → 划线 / 高亮 / 引用问 AI / 复制；划线高亮收进右上角**书签**面板；
+  AI 走阅读器内**共读抽屉**（挑已有会话或新建「共读 · 书名」）。详见第 4 节之 21) 与第 13 节。
 - **v4.3.3（2026-09-29）** —— **备份与恢复的数据安全修复**：灵感的 `imageIds` 与碎片的
   `imageIds` 此前不在 `collectFileIds` 里（导出 JSON / WebDAV / 快照三条备份路径都共用它），
   **备份只有条目没有图、原图不可恢复**；导入 JSON / WebDAV 取回 / 快照恢复三条路又都绕过
@@ -401,6 +414,31 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
   会让根容器高度变 auto，上面整条链一起退化。
 - 验证口径见第 12 节教训 17、18；`BottomTabBar` 保持 `fixed`（不要改成流内）。
 
+### 21) 馆藏（v4.4，`lib/library.ts` + `pages/LibraryPage` + `pages/ReaderPage` + `components/library/CoreadDrawer`）
+- **数据模型**：`LibraryBook { id, title, format:'txt'|'md', content, charCount, lastBlockIndex?, marks[], coreadSessionId? }`，
+  `BookMark { id, kind:'underline'|'highlight', text, blockIndex, start, end, createdAt }`；
+  正文**直接存主数据**（`state.books`）。单本建议 ≤1 万字（硬上限 20 万字，导入时两级提示）。
+- **正文切块 `parseBook(content, format)`**：txt 按空行切段（段内换行原样保留，靠 `white-space: pre-wrap`
+  让 `textContent` 与原文一致）；md 用 `marked.lexer` 逐 token 渲染成块（**一个 token = 一块**），
+  每块单独过 `sanitizeHtml`。**块顺序就是标注锚点的坐标系，所以 parseBook 必须是确定性的**。
+- **标注锚点 = {块索引, 块内字符偏移}**（借鉴参考项目 IB 的共读/批注做法，用 React 架构重写）：
+  选区用 `Range` + `document.createTreeWalker` 算块内偏移（天然处理嵌套行内标签，如 `**加粗**` 里的文字），
+  **跨段选择自动拆成多条锚点**，各锚各段。**不往正文 HTML 里插标记**：渲染完成后用 DOM Range 把
+  `<mark>` 包回去（`applyMarksToDom`，**从后往前包**——`textContent` 长度不变，所以先包的不会污染后包的偏移）；
+  重新套标注前必须先 `resetBlockDom` 还原原始 HTML（React 不会重写 `dangerouslySetInnerHTML`，
+  不还原就会越包越多）。
+- **浮动工具条**：监听 `selectionchange` → `anchorsFromSelection` 拿到锚点 → 现场量位置。
+  两个必须记住的点：① 位置判断要用**现场量的顶栏底边 + 实测的工具条高度（63px）**，拍 44px 会让它
+  压住固定顶栏（实测踩到过）；② 按钮要 `onMouseDown={e => e.preventDefault()}`，否则点按钮时选区先被清掉。
+- **书签面板**：`sortMarks` 按正文顺序排；点一条 `scrollIntoView`（CSS 给 `[data-block-idx]` 留了
+  `scroll-margin-top` 避开顶栏与 sticky 工具行）+ `vd-mk-flash` 闪烁；可逐条删除。
+- **共读抽屉**：复用 `lib/agentTurn.ts` —— 与 Agent 会话页**同一份**回复流程（流式 / 记忆写入 /
+  `[[读:]]` 工具标记循环），所以两处行为不会走样。引用以 Markdown 引用块写进用户消息
+  （既显示清楚，也留在会话历史里让 AI 记得在引用什么）；`books[].coreadSessionId` 记住本书用哪个会话。
+- **阅读位置**：`IntersectionObserver` 取「当前可见块里最小的索引」，debounce 500ms 写 store；
+  `setBookProgress` **故意不动 `updatedAt`**（否则翻两页就把书架排序刷成最新）；
+  进页面时 `scrollIntoView` 回到上次那块。
+
 ---
 
 ## 5. 文件结构与职责
@@ -425,6 +463,8 @@ VidaOS/
 │   │   ├── snapshot.ts          # 本地文件夹快照（≤10 份，gzip + 原 Blob）
 │   │   ├── webdav.ts            # WebDAV 云同步 + 端到端加密（PBKDF2 + AES-256-GCM）
 │   │   ├── focusRequest.ts      # 查找跳转定位（query + 命中序号）
+│   │   ├── agentTurn.ts         # ★ 一轮 Agent 回复（Agent 会话页与馆藏共读抽屉共用）
+│   │   ├── library.ts           # ★ 馆藏：正文切块 + 划线/高亮锚点数学 + 阅读进度
 │   │   └── utils.ts             # 时间/ID/压缩/文本工具
 │   ├── stores/                  # useAppStore / useUIStore / useMusicStore
 │   ├── components/
@@ -432,13 +472,15 @@ VidaOS/
 │   │   ├── home/                # ClockHeader / FeatureGrid(4 宫格) / CalendarCard / DayScheduleCard / MusicPlayerCard / TodoSummaryCard
 │   │   ├── notes/               # SegmentedControl / CategoryChips / Inspiration / Schedule / Todo / ScheduleEditor
 │   │   ├── agent/               # ★ AgentChatView（气泡流 + 输入区 + 配置/资料库/记忆馆抽屉）
+│   │   ├── library/             # ★ CoreadDrawer（阅读器里引用选段问 AI 的共读抽屉）
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
 │   │   ├── search/              # GlobalFindReplaceCard / PageFindBar / usePageFind
 │   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
 │   │                            #   + ErrorBoundary / MarkdownView
-│   └── pages/                   # 11 个路由页面
-│       DeskPage / DiaryPage(碎片流) / AgentPage(会话列表+聊天) / NotesPage / DataPage / SettingsPage /
-│       SpacePage / CollectionPage / ArticleReaderPage / MomentsPage / FavoritesPage
+│   └── pages/                   # 12 个路由页面
+│       DeskPage / NotesPage / LibraryPage(书架) / ReaderPage(阅读器·划线·书签·共读) /
+│       AgentPage(会话列表+聊天) / DataPage / SettingsPage / SpacePage / CollectionPage /
+│       ArticleReaderPage / MomentsPage / FavoritesPage
 ├── public/                      # favicon.svg + icons/（PWA 图标，manifest 引用）
 ├── scripts/make-icons.mjs       # ⚠️ 生成 PWA 图标（依赖 sharp 但**未在 package.json 声明**，当前跑不了）
 ├── docs/
@@ -452,7 +494,8 @@ VidaOS/
 
 ### 路由表（App.tsx 实际注册）
 `/`（重定向到 currentTab）、`/desk`、`/notes`、`/data`、`/settings`、`/space`、
-`/space/collection/:id`、`/space/article/:id`、`/moments`、`/diary`、`/agent`、`/favorites`。
+`/space/collection/:id`、`/space/article/:id`、`/moments`、`/library`、`/library/book/:id`、
+`/agent`、`/favorites`。（v4.4 删掉 `/diary`。）
 
 ---
 
@@ -487,9 +530,10 @@ VidaOS/
 - **便签**：灵感/日程/待办分区滑块 + 分类管理（增删改）+ 日程与首页日历联动
   + 待办**自动置底 / textarea 多行 / 长按拖拽排序**
 - **收藏夹**：跨类型聚合（文章 / 动态）；副标题「收藏的项目」
-- **碎片**：**微信式气泡流**（按天分组吸顶、右侧酒红气泡、文字+多图+标签、星标、
-  长按菜单编辑/星标/复制/转文章/删除、底部固定输入、只看星标、空态自动聚焦）+
-  **页内查找替换**；正文 Markdown 渲染（**双链在碎片内同样生效**）
+- **馆藏**（v4.4）：**书架**（导入本地 txt / md、卡片显示字数/标注数/进度、重命名、移出书架）+
+  **阅读器**（连续滚动、记住读到哪、md 按 Markdown 渲染）；选中一段 → **划线 / 高亮 / 问 AI / 复制**，
+  划线高亮收进**右上角书签**（按序排列、点击定位闪烁、可删）；**共读抽屉**挑会话或新建
+  「共读 · 书名」，引用选段继续聊（与 Agent 页共用回复流程）
 - **Agent**：**多会话聊天**（会话列表 → 点进 → 聊天，新建自动开场白）；气泡流界面
   （借鉴 Ventana React 化，适配三版书房皮肤）；**演示模式**兜底（未配置 API 可全交互体验）；
   资料库 `[[读:文档]]` 按需读取 + 记忆馆 `[[记:]]`/`[[忆:]]`；会话重命名/归档/导出 txt/删除；
@@ -538,7 +582,17 @@ VidaOS/
   网络挂起时没有自动超时上限（低优，可加 AbortSignal.timeout）。
 - **Agent 演示模式是本地模板回复**：未配置 API 时 `demoReply` 只能按关键词给固定话术，
   不读真实资料库内容（已如实告知用户，演示 ≠ 真实对话）。
-- 低优先级设想：文章加密、静态站点导出、自定义主题色。
+- **馆藏 · 跨段选择会拆成多条标注**：一次跨 3 段的选择会生成 3 条 `BookMark`，书签面板里是 3 行
+  （各自「第 N 段 + 预览」）。数据模型没有 groupId，改起来要动 `BookMark` 结构与面板分组。
+- **馆藏 · 长文会卡**：单本硬上限 20 万字，但**建议 ≤1 万字**。超过之后 `applyMarksToDom` 每次
+  标注变化都要重扫所有块、IntersectionObserver 也要 observe 上千个块；真正的解法是虚拟滚动 + 分页。
+- **馆藏 · 碎片遗留图片没有回收**：碎片功能删掉后，它引用过的图片 blob 仍留在 `files` 表里
+  无人引用（**没自动删，怕误删**）。要清需要一次「孤儿文件回收」（用 `collectFileIds` 的反集）。
+- **馆藏 · 移动端长按选中受系统菜单影响**：iOS / Android 会弹自带的「拷贝 / 查询」气泡，
+  本项目的工具条与它并存（不是替换）；真机手势体验**未复测**。
+- **共读抽屉的会话选择器较朴素**：只有「新建」+ 按更新时间列的会话，没有搜索 / 分组；
+  会话切换靠左上角返回箭头。
+- 低优先级设想：文章加密、静态站点导出、自定义主题色、馆藏目录（章节目录跳转）。
 
 ### 8.2 平台 / 外部限制（如实告知用户）
 - **WebDAV 纯浏览器直连坚果云被 CORS 拦截**（坚果云未开放跨域头）；代码就绪，
@@ -661,8 +715,8 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
 | 改首页 | `pages/DeskPage.tsx` + `components/home/*` |
 | 改编辑器 | `components/editor/*` + `globals.css` 的 `.prose-vidaos` |
 | 改查找 | `components/search/*` + `lib/focusRequest.ts` + `useUIStore`（findPanel / focusRequest / FocusKind） |
-| 改碎片页 | `pages/DiaryPage.tsx`（气泡流/输入/长按/星标）+ `globals.css` 的 `.frag-bubble` + `types` 的 `FragmentEntry` + `useAppStore` 的 fragment actions |
-| 改 Agent 对话 | `lib/agentEngine.ts`（纯函数：端点/消息/索引/截取/标记/演示模式）+ `components/agent/AgentChatView.tsx`（UI）+ `pages/AgentPage.tsx`（会话列表）——**逻辑改完跑引擎单测** |
+| 改馆藏 | `pages/LibraryPage.tsx`（书架/导入）+ `pages/ReaderPage.tsx`（阅读器/工具条/书签）+ `components/library/CoreadDrawer.tsx`（共读）+ `lib/library.ts`（切块与锚点数学）+ store 的 book actions |
+| 改 Agent 对话 | `lib/agentEngine.ts`（纯函数：端点/消息/索引/截取/标记/演示模式）+ `lib/agentTurn.ts`（一轮回复，**改这里两处同时生效**）+ `components/agent/AgentChatView.tsx`（会话页 UI）+ `components/library/CoreadDrawer.tsx`（共读 UI）+ `pages/AgentPage.tsx`（会话列表）——**逻辑改完跑引擎单测** |
 
 ### 怎么验证（本项目标准做法）
 1. `npm run typecheck` + `npm run build`（最低要求，**不等于修好了**）；
@@ -795,10 +849,51 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
        灵感**，三次点出 3 篇文章，看起来完全像「去重没生效」。修法：把被测对象**锚定到
        具体条目**（`main ul li:first-child`），按钮文案会变时用「容器 + 属性正则」定位。
     **教训：「功能没生效」先怀疑探针，再怀疑代码；每个断言都要能说清它点的是哪个元素。**
+20. **「拍脑袋的常量」要用实测值替换（v4.4）**：阅读器的浮动工具条要判断「选区上方够不够放」，
+    我先按工具栏 ≈44px 估了个阈值 —— 实测工具条高 **63px**，于是移动端贴顶选中时工具条压住固定顶栏 8px。
+    改成**现场量顶栏底边（`header.getBoundingClientRect().bottom`）+ 用实测高度**，并把「上方放不下」
+    改成翻转到底部（`translate-y` 方向跟着变）。**凡是「留多少间距」的判断，要么量，要么翻转到另一侧。**
+21. **无头探针点不到「只有图标」的按钮（v4.4）**：`clickText('发送')` 找不到发送键 ——
+    它是纯图标按钮（`aria-label="发送"`、无文字），`textContent` 是空的。
+    同理，`innerText` 找按钮还会踩 Tailwind `uppercase` 的坑（第 9 条）。
+    **探针定位一律优先 `aria-label` / `data-*` 这类为测试存在的属性**，其次才用文案。
 
 ---
 
 ## 13. 变更日志
+
+### [v4.4.0] - 2026-09-29 —— 馆藏上线（书架 + 阅读器 + 共读），碎片整体下线
+- **碎片整体删除**（`pages/DiaryPage.tsx` 删除 + 7 个文件清扫）：`FragmentEntry` 类型、
+  `AppState.fragments`、store 的 4 个 fragment action、全局查找的「碎片」范围（`ScopeKey`/`HitKind`/
+  命中跳转与替换分支/标签与 placeholder）、Agent 引擎的内置「碎片」虚拟文档与演示话术、
+  `.frag-bubble` 整段样式。旧 `fragments` 字段在 `normalizeState` 里**不迁移、直接丢弃**。
+- **底栏**：`TAB_KEYS` 去掉 `diary` 换成 `notes`；`BottomTabBar` 的「碎片」→「便签」
+  （图标 `StickyNote`）；顺手修掉「主页 tab 在 /notes 也高亮」的旧 hack。
+- **主页宫格**：`FeatureKey` 的 `'notes'` 换成 `'library'`，卡片「便签」→「馆藏」（`LibraryBig`）。
+- **馆藏**（新功能，见第 4 节之 21)）：`lib/library.ts`（切块 + 锚点数学 + 进度）、
+  `pages/LibraryPage.tsx`（书架 / 导入 / 重命名 / 移出）、`pages/ReaderPage.tsx`
+  （阅读器 / 浮动工具条 / 书签面板 / 共读入口）、`components/library/CoreadDrawer.tsx`（共读抽屉）、
+  store 新增 6 个 book action、`types` 新增 `LibraryBook` / `BookMark`、路由 `/library` 与 `/library/book/:id`、
+  `globals.css` 新增 `.vd-book` / `.vd-mk-*` 系列。
+- **Agent 侧改名**：引擎上下文 `fragments` → `books`（`booksIndexText` 列书名/字数/标注数，
+  `[[读:书名]]` 直接读某本书正文，`[[读:馆藏]]` 读书架索引）；默认人格、开场白、演示话术同步改写。
+- **抽出 `lib/agentTurn.ts`**：把 AgentChatView 里的「一轮回复」原样抽出来（流式 + 记忆写入 +
+  工具标记循环 + 错误兜底），**Agent 会话页与共读抽屉共用同一份**，避免两处实现走样。
+- **实测**（无头 Chrome 走真实 UI，1280×900 与 390×844×3，全部有真实文件输入框 / 真实下载 /
+  真实选区）：
+  - 底栏 = 主页/便签/Agent/数据/设置；宫格 = 空间/动态/馆藏/收藏夹；便签 tab 正常（`#/notes`）；
+  - 导入 txt + md 两本 → 书架 2 本、格式与字数正确（96 / 106）；空书架有引导；
+  - 阅读器：txt 41 段 / md 6 块，md 的 h1 / ul / blockquote / strong 都正确渲染；
+  - 划线：真实选区（第 1 段第 0–6 字）→ 工具条出现 → 划线 → DOM `1` 处且 store 落库
+    `{kind:'underline', text:'乡愁是一枚小', block:0, start:0, end:6}`（锚点精确）；
+  - 高亮：另一段同样通过；两种标注并存（各 1 处）；
+  - 书签面板：2 条、按序带「第 N 段 + 预览」；点击跳回正文并闪烁；删除后 DOM 与 store 同步变 1；
+  - 共读：选中 →「问 AI」→ 抽屉带引用打开 → 新建「共读 · 书名」→ 发送 → 会话里
+    `[greet, user, assistant]` 三条，用户消息里带着引用原文，AI 有回复（演示模式），全程零报错；
+  - 移动端：工具条 4 键在视口内、不压顶栏（贴顶时自动翻到选区下方）、无横向溢出（正文宽 358/390）、
+    划线成功落库；
+  - 阅读位置：滚到底记录 idx=31，真重载后恢复到 74%（idx=29），标签从 0% 起算（不是 25%）；
+  - 重命名 / 移出书架通过；真重载后书与标注都还在、无错误边界；`fragments` 字段已从 store 消失。
 
 ### [v4.3.3] - 2026-09-29 —— 备份与恢复的数据安全修复（两项 P1）+ 灵感体验修复
 - **灵感/碎片图片不进备份**（P1 · 数据不可恢复）：`collectFileIds` 只收集
@@ -1029,10 +1124,14 @@ amber/parchment/ash 与语义色、错误边界两层、9 项 P0 缺陷、死代
 - **项目归属**：用户个人项目
 - **V2.x 设计借鉴**：[Sui-IB / InternalBeyond-Mobile](https://github.com/Sui-IB/InternalBeyond-Mobile)
   （PolyForm Noncommercial 1.0.0；仅 V2 借用，V3 起完全自研）
+- **v4.4 馆藏参考**：同上的 IB 项目「共读间 / 批注」交互（本地参考副本在
+  `Chambre工作区/参考文件-IB机`）—— 本项目**只借鉴交互模型**（正文按块包裹做锚点、
+  选中→浮动工具条→引用发问、一本书对应一个会话），代码是按本项目的 React 架构重写的，未复制实现
 - **V3.x 设计哲学**：用户自定义「暗夜书房」色板与方向；三书房主题体系由用户推动
 - **参与实现的 Agent**：Mavis（v3.0 重写）、多个会话（v3.1~v4.0 修复与功能）、
   另一位 agent（v3.6/v3.8 PDF 版式与缺陷修复）、v4.1/v4.2 会话（主页待办/双链/收藏夹改名/
   碎片页/Agent 多会话/全局查找扩展与接手文档校正）、v4.2.1 会话（日间背景 #fdf2e1 与
   卡片 #fce8dd 六版迭代定稿）、v4.3/v4.3.1 会话（碎片/Agent 布局卡顿 fixed→flex、
   灵感星标/转文章/多图上传、桌面端三页底部遮挡修复与文档更新）
+- **v4.4 会话**（馆藏/碎片下线/底栏与宫格调整/agentTurn 抽取/共读抽屉与全部实测）
 - **最后更新日期**：2026-09-29

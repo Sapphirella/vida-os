@@ -56,7 +56,7 @@ interface UIStore {
 
   // 全局查找「跳转到命中处」：目标页挂载后读取并定位/高亮
   focusRequest: {
-    kind: 'article' | 'moment' | 'fragment' | 'inspiration';
+    kind: 'article' | 'moment' | 'inspiration';
     id: string;
     query: string;
     ignoreCase: boolean;
