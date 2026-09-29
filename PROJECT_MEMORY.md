@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-29（v4.3：Agent/碎片页进入卡顿改 fixed→flex；灵感星标/转文章/图片上传）
+> 最后更新：2026-09-29（v4.3.1：修复桌面端主页/数据/设置页底部被底栏遮挡；Agent/碎片页进入卡顿改 fixed→flex；灵感星标/转文章/图片上传）
 
 ---
 
@@ -14,7 +14,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
-| **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3**（2026-09-29） |
+ | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3.1**（2026-09-29） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -91,7 +91,13 @@
   见第 17 节 fixed→flex 记录）；**灵感页功能补全**：便签-灵感支持星标
   （`toggleInspirationStar`）、一键转文章（`convertInspirationToArticle`，生成本地
   Article 进入空间）、撰写/编辑时多图上传（复用碎片 compressImage + putFile + MediaImage），
-  数据模型 `InspirationNote` 新增 `starred: boolean` 与 `imageIds: string[]`。
+  数据模型 `InspirationNote` 新增 `starred: boolean` 与 `imageIds: string[]`；
+  `db.ts loadState` 迁移兜底旧数据（补 `starred: false`、`imageIds: []`）。
+- **v4.3.1（2026-09-29）** —— **桌面端三页底部遮挡修复**：主页/数据/设置页滚动到底时
+  内容被固定定位的 BottomTabBar（56px）遮挡；根因是 `<main>` 内部包裹 div 同时有
+  `flex-1 min-h-0 flex flex-col`（flex 压缩）且 padding-bottom 不足。修复：内部 div
+  改为 `flex flex-col`（移除 flex-1/min-h-0），`<main>` padding-bottom 调为
+  `pb-[calc(80px+env(safe-area-inset-bottom))]`，确保内容完整露出在底栏上方。
 
 ---
 
@@ -502,9 +508,8 @@ VidaOS/
   可先验证连通性。
 - **多设备同时编辑同一 WebDAV 备份会互相覆盖**，说明书弹窗已提醒单设备编辑。
 
-### 8.3 版本号不一致
-`package.json` = 3.0.0、设置页显示「v3.0 · night study」、文档迭代 = v4.2.1（日间色板定稿）。
-（低优，改设置页文案需要用户确认显示什么。）
+### 8.3 已修复
+- **版本号不一致**（v4.2 → v4.3.1）：package.json / 设置页 / README badge / 本文档已同步。
 
 ---
 
@@ -734,6 +739,33 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
   src 58 文件）、新增第 4 节之 19) Agent 对话引擎架构、功能清单去掉占位页、
   已知问题补 Agent SSE 无超时等，版本号统一 v4.2。
 
+### [v4.3.1] - 2026-09-29 —— 桌面端三页底部遮挡修复
+- **根因**：`<main>` 内部包裹 div 使用 `flex-1 min-h-0 flex flex-col`，在桌面端 WebKit flex
+  计算下内容被压缩；且 padding-bottom 不足以避让固定定位的 56px BottomTabBar，
+  导致主页/数据/设置页滚动到底后内容仍被遮挡。
+- **修复**（`7cbdbc0`）：
+  - `App.tsx` `<main>` 内部包裹 div 改为 `flex flex-col`（移除 `flex-1 min-h-0`），
+    解除内容高度压缩；
+  - `<main>` 底部内边距调整为 `pb-[calc(80px+env(safe-area-inset-bottom))]`，
+    确保最后内容完整露出在底栏上方；
+  - `BottomTabBar` 保持 `fixed bottom-0`（未改流内，避免破坏 Agent/碎片页已有 flex 布局）。
+- **版本号**：v4.3.1（package.json / README badge / 设置页同步）。
+
+### [v4.3] - 2026-09-29 —— 碎片/Agent 页布局卡顿修复 + 灵感功能补全
+- **碎片/Agent 页进入卡顿修复**（`ba44312`，`037bc3b`）：
+  - 根因：`position: fixed + env(safe-area-inset-*)` 在 WebKit 有双重布局计算延迟，
+    导致进入页面时头部/底部输入框延迟贴位、跳动；view-enter 动画移除无效；
+  - 改为 flex 流内布局：App.tsx 根容器 `h-[100dvh] overflow-hidden flex flex-col`，
+    AgentChatView 头部/输入区、DiaryPage 工具行/输入区均从 fixed 改为 `flex-none` 流内定位，
+    消息流/碎片流用 `flex-1 min-h-0 overflow-y-auto`；进入即到位，不再卡顿。
+- **灵感功能补全**（`94f9acb`）：
+  - 数据层：`InspirationNote` 新增 `starred: boolean`、`imageIds: string[]`；
+    `db.ts loadState` 旧数据迁移兜底（补 `starred: false`、`imageIds: []`）；
+  - store 新增 `toggleInspirationStar`、`convertInspirationToArticle`（首行生成标题、
+    继承分类为标签、保留图片）；
+  - UI：`InspirationView.tsx` 每条灵感带星标按钮（琥珀点亮）、悬停「转文章」按钮；
+    撰写/编辑支持多图上传（compressImage + putFile + MediaImage，缩略预览+删除）。
+
 ### [v4.2.1] - 2026-09-28 —— 日间色板定稿（背景 #fdf2e1 + 卡片 #fce8dd）
 - **白昼书房页面背景改为暖米**（`bc4dc6c`）：`--bg-base` `#F5F9E5 → #fdf2e1`，
   `--bar-bg` 同步 `rgba(253,242,225,.82)`；`SettingsPage` 主题卡预览同步。
@@ -851,5 +883,6 @@ amber/parchment/ash 与语义色、错误边界两层、9 项 P0 缺陷、死代
 - **参与实现的 Agent**：Mavis（v3.0 重写）、多个会话（v3.1~v4.0 修复与功能）、
   另一位 agent（v3.6/v3.8 PDF 版式与缺陷修复）、v4.1/v4.2 会话（主页待办/双链/收藏夹改名/
   碎片页/Agent 多会话/全局查找扩展与接手文档校正）、v4.2.1 会话（日间背景 #fdf2e1 与
-  卡片 #fce8dd 六版迭代定稿，含本轮流式更新文档）
-- **最后更新日期**：2026-09-28
+  卡片 #fce8dd 六版迭代定稿）、v4.3/v4.3.1 会话（碎片/Agent 布局卡顿 fixed→flex、
+  灵感星标/转文章/多图上传、桌面端三页底部遮挡修复与文档更新）
+- **最后更新日期**：2026-09-29
