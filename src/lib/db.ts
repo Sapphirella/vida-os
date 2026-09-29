@@ -54,6 +54,21 @@ export async function loadState(): Promise<AppState | null> {
       ),
       // v4.2：碎片流 + Agent 会话/配置/资料库/记忆馆（旧数据无这些字段，给默认空值）
       fragments: (row.data as { fragments?: unknown }).fragments as AppState['fragments'] ?? [],
+      // v4.3：灵感支持星标与多图（旧灵感数据无 starred/imageIds，逐条补默认值，避免 item.imageIds.length 运行时崩溃）
+      notes: {
+        ...((row.data as { notes?: AppState['notes'] }).notes ?? {
+          inspiration: [],
+          schedule: [],
+          todo: [],
+        }),
+        inspiration: (
+          ((row.data as { notes?: AppState['notes'] }).notes?.inspiration ?? []) as AppState['notes']['inspiration']
+        ).map((n) => ({
+          ...n,
+          starred: (n as { starred?: boolean }).starred ?? false,
+          imageIds: (n as { imageIds?: string[] }).imageIds ?? [],
+        })),
+      } as AppState['notes'],
       agentSessions:
         ((row.data as { agentSessions?: unknown }).agentSessions as AppState['agentSessions'] | undefined) ?? [],
       agentConfig: {
