@@ -1,7 +1,7 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-29（v4.3.2：统一布局链 —— 内容页不再被底栏遮挡，碎片/Agent 页恢复贴底输入与内部滚动）
+> 最后更新：2026-09-29（v4.3.3：备份/恢复的数据安全修复 —— 灵感与碎片图片不再漏备份、导入旧备份不再崩；另含 v4.3.2 布局链统一）
 
 ---
 
@@ -14,7 +14,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3.2**（2026-09-29） |
+ | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.3.3**（2026-09-29） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -98,6 +98,13 @@
   `flex-1 min-h-0 flex flex-col`（flex 压缩）且 padding-bottom 不足。修复：内部 div
   改为 `flex flex-col`（移除 flex-1/min-h-0），`<main>` padding-bottom 调为
   `pb-[calc(80px+env(safe-area-inset-bottom))]`，确保内容完整露出在底栏上方。
+- **v4.3.3（2026-09-29）** —— **备份与恢复的数据安全修复**：灵感的 `imageIds` 与碎片的
+  `imageIds` 此前不在 `collectFileIds` 里（导出 JSON / WebDAV / 快照三条备份路径都共用它），
+  **备份只有条目没有图、原图不可恢复**；导入 JSON / WebDAV 取回 / 快照恢复三条路又都绕过
+  `loadState` 的迁移兜底，导入 v4.2 及更早的备份后进「便签」会直接 `TypeError` 崩溃。
+  已补全文件收集、抽出 `normalizeState()` 并在 `importState` 两条分支统一调用；
+  另修灵感编辑草稿不复位（含孤儿图）、「转文章」无去重、启动脚本端口判定三处。
+  详见第 8.3 节与第 13 节。
 - **v4.3.2（2026-09-29）** —— **布局链统一**：v4.3.1 的修法把碎片页/Agent 页的
   「确定高度」弄丢了（输入框浮到屏幕中间、消息流不再内部滚动、新碎片被底栏切掉 40px）。
   改为把 `overflow-y-auto` 与 80px 避让一起下沉到内层 div（保留 `flex-1 min-h-0`），
@@ -502,34 +509,9 @@ VidaOS/
 
 ---
 
-## 8. 已知问题与待处理（真实未修项，截至 2026-09-28）
+## 8. 已知问题与待处理（真实未修项，截至 2026-09-29 / v4.3.2）
 
 ### 8.1 功能/代码缺陷
-- **【数据丢失风险】灵感与碎片的图片不进任何备份**：`collectFileIds`
-  （`lib/exportImport.ts:124-142`）只收集 `articles` / `moments` / `profile` 引用的文件，
-  不含 `notes.inspiration[].imageIds`（v4.3 新增，`InspirationView.tsx:67,273` 落库）
-  也不含 `fragments[].imageIds`。而三条备份路径都用它挑文件：导出 JSON
-  （`exportImport.ts:26-37`）、WebDAV（`webdav.ts:222`）、本地快照（`snapshot.ts:164`）。
-  → 备份里只有条目没有图，换机/清缓存后导入得到**永久灰块**（`MediaImage` 对缺失文件
-  无失败兜底），且原图不可恢复；而界面文案写的是「含图片 / 音频」（`DataPage.tsx:469`）。
-- **【导入即崩】三条恢复路径绕过 `loadState` 的迁移兜底**：`starred`/`imageIds` 的兜底
-  只写在 `lib/db.ts:57-71`，而 `parseJSONImport`（`exportImport.ts:641-648`）、
-  WebDAV 取回（`webdav.ts:324-339`）、快照恢复（`snapshot.ts:234-256`）都是原样返回
-  `state`，`useAppStore.importState`（`useAppStore.ts:733-736` / `754-758`）直接灌进 store。
-  → 导入 v4.2 及更早的备份后进「便签·灵感」，`InspirationView.tsx:374` 读
-  `item.imageIds.length` 抛 TypeError，错误边界接管；**「重试」无效**（内存里仍是旧数据），
-  只有刷新才会被 `loadState` 修好。修法应在导入/取回/恢复三处统一走一次「归一化」函数。
-- **灵感编辑态草稿取消后不复位**：`InspirationView.tsx:262-263` 的 `draft`/`draftImages`
-  只初始化一次（组件按 `key={item.id}` 常驻），「取消」只清 `editingId`
-  （`InspirationView.tsx:335-337`）。→ 改完取消、再进编辑、保存 = 被取消的改动写回；
-  图片草稿同理，且 `putFile` 落库的 blob 变成无引用的孤儿。
-- **「转文章」没有重复保护**：`useAppStore.ts:360-383` 每次调用都新建文章；
-  `InspirationView.tsx:391-398` 是裸 `onClick`，触屏上双击图标会生成两篇相同文章。
-- **启动脚本的端口判定会「自信地」打开错误的页面**：`打开VidaOS.command:51` 的
-  `curl -s -o /dev/null` 不带 `-f`（4xx/5xx 也返回 0），而 `vite.config.ts` 有
-  `port: 5173` 却**没有 `strictPort`** → 5173 被别的程序占用时 vite 静默换到 5174，
-  脚本只轮询 5173，于是要么打开别人的应用、要么打印「✅ 已就绪 地址 5173」而真实端口是
-  5174。修法：加 `strictPort: true`，并把探测改成校验响应内容（`curl -sf` + 匹配特征串）。
 - **`DataPage` 用 `useAppStore()` 订阅了整个 store**（`DataPage.tsx:127`）：任一字段
   （含 `hydrated`）变化都会重渲染整页；且它把整个 store（混着 action 函数）传进
   `exportJSON` / `saveSnapshot`，目前靠 `JSON.stringify` 静默丢弃函数才没出事 ——
@@ -548,6 +530,10 @@ VidaOS/
   可能退出应用而不是回到列表。
 - **收藏夹里的「动态」类收藏只跳到 `/moments`**，不定位到被收藏的那一条。
 - **`vite.config.ts` 残留 Google Fonts runtimeCaching 死配置**（自托管后无意义，可删）。
+- **`scripts/make-icons.mjs` 依赖 `sharp` 但未在 package.json 声明**（当前跑不了）；
+  `date-fns` 装着但没人用。
+- **`theme.ts:12` `META_THEME_COLOR.day` 仍是旧米色 `#DDD3C9`**（未跟随 v4.2.1 的新
+  日间 `--bg-base #fdf2e1`）→ 只影响手机浏览器地址栏色块，遗留项、非本轮引入。
 - **Agent SSE 请求无超时**：`streamChatCompletion` 只支持用户手动「停止」（AbortController），
   网络挂起时没有自动超时上限（低优，可加 AbortSignal.timeout）。
 - **Agent 演示模式是本地模板回复**：未配置 API 时 `demoReply` 只能按关键词给固定话术，
@@ -565,11 +551,38 @@ VidaOS/
 - **多设备同时编辑同一 WebDAV 备份会互相覆盖**，说明书弹窗已提醒单设备编辑。
 
 ### 8.3 已修复
-- **版本号不一致**（v4.2 → v4.3.1）：package.json / 设置页 / README badge / 本文档已同步。
+- **版本号不一致**（v4.2 → v4.3.2）：package.json / 设置页 / README badge / 本文档已同步。
 - **布局链两难**（v4.3.2）：内容页被底栏遮挡 ↔ 碎片/Agent 输入框不贴底，两个方向的
   修法互相冲突（v4.3 与 v4.3.1 各修坏一个）。已按第 4 节之 20) 的结构统一：滚动与
   80px 避让一起下沉到内层 div，`.app-shell` 补 `100vh` 回退。13 项页面 × 2 视口实测
   无内容被遮，两页聊天布局贴底且消息流内部滚动。
+- **灵感/碎片图片不进备份**（v4.3.2）：`collectFileIds` 只收 articles/moments/profile，
+  三条备份路径（导出 JSON / WebDAV / 快照）共用它 → 备份里只有条目没有图。已补
+  `fragments[].imageIds` 与 `notes.inspiration[].imageIds`（含 `fileRef:` 扫描）；
+  实测：带图灵感 + 带图碎片导出 → 清空 IndexedDB → 导入还原 → 图片以 blob 正常显示、
+  无占位灰块。**修前实测备份里 0 张图、缺 2 个 id，修后 2 张齐全**。
+- **导入/取回绕过迁移兜底 → 打开便签页崩溃**（v4.3.2）：`starred`/`imageIds` 的兜底只在
+  `loadState` 里，而导入 JSON（合并/覆盖）、WebDAV 取回、快照恢复都原样灌 store。
+  已抽出 `normalizeState()`（`lib/db.ts`）并在 `importState` 两条分支统一调用。
+  **修前实测**：导入 v4.1 备份 → 进便签 → `TypeError: Cannot read properties of undefined
+  (reading 'length')`（错误边界接管、重试无效）；**修后**：合并 / 覆盖两条路径均正常渲染。
+- **灵感编辑草稿取消后不复位**（v4.3.2）：`InspirationView` 的 `draft`/`draftImages`
+  只在挂载时初始化 → 取消后再进编辑、保存会把被取消的改动写回。已在「进入编辑态」时
+  重新同步一次，并在取消时删掉本次新加、未保存的图片（孤儿 blob）。实测：取消后再进
+  编辑看到原文；保存后再进编辑看到新值（灵敏度对照）；编辑态加图 → 取消 → 库里文件数
+  回到加图前。
+- **「转文章」无重复保护**（v4.3.2）：新增 `InspirationNote.convertedArticleId`，
+  已转过且文章还在时复用（不新建），正文被改动后自动解除标记允许重转；按钮
+  `aria-label`/`title` 与提示文案区分两种状态。实测：同一按钮连点三次只生成 1 篇、
+  第二次起提示「已经转成过文章了」；改正文再转 → 正常新增第 2 篇。
+- **启动脚本端口判定会打开别人的页面**（v4.3.2）：`curl` 不带 `-f`（4xx/5xx 也返回 0）
+  + `vite.config.ts` 无 `strictPort`（静默换 5174）+ 只轮询 5173。已加
+  `strictPort: true`，探测改为问 vite dev 专属端点 `/@vite/client`（并匹配
+  `createHotContext`），端口被别人占用时直接给出明确提示并退出。实测三场景：
+  ① 静态服务器占 5173 → 明确报「已被其它程序占用」退出 1（**注意：只匹配 index.html
+  内容会被 `python -m http.server` 骗过，已踩过**）；② 端口空闲 → 正常起服务并打印
+  局域网地址；③ 自己的 dev server 在跑 → 走「服务已在运行」分支。另实测 5173 被占时
+  `npm run dev` 会以 `Port 5173 is already in use` 直接失败，不再静默换端口。
 
 ---
 
@@ -770,10 +783,50 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
     并区分「容器被遮」（布局骨架）与「文字叶子被遮」（真正的展示不全）两个口径。
     **自检指标写完要拿一个已知好 + 一个已知坏的结构各跑一次**，两边都能区分才算可用
     （呼应第 2、9 条）。
+19. **无头 Chrome 探针环境本身会污染结论（v4.3.3 连踩两个）**：
+    1) **固定调试端口 + 探针中途抛错没走到收尾** → 上一次的 Chrome 一直活着占着 9333，
+       后续每次 `launchChrome` 都**连到了那个旧实例**（旧 profile，数据在同一个 IndexedDB
+       里累加），表现为「我明明只建了 1 条灵感，怎么数出 5 条」。
+       修法：调试端口改**随机端口** + 起 Chrome 前先探测该端口是否已被占用（占用就报错
+       退出，绝不连到别人的 Chrome）+ 给进程挂 `exit` 钩子兜底杀 Chrome。
+    2) **选择器会悄悄漂到别的元素上**：用
+       `document.querySelector('main ul li button[aria-label="转为文章"]')` 连点三次，
+       第一次点完按钮的 `aria-label` 变成「已转为文章」→ 第二次选择器匹配到的是**下一条
+       灵感**，三次点出 3 篇文章，看起来完全像「去重没生效」。修法：把被测对象**锚定到
+       具体条目**（`main ul li:first-child`），按钮文案会变时用「容器 + 属性正则」定位。
+    **教训：「功能没生效」先怀疑探针，再怀疑代码；每个断言都要能说清它点的是哪个元素。**
 
 ---
 
 ## 13. 变更日志
+
+### [v4.3.3] - 2026-09-29 —— 备份与恢复的数据安全修复（两项 P1）+ 灵感体验修复
+- **灵感/碎片图片不进备份**（P1 · 数据不可恢复）：`collectFileIds` 只收集
+  articles/moments/profile 引用的文件，而导出 JSON、WebDAV、本地快照三条路共用它。
+  v4.3 新加的灵感图片（`notes.inspiration[].imageIds`）与碎片图片（`fragments[].imageIds`）
+  于是只备份了条目、没备份图。**修前实测**：一条带图灵感 + 一条带图碎片 → 导出 JSON
+  只有 2KB、`bundle.files` 为 0、两个 fileId 都缺；**修后**：20KB / 2 张图齐全，清空
+  IndexedDB 再导入，图片以 blob 正常显示、无占位灰块。
+- **导入/取回绕过迁移兜底 → 打开便签页崩溃**（P1）：`starred`/`imageIds` 的兜底只写在
+  `loadState`，而 `parseJSONImport`、WebDAV 取回（`webdav.ts`）、快照恢复（`snapshot.ts`）
+  都原样把 state 灌进 store。**修前实测**：导入一份 v4.1 备份（灵感无这两个字段）→
+  应用内导航进便签 → `TypeError: Cannot read properties of undefined (reading 'length')`
+  （错误边界接管，「重试」无效）；**修后**：合并 / 覆盖两条路径均正常。
+  做法：抽出 `normalizeState()`（`lib/db.ts`，含 tracks/favorites/notes/fragments/agent
+  各段迁移），`loadState` 与 `importState` 两条分支统一走它。
+- **灵感编辑草稿取消后不复位**：`draft`/`draftImages` 只在挂载时初始化 → 取消后再进编辑、
+  保存会把被取消的改动写回（图片还能把取消掉的图写回 `imageIds`）。改为「进入编辑态时
+  同步一次」，并在取消时删掉本次新加未保存的图片（孤儿 blob）。
+- **「转文章」无重复保护**：新增 `InspirationNote.convertedArticleId`，已转过且文章仍在
+  时复用不新建；正文改动后自动解除标记允许重转；按钮文案与提示区分两种状态。
+- **启动脚本端口判定会打开别人的页面**：`curl` 不带 `-f` + `vite.config.ts` 无
+  `strictPort`（静默换 5174）+ 只轮询 5173 三件事叠加。已加 `strictPort: true`，
+  探测改为问 vite dev 专属端点 `/@vite/client`（匹配 `createHotContext`），
+  端口被占时明确提示并退出；三个场景（被静态服务器占用 / 空闲冷启动 / 自己已在跑）
+  均实测过。
+- 验证方式：无头 Chrome 走真实 UI（真实文件输入框选图、真实导入按钮、真实下载），
+  全部结论都有修前 / 修后两组成对数据；另加 `collectFileIds` / `normalizeState`
+  两个纯函数的契约测试（含旧数据不抛错、不覆盖有值字段）。
 
 ### [v4.3.2] - 2026-09-29 —— 布局链统一（内容页不遮挡 + 聊天页贴底）
 - **背景**：v4.3 把碎片页/Agent 页从 `fixed` 改成 flex 流内布局，依赖祖先是「确定高度」；

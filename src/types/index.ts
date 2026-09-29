@@ -61,6 +61,12 @@ export interface InspirationNote {
   starred: boolean;
   /** 图片 fileId 列表（复用 files 表） */
   imageIds: string[];
+  /**
+   * 「转文章」生成的 Article id（可选）。用于防重复：连点不会生成第二篇；
+   * 灵感内容被改动后（updateInspiration 传了 content）会被清空，允许重新生成。
+   * 目标文章被删除后该字段失效，转换时会重新创建。
+   */
+  convertedArticleId?: string;
   createdAt: number;
   updatedAt: number;
 }

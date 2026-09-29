@@ -75,6 +75,10 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // 端口被占用时直接报错退出，不要静默换到 5174 ——
+    // 打开VidaOS.command 只认 5173；静默换端口会让脚本打印「✅ 已就绪 地址 5173」
+    // 却把用户引到占用该端口的另一个程序上（v4.3.3 修，见 PROJECT_MEMORY 第 8.3 节）
+    strictPort: true,
   },
   build: {
     target: 'es2020',

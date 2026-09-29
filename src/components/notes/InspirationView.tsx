@@ -11,11 +11,12 @@ import { usePageFind } from '@/components/search/usePageFind';
 import { PageFindBar } from '@/components/search/PageFindBar';
 import { useGlobalFocus } from '@/lib/focusRequest';
 import { compressImage, uid, relativeTime, clsx } from '@/lib/utils';
-import { putFile } from '@/lib/db';
+import { putFile, deleteFile } from '@/lib/db';
 import type { InspirationNote } from '@/types';
 
 export function InspirationView() {
   const inspiration = useAppStore((s) => s.notes.inspiration);
+  const articles = useAppStore((s) => s.articles);
   const addInspiration = useAppStore((s) => s.addInspiration);
   const updateInspiration = useAppStore((s) => s.updateInspiration);
   const deleteInspiration = useAppStore((s) => s.deleteInspiration);
@@ -74,10 +75,17 @@ export function InspirationView() {
   };
 
   const handleConvert = (id: string) => {
+    // 先看这条是否已经转过、且转出的文章还在 —— 用于给出不同提示（不重复创建）
+    const item = inspiration.find((i) => i.id === id);
+    const already =
+      !!item?.convertedArticleId &&
+      articles.some((a) => a.id === item.convertedArticleId);
     const artId = convertInspirationToArticle(id);
-    if (artId) {
-      showToast('已转为文章，可在「空间」查看', 'success');
-    }
+    if (!artId) return;
+    showToast(
+      already ? '这条灵感已经转成过文章了（没有重复创建）' : '已转为文章，可在「空间」查看',
+      already ? 'info' : 'success',
+    );
   };
 
   return (
@@ -219,6 +227,10 @@ export function InspirationView() {
               }}
               onStar={() => toggleInspirationStar(item.id)}
               onConvert={() => handleConvert(item.id)}
+              converted={
+                !!item.convertedArticleId &&
+                articles.some((a) => a.id === item.convertedArticleId)
+              }
               contentHtml={find.hlText(item.content, item.id, 'content')}
               findCardProps={find.findCardProps(item.id)}
             />
@@ -253,15 +265,36 @@ interface ItemProps {
   onDelete: () => void;
   onStar: () => void;
   onConvert: () => void;
+  /** 已经转成过文章（且那篇文章还在）——仅用于按钮文案与提示，不阻止再次点击 */
+  converted: boolean;
   /** 页内查找高亮后的正文 HTML */
   contentHtml: string;
   findCardProps: Record<string, string>;
 }
 
-function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, onStar, onConvert, contentHtml, findCardProps }: ItemProps) {
+function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, onStar, onConvert, converted, contentHtml, findCardProps }: ItemProps) {
   const [draft, setDraft] = useState(item.content);
   const [draftImages, setDraftImages] = useState(item.imageIds);
   const fileRef = useRef<HTMLInputElement>(null);
+  const wasEditing = useRef(false);
+
+  // 草稿只属于「这一次编辑」：只在刚进入编辑态时从 item 同步一次。
+  // 不在取消时把草稿清掉的话，再点编辑、直接保存就会把已经取消的改动写回去
+  // （图片更隐蔽：取消时新加的图还在草稿里，保存后 imageIds 被写回）。
+  useEffect(() => {
+    if (isEditing && !wasEditing.current) {
+      setDraft(item.content);
+      setDraftImages(item.imageIds);
+    }
+    wasEditing.current = isEditing;
+  }, [isEditing, item.content, item.imageIds]);
+
+  /** 取消编辑：把这次新加、但没保存的图片删掉，避免留下无引用的孤儿 blob */
+  const handleCancel = () => {
+    const added = draftImages.filter((id) => !item.imageIds.includes(id));
+    added.forEach((id) => void deleteFile(id));
+    onCancel();
+  };
 
   const handlePickImages = async (files: FileList | null) => {
     if (!files) return;
@@ -332,7 +365,7 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={onCancel} className="btn-text">
+              <button onClick={handleCancel} className="btn-text">
                 取消
               </button>
               <button
@@ -390,9 +423,12 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
           <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={onConvert}
-              className="w-6 h-6 flex items-center justify-center text-bronze hover:text-candle"
-              aria-label="转为文章"
-              title="转为文章"
+              className={clsx(
+                'w-6 h-6 flex items-center justify-center transition-colors',
+                converted ? 'text-amber' : 'text-bronze hover:text-candle',
+              )}
+              aria-label={converted ? '已转为文章' : '转为文章'}
+              title={converted ? '已转为文章（再次点击不会重复创建）' : '转为文章'}
             >
               <BookOpen size={11} strokeWidth={1.5} />
             </button>

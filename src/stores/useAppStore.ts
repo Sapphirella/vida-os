@@ -19,7 +19,7 @@ import type {
   AgentMessage,
   AgentConfig,
 } from '@/types';
-import { defaultState, loadState, saveState } from '@/lib/db';
+import { defaultState, loadState, saveState, normalizeState } from '@/lib/db';
 import { debounce, uid, now } from '@/lib/utils';
 
 // ============================================================
@@ -331,7 +331,18 @@ export const useAppStore = create<Store>((set, get) => ({
       notes: {
         ...s.notes,
         inspiration: s.notes.inspiration.map((n) =>
-          n.id === id ? { ...n, ...patch, updatedAt: now() } : n,
+          n.id === id
+            ? {
+                ...n,
+                ...patch,
+                // 正文改了 → 之前转出的文章已不是这份内容，解除「已转过」标记，
+                // 允许重新转（也覆盖页内查找替换写回正文的情况）
+                ...(patch.content !== undefined && patch.content !== n.content
+                  ? { convertedArticleId: undefined }
+                  : {}),
+                updatedAt: now(),
+              }
+            : n,
         ),
       },
     }));
@@ -360,6 +371,14 @@ export const useAppStore = create<Store>((set, get) => ({
   convertInspirationToArticle: (id) => {
     const ins = get().notes.inspiration.find((n) => n.id === id);
     if (!ins) return '';
+    // 已经转过、且那篇文章还在 → 直接复用，避免连点/重复点击生成内容相同的第二篇
+    // （灵感正文改动后 updateInspiration 会清掉这个标记，那时可以重新转）
+    if (
+      ins.convertedArticleId &&
+      get().articles.some((a) => a.id === ins.convertedArticleId)
+    ) {
+      return ins.convertedArticleId;
+    }
     const artId = uid('art_');
     const title = ins.content.split('\n')[0].slice(0, 50) || '来自灵感的文章';
     set((s) => ({
@@ -377,6 +396,12 @@ export const useAppStore = create<Store>((set, get) => ({
         },
         ...s.articles,
       ],
+      notes: {
+        ...s.notes,
+        inspiration: s.notes.inspiration.map((n) =>
+          n.id === id ? { ...n, convertedArticleId: artId } : n,
+        ),
+      },
     }));
     persist(get());
     return artId;
@@ -732,7 +757,9 @@ export const useAppStore = create<Store>((set, get) => ({
   // 导入（incoming 允许是 Partial：Markdown/TXT 导入只带 articles）
   importState: (incoming, mode) => {
     if (mode === 'overwrite') {
-      set({ ...defaultState(), ...incoming, version: 3, hydrated: true });
+      // 外部来源一律先归一化：旧备份缺 starred / imageIds 等字段，
+      // 原样灌进 store 会让「便签 · 灵感」渲染即崩（v4.3.3 修，见 db.ts normalizeState）
+      set({ ...normalizeState(incoming), hydrated: true });
     } else {
       // 合并：保留现有数据，追加 incoming 中不存在的新项
       const cur = get();
@@ -772,7 +799,9 @@ export const useAppStore = create<Store>((set, get) => ({
         agentMemories: mergeById(cur.agentMemories, incoming.agentMemories),
         settings: cur.settings,
       };
-      set(merged);
+      // merged 是从 cur（完整）构造出来的，再过一次归一化即可补齐 incoming 里
+      // 旧条目的缺字段 —— 注意不能直接归一化 incoming：那会用默认资料覆盖现有数据
+      set(normalizeState(merged));
     }
     persist(get());
   },

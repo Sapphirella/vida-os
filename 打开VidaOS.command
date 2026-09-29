@@ -44,11 +44,25 @@ print_hint() {
   echo
 }
 
+# 判断 5173 上跑的到底是不是 VidaOS 的 vite dev server。
+# 踩过的两个坑：
+#   1) 只看「HTTP 通不通」不够：curl 不带 -f 时对 404/500 也返回 0；
+#   2) 只看 index.html 的内容也不够：用 `python3 -m http.server` 伺服项目根目录时
+#      同样会返回含特征串的 index.html（实测被误判成「服务已在运行」）。
+# 所以改问 vite dev server 的专属端点 /@vite/client —— 它不存在于磁盘上，
+# 静态服务器一定拿不到（返回 404 → curl -f 失败）。
+is_vidaos() {
+  curl -sf --max-time 2 "$1/@vite/client" 2>/dev/null | grep -q "createHotContext"
+}
+
+LSOF=/usr/sbin/lsof
+[ -x "$LSOF" ] || LSOF=$(command -v lsof)
+
 echo "✦ VidaOS — 暗夜书房"
 echo
 
 # 1) 服务已在运行？直接打开浏览器即可
-if curl -s -o /dev/null --max-time 1 "$URL"; then
+if is_vidaos "$URL"; then
   echo "服务已在运行，打开浏览器…"
   open_url "$URL"
   print_hint
@@ -59,6 +73,17 @@ if curl -s -o /dev/null --max-time 1 "$URL"; then
   # 留 2 秒让用户看清提示，避免“双击一闪而过、以为没反应”
   sleep 2
   exit 0
+fi
+
+# 1b) 端口被别的程序占用：说清楚，别静默换端口
+# （vite.config.ts 已设 strictPort，起不来时会在下面第 4 步以报错形式体现）
+if "$LSOF" -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "❌ 端口 $PORT 已被其它程序占用，VidaOS 起不来（这不是 VidaOS 自己的服务）。"
+  echo "   查看占用者：lsof -nP -iTCP:$PORT -sTCP:LISTEN"
+  echo "   关掉它，或改 vite.config.ts 里的 server.port 后再点本文件。"
+  echo
+  read -r -p "按回车键关闭…"
+  exit 1
 fi
 
 # 2) 检查 Node / npm
@@ -89,7 +114,7 @@ trap 'kill $SERVER_PID 2>/dev/null' EXIT INT TERM
 
 for _ in $(seq 1 60); do
   sleep 1
-  if curl -s -o /dev/null --max-time 1 "$URL"; then
+  if is_vidaos "$URL"; then
     echo
     echo "✅ 已就绪"
     open_url "$URL"
@@ -106,5 +131,6 @@ done
 
 echo
 echo "❌ 启动超时。请检查上面的报错信息，或手动运行：npm run dev"
+echo "   （若提示端口被占用，先关掉占用 $PORT 的程序；vite 现在不会自动换端口）"
 read -r -p "按回车键关闭…"
 exit 1

@@ -33,60 +33,57 @@ export async function loadState(): Promise<AppState | null> {
   try {
     const row = await db.state.get(STATE_KEY);
     if (!row?.data) return null;
-    // 兼容迁移：
-    // 1) 旧版本含内置音景轨道（WebAudio 合成，无实体文件），
-    //    新版已移除内置音频，只保留用户自己导入的本地文件曲目。
-    // 2) 信箱功能已移除（v4 数据模型）：剥离旧 letters 数据，并清理指向
-    //    已删除信件的收藏记录，避免收藏夹出现「已删除」空项。
-    // 3) lastTab 归一化：旧数据可能持久化了已不存在的 tab（如 'notes'），
-    //    恢复时回退到 'desk'，防止启动后 setTab 到无效 key。
-    const lastTab: TabKey = isTabKey(row.data.settings?.lastTab)
-      ? row.data.settings!.lastTab
-      : 'desk';
-    const data: AppState = {
-      ...row.data,
-      tracks: (row.data.tracks ?? []).filter(
-        (t) => !(t as { builtin?: unknown }).builtin,
-      ),
-      favorites: (row.data.favorites ?? []).filter(
-        // 运行时旧数据可能含 letter 收藏（类型已收窄，需按 string 比较）
-        (f) => (f.refType as string) !== 'letter',
-      ),
-      // v4.2：碎片流 + Agent 会话/配置/资料库/记忆馆（旧数据无这些字段，给默认空值）
-      fragments: (row.data as { fragments?: unknown }).fragments as AppState['fragments'] ?? [],
-      // v4.3：灵感支持星标与多图（旧灵感数据无 starred/imageIds，逐条补默认值，避免 item.imageIds.length 运行时崩溃）
-      notes: {
-        ...((row.data as { notes?: AppState['notes'] }).notes ?? {
-          inspiration: [],
-          schedule: [],
-          todo: [],
-        }),
-        inspiration: (
-          ((row.data as { notes?: AppState['notes'] }).notes?.inspiration ?? []) as AppState['notes']['inspiration']
-        ).map((n) => ({
-          ...n,
-          starred: (n as { starred?: boolean }).starred ?? false,
-          imageIds: (n as { imageIds?: string[] }).imageIds ?? [],
-        })),
-      } as AppState['notes'],
-      agentSessions:
-        ((row.data as { agentSessions?: unknown }).agentSessions as AppState['agentSessions'] | undefined) ?? [],
-      agentConfig: {
-        baseUrl: '',
-        apiKey: '',
-        model: '',
-        persona: '',
-        ...((row.data as { agentConfig?: unknown }).agentConfig as Partial<AppState['agentConfig']> | undefined),
-      },
-      agentDocs: ((row.data as { agentDocs?: unknown }).agentDocs as AppState['agentDocs'] | undefined) ?? [],
-      agentMemories: ((row.data as { agentMemories?: unknown }).agentMemories as AppState['agentMemories'] | undefined) ?? [],
-      settings: { ...row.data.settings, lastTab },
-    };
-    return data;
+    return normalizeState(row.data);
   } catch (err) {
     console.error('[VidaOS] loadState failed', err);
     return null;
   }
+}
+
+/**
+ * 把「旧版本 / 外部来源」的 state 归一化成当前数据模型。
+ *
+ * ⚠️ 三条恢复路径都必须走这里，不能只在 loadState 里做迁移：
+ *   ① IndexedDB 启动加载（loadState）
+ *   ② 导入 JSON / Markdown / TXT（`useAppStore.importState`）
+ *   ③ WebDAV 云端取回、本地文件夹快照恢复（同样经 importState 落地）
+ * 只在 ① 做兜底的话，导入一份 v4.2 及更早的备份会绕过迁移、把旧字段直接灌进
+ * store —— 打开「便签 · 灵感」立刻因 `item.imageIds.length` 抛 TypeError，
+ * 错误边界接管且「重试」无效（内存里仍是旧数据），只有刷新才好（v4.3.3 修）。
+ */
+export function normalizeState(raw: Partial<AppState> | null | undefined): AppState {
+  const d = defaultState();
+  const r = (raw ?? {}) as Partial<AppState>;
+  // lastTab 归一化：旧数据可能持久化了已不存在的 tab（如 'notes'），回退 'desk'
+  const lastTab: TabKey = isTabKey(r.settings?.lastTab) ? r.settings!.lastTab : 'desk';
+  return {
+    ...d,
+    ...r,
+    version: 3,
+    // 旧版本含内置音景轨道（WebAudio 合成，无实体文件），新版已移除
+    tracks: (r.tracks ?? []).filter((t) => !(t as { builtin?: unknown }).builtin),
+    // 信箱功能已移除（v4 数据模型）：清理指向已删除信件的收藏
+    favorites: (r.favorites ?? []).filter((f) => (f.refType as string) !== 'letter'),
+    notes: {
+      ...d.notes,
+      ...(r.notes ?? {}),
+      // v4.3：灵感支持星标与多图，旧灵感数据逐条补默认值
+      inspiration: (r.notes?.inspiration ?? []).map((n) => ({
+        ...n,
+        starred: (n as { starred?: boolean }).starred ?? false,
+        imageIds: (n as { imageIds?: string[] }).imageIds ?? [],
+      })),
+      schedule: r.notes?.schedule ?? [],
+      todo: r.notes?.todo ?? [],
+    },
+    // v4.2：碎片流 + Agent 会话/配置/资料库/记忆馆（旧数据无这些字段）
+    fragments: r.fragments ?? [],
+    agentSessions: r.agentSessions ?? [],
+    agentConfig: { ...d.agentConfig, ...(r.agentConfig ?? {}) },
+    agentDocs: r.agentDocs ?? [],
+    agentMemories: r.agentMemories ?? [],
+    settings: { ...d.settings, ...(r.settings ?? {}), lastTab },
+  };
 }
 
 export async function saveState(state: AppState): Promise<void> {

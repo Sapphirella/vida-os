@@ -291,7 +291,7 @@ export function SettingsPage() {
         <Card className="p-5 sm:p-6 text-center">
           <p className="font-serif text-headline text-lg tracking-widest">VidaOS</p>
           <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mt-1">
-            v4.3.2 · night study
+            v4.3.3 · night study
           </p>
           <p className="font-sans text-bronze text-xs mt-3 leading-relaxed">
             你的私密生活记录空间。
