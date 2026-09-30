@@ -59,11 +59,7 @@ export function DayOutputCard() {
   }, [selected, articles, moments, inspirations]);
 
   const goto = (kind: DayItem['kind'], id: string) => {
-    if (kind === 'article') {
-      navigate(`/space/article/${id}`);
-      return;
-    }
-    // 动态 / 灵感：带定位请求跳转，目标页按 id 滚动到对应卡片（query 为空 = 不依赖文本匹配）
+    // 统一带定位请求跳转：目标页挂载后按 id 滚动到对应位置（query 为空 = 不依赖文本匹配）
     setFocusRequest({
       kind,
       id,
@@ -73,7 +69,9 @@ export function DayOutputCard() {
       inTitle: false,
       ts: Date.now(),
     });
-    navigate(kind === 'moment' ? '/moments' : '/notes');
+    if (kind === 'article') navigate(`/space/article/${id}`);
+    else if (kind === 'moment') navigate('/moments');
+    else navigate('/notes');
   };
 
   const kindTag = (kind: DayItem['kind']) => {

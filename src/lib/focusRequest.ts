@@ -113,8 +113,12 @@ export function useGlobalFocus(
         if (root) {
           const q = (fr.query || '').trim();
           if (!q) {
-            // 无查询文本（如从主页「当日产出」按 id 跳转）：直接滚动到目标卡片，不依赖正文文本匹配
-            root.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            // 无查询文本（如从主页「当日产出」按 id 跳转）：直接滚动到目标，不依赖正文文本匹配。
+            // 文章是长文，滚到开头；动态/灵感卡片居中最自然。
+            root.scrollIntoView({
+              block: fr.kind === 'article' ? 'start' : 'center',
+              behavior: 'smooth',
+            });
           } else {
             focusNthQuery(root, fr.query, fr.index, fr.ignoreCase);
           }
