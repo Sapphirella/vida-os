@@ -52,7 +52,19 @@ export function InspirationView() {
   const find = usePageFind<HTMLUListElement>(targets, {
     onToast: (msg, type) => showToast(msg, type),
   });
-  useGlobalFocus('inspiration', undefined, () => find.listRef.current);
+  useGlobalFocus(
+    'inspiration',
+    undefined,
+    () => {
+      const fr = useUIStore.getState().focusRequest;
+      if (!fr) return null;
+      return (
+        find.listRef.current?.querySelector<HTMLElement>(
+          `[data-note-id="${fr.id}"]`,
+        ) ?? null
+      );
+    },
+  );
 
   const handleAdd = () => {
     setComposing({ content: '', category: selectedCat || '随想', imageIds: [] });
@@ -383,7 +395,7 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
   }
 
   return (
-    <li {...findCardProps}>
+    <li {...findCardProps} data-note-id={item.id}>
       <Card className="p-4 sm:p-5 group hover:scale-[1.005] transition-transform">
         {/* 星标 */}
         <div className="flex items-start gap-2">

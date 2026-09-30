@@ -18,6 +18,7 @@ interface DayItem {
 export function DayOutputCard() {
   const navigate = useNavigate();
   const selected = useUIStore((s) => s.selectedDate);
+  const setFocusRequest = useUIStore((s) => s.setFocusRequest);
   const articles = useAppStore((s) => s.articles);
   const moments = useAppStore((s) => s.moments);
   const inspirations = useAppStore((s) => s.notes.inspiration);
@@ -58,9 +59,21 @@ export function DayOutputCard() {
   }, [selected, articles, moments, inspirations]);
 
   const goto = (kind: DayItem['kind'], id: string) => {
-    if (kind === 'article') navigate(`/space/article/${id}`);
-    else if (kind === 'moment') navigate('/moments');
-    else navigate('/notes');
+    if (kind === 'article') {
+      navigate(`/space/article/${id}`);
+      return;
+    }
+    // 动态 / 灵感：带定位请求跳转，目标页按 id 滚动到对应卡片（query 为空 = 不依赖文本匹配）
+    setFocusRequest({
+      kind,
+      id,
+      query: '',
+      ignoreCase: false,
+      index: 0,
+      inTitle: false,
+      ts: Date.now(),
+    });
+    navigate(kind === 'moment' ? '/moments' : '/notes');
   };
 
   const kindTag = (kind: DayItem['kind']) => {

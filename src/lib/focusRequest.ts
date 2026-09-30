@@ -110,7 +110,15 @@ export function useGlobalFocus(
         }
       } else {
         const root = getRootRef.current?.();
-        if (root) focusNthQuery(root, fr.query, fr.index, fr.ignoreCase);
+        if (root) {
+          const q = (fr.query || '').trim();
+          if (!q) {
+            // 无查询文本（如从主页「当日产出」按 id 跳转）：直接滚动到目标卡片，不依赖正文文本匹配
+            root.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          } else {
+            focusNthQuery(root, fr.query, fr.index, fr.ignoreCase);
+          }
+        }
       }
       // 处理完就清除，避免之后跳转到其他文档时误触发旧请求
       setFocusRequest(null);
