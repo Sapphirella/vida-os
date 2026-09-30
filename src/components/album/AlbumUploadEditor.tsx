@@ -45,6 +45,10 @@ export function AlbumUploadEditor({
   const [urls, setUrls] = useState<Record<string, string>>({});
   const isCoarse =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  /** 拖拽刚结束后 350ms 内抑制 click，避免松手触发预览大图 */
+  const clickSuppressed = useRef(false);
+  /** 桌面鼠标拖拽状态（mousedown 即拖，无需长按） */
+  const mouseDrag = useRef<{ from: number; moved: boolean } | null>(null);
 
   // 缩略图 URL 异步加载（div 背景图，不用 <img>——见文件头注释）
   useEffect(() => {
@@ -173,6 +177,13 @@ export function AlbumUploadEditor({
         clearTimeout(longPress.current.timer);
         longPress.current.timer = null;
       }
+      // 发生过拖拽：抑制随后的 click，避免松手弹出预览
+      if (dragFromRef.current !== null) {
+        clickSuppressed.current = true;
+        setTimeout(() => {
+          clickSuppressed.current = false;
+        }, 350);
+      }
       setDrag(null);
     };
     document.addEventListener('touchstart', onTouchStartTile, { passive: true });
@@ -184,6 +195,45 @@ export function AlbumUploadEditor({
       document.removeEventListener('touchmove', onTouchMove);
       document.removeEventListener('touchend', onTouchEnd);
       document.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [isCoarse, moveImage]);
+
+  // 桌面鼠标拖拽（mousedown 按下即拖；窗口级监听，移出缩略图后仍能换位）
+  useEffect(() => {
+    if (isCoarse) return;
+    const onMouseMove = (e: MouseEvent) => {
+      if (!mouseDrag.current) return;
+      mouseDrag.current.moved = true;
+      e.preventDefault();
+      const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const target = el?.closest('[data-album-tile]') as HTMLElement | null;
+      if (target) {
+        const to = Number(target.dataset.index);
+        const from = dragFromRef.current ?? mouseDrag.current.from;
+        if (!Number.isNaN(to) && to !== from) {
+          setDrag(to);
+          moveImage(from, to);
+          mouseDrag.current.from = to;
+        }
+      }
+    };
+    const onMouseUp = () => {
+      if (!mouseDrag.current) return;
+      const moved = mouseDrag.current.moved;
+      mouseDrag.current = null;
+      setDrag(null);
+      if (moved) {
+        clickSuppressed.current = true;
+        setTimeout(() => {
+          clickSuppressed.current = false;
+        }, 350);
+      }
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
     };
   }, [isCoarse, moveImage]);
 
@@ -223,17 +273,17 @@ export function AlbumUploadEditor({
                   key={id}
                   data-album-tile
                   data-index={i}
-                  draggable={!isCoarse}
-                  onDragStart={() => !isCoarse && setDragFrom(i)}
-                  onDragOver={(e) => !isCoarse && e.preventDefault()}
-                  onDrop={(e) => {
+                  onMouseDown={(e) => {
                     if (isCoarse) return;
+                    if ((e.target as HTMLElement).closest('button')) return;
                     e.preventDefault();
-                    if (dragFrom !== null && dragFrom !== i) moveImage(dragFrom, i);
-                    setDragFrom(null);
+                    mouseDrag.current = { from: i, moved: false };
+                    setDrag(i);
                   }}
-                  onDragEnd={() => setDragFrom(null)}
-                  onClick={() => setLightbox({ fileId: id, starTag: 'album' })}
+                  onClick={() => {
+                    if (clickSuppressed.current) return;
+                    setLightbox({ fileId: id, starTag: 'album' });
+                  }}
                   className={clsx(
                     'relative aspect-square rounded-card overflow-hidden border transition-all vd-album-tile',
                     dragFrom === i ? 'opacity-50 border-amber scale-95' : 'border-line/50',
@@ -254,13 +304,13 @@ export function AlbumUploadEditor({
                     style={{ background: 'rgba(106,8,14,0.85)' }}>
                     {i + 1}
                   </span>
-                  {/* 移除 */}
+                  {/* 移除（放在 tile 内，避免被 overflow-hidden 裁掉） */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setImages(images.filter((x) => x !== id));
                     }}
-                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-moon"
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-moon border border-moon/20"
                     style={{ background: 'var(--wine-deep)' }}
                     aria-label="移除这张照片"
                   >

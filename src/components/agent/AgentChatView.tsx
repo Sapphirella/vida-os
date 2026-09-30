@@ -23,7 +23,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { MediaImage } from '@/components/common/MediaImage';
 import { saveText, formatDate, relativeTime, clsx, errMsg, compressImage, uid } from '@/lib/utils';
-import { putFile } from '@/lib/db';
+import { putFile, deleteFile } from '@/lib/db';
 // 逐轮回复的实现已抽到 lib/agentTurn.ts（与馆藏「共读」抽屉共用），
 // 这里只留这个组件自己还要用的几个（自检连通性 / 导出 / 资料库上传大小限制）
 import { hasApiConfig, sessionToTxt, DOC_MAX_BYTES } from '@/lib/agentEngine';
@@ -53,6 +53,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const docFileRef = useRef<HTMLInputElement>(null);
   const imgFileRef = useRef<HTMLInputElement>(null);
   const [imgBusy, setImgBusy] = useState(false);
+  /** 已选待发图片（压缩入库，等文字输入后随消息一并发送） */
+  const [picked, setPicked] = useState<{ id: string; url: string | null }[]>([]);
 
   const messages = session?.messages ?? [];
   const unreadMemories = memories.filter((m) => !m.read).length;
@@ -99,6 +101,7 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
     const content = [text, imgMarkdown].filter(Boolean).join('\n\n');
     if (!content || streaming) return;
     setInput('');
+    setPicked([]);
     const st = useAppStore.getState();
     st.appendAgentMessage(sessionId, { role: 'user', content });
     // 自动命名会话
@@ -119,15 +122,20 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
     void runTurn(content);
   };
 
-  const send = () => sendContent(input.trim());
+  const send = () => {
+    const text = input.trim();
+    const imgMarkdown = picked.map((p) => `![图片](fileRef:${p.id})`).join('\n');
+    sendContent(text, imgMarkdown || undefined);
+  };
 
-  /** 图片按钮：压缩入库后随当前输入一并发送；不支持图片识别的模型会自行略过图片标记 */
+  /** 图片按钮：选图只压缩入库进入待发区，等文字输完随消息一并发送；
+   *  不支持图片识别的模型会自行略过图片标记 */
   const pickImages = async (files: FileList | null) => {
     if (!files?.length || streaming) return;
     setImgBusy(true);
     try {
       const ids: string[] = [];
-      for (const file of Array.from(files).slice(0, 9)) {
+      for (const file of Array.from(files).slice(0, 9 - picked.length)) {
         try {
           const blob = await compressImage(file);
           const id = uid('img_');
@@ -138,12 +146,25 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
         }
       }
       if (ids.length === 0) return;
-      const imgMarkdown = ids.map((id) => `![图片](fileRef:${id})`).join('\n');
-      sendContent(input.trim(), imgMarkdown);
-      showToast(`已附带 ${ids.length} 张图片`, 'success');
+      const add: { id: string; url: string | null }[] = ids.map((id) => ({ id, url: null }));
+      setPicked((prev) => [...prev, ...add].slice(0, 9));
+      // 异步取缩略图 URL 回填
+      void Promise.all(
+        ids.map(async (id) => {
+          const { fileURL } = await import('@/lib/fileUrl');
+          const u = await fileURL(id);
+          if (u) setPicked((prev) => prev.map((p) => (p.id === id ? { ...p, url: u } : p)));
+        }),
+      );
     } finally {
       setImgBusy(false);
     }
+  };
+
+  /** 移除待发图片（还没发送，从库中一并删掉，不留垃圾文件） */
+  const removePicked = (id: string) => {
+    setPicked((prev) => prev.filter((p) => p.id !== id));
+    void deleteFile(id);
   };
 
   const stop = () => {
@@ -413,6 +434,43 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
           className="mx-auto max-w-2xl rounded-card border border-bronze/15 px-3 py-2.5 shadow-card-elevated"
           style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px) saturate(140%)' }}
         >
+          {/* 待发图片条：选图后先停在这里，等文字输完一起发送 */}
+          {picked.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-1.5 -mx-0.5 px-0.5">
+              {picked.map((p) => (
+                <div
+                  key={p.id}
+                  className="relative w-11 h-11 flex-none rounded-lg overflow-hidden border border-bronze/20"
+                  onClick={() => useUIStore.getState().setLightbox({ fileId: p.id, starTag: 'album' })}
+                >
+                  {p.url ? (
+                    <div
+                      className="absolute inset-0 bg-no-repeat bg-cover bg-center"
+                      style={{ backgroundImage: `url("${p.url}")` }}
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--charcoal)' }}>
+                      <Loader2 size={13} className="animate-spin text-bronze" />
+                    </div>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removePicked(p.id);
+                    }}
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-moon border border-moon/20"
+                    style={{ background: 'var(--wine-deep)' }}
+                    aria-label="移除这张图片"
+                  >
+                    <X size={9} strokeWidth={2.2} />
+                  </button>
+                </div>
+              ))}
+              <span className="flex-none font-mono text-[9px] text-bronze-deep pl-1">
+                {picked.length}/9 张，随文字一同发送
+              </span>
+            </div>
+          )}
           <div className="flex items-end gap-2">
             {/* 图片按钮：压缩后随文字一并发送；不支持图片识别的模型自动略过 */}
             <input
@@ -428,10 +486,10 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
             />
             <button
               onClick={() => imgFileRef.current?.click()}
-              disabled={streaming || imgBusy}
+              disabled={streaming || imgBusy || picked.length >= 9}
               className="w-9 h-9 flex-none flex items-center justify-center rounded-full text-bronze hover:text-candle transition-colors disabled:opacity-30"
               aria-label="附带图片"
-              title="附带图片（不支持图片识别的模型会自动略过）"
+              title="附带图片：选图后先停在输入区，随文字一同发送（不支持图片识别的模型会自动略过）"
             >
               {imgBusy ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={17} strokeWidth={1.6} />}
             </button>
@@ -468,7 +526,7 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
             ) : (
               <button
                 onClick={send}
-                disabled={!input.trim()}
+                disabled={!input.trim() && picked.length === 0}
                 className="w-9 h-9 flex-none flex items-center justify-center rounded-full transition-all disabled:opacity-30"
                 style={{ background: 'var(--wine)' }}
                 aria-label="发送"

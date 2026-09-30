@@ -37,6 +37,7 @@ import {
 } from '@/lib/exportImport';
 import {
   hasWebDavConfig,
+  hasEncryption,
   syncToWebDav,
   normalizeDavUrl,
   BACKUP_FILENAME,
@@ -187,7 +188,13 @@ export function DataPage() {
     setDavBusy(true);
     try {
       const info = await syncToWebDav(cfg, state);
-      showToast(`云备份完成：已上传 ${humanBytes(info.bytes)}`, 'success');
+      const encrypted = hasEncryption(cfg);
+      showToast(
+        encrypted
+          ? `云备份完成：已加密上传 ${humanBytes(info.bytes)}（云端只存密文）`
+          : `云备份完成：已上传 ${humanBytes(info.bytes)}（云端存明文 JSON）`,
+        'success',
+      );
     } catch (e) {
       showToast(`云备份失败：${errMsg(e)}`, 'error');
     } finally {
