@@ -28,6 +28,7 @@ export function ArticleReaderPage() {
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
   const setLightbox = useUIStore((s) => s.setLightbox);
+  const setFocusRequest = useUIStore((s) => s.setFocusRequest);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -224,9 +225,23 @@ export function ArticleReaderPage() {
                 {backlinks.map((b) => (
                   <li key={`${b.kind}-${b.id}`}>
                     <button
-                      onClick={() =>
-                        navigate(b.kind === 'article' ? `/space/article/${b.id}` : '/moments')
-                      }
+                      onClick={() => {
+                        if (b.kind === 'article') {
+                          navigate(`/space/article/${b.id}`);
+                        } else {
+                          // 动态反向链接：带上 focusRequest，让动态页精准滚动定位到这一条
+                          setFocusRequest({
+                            kind: 'moment',
+                            id: b.id,
+                            query: '',
+                            ignoreCase: true,
+                            index: 0,
+                            inTitle: false,
+                            ts: Date.now(),
+                          });
+                          navigate('/moments');
+                        }
+                      }}
                       className="w-full text-left px-3 py-2 rounded-lg border border-bronze/15 hover:border-candle/40 bg-bronze/5 hover:bg-bronze/10 transition-all"
                     >
                       <p className="font-serif text-sm text-paper truncate">{b.title}</p>
