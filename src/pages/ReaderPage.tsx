@@ -8,13 +8,11 @@ import {
   Bookmark,
   Copy,
   Highlighter,
-  MessageSquareQuote,
   Trash2,
   Underline,
   X,
 } from 'lucide-react';
 import { EmptyState } from '@/components/common/EmptyState';
-import { CoreadDrawer } from '@/components/library/CoreadDrawer';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import {
@@ -54,8 +52,6 @@ export function ReaderPage() {
     anchors: BookAnchor[];
   } | null>(null);
   const [marksOpen, setMarksOpen] = useState(false);
-  /** null = 未打开；'' = 打开但没带引用；非空 = 携带这段引用打开 */
-  const [coreadQuote, setCoreadQuote] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
 
   const marks = book?.marks ?? [];
@@ -72,11 +68,10 @@ export function ReaderPage() {
       applyMarksToDom(el, byBlock.get(idx) ?? []);
     });
     if (flashId) {
-      const target = root.querySelector<HTMLElement>(`[data-mark-id="${flashId}"]`);
-      if (target) {
-        target.classList.add('vd-mk-flash');
-        window.setTimeout(() => target.classList.remove('vd-mk-flash'), 1200);
-      }
+      // 一条标注可能被拆成多个 <mark>（跨行内元素），要全部闪
+      const targets = root.querySelectorAll<HTMLElement>(`[data-mark-id="${flashId}"]`);
+      targets.forEach((t) => t.classList.add('vd-mk-flash'));
+      window.setTimeout(() => targets.forEach((t) => t.classList.remove('vd-mk-flash')), 1200);
     }
   }, [marks, blocks, flashId]);
 
@@ -109,7 +104,14 @@ export function ReaderPage() {
       const TOOLBAR_H = 66;
       const need = barBottom + TOOLBAR_H + 8;
       const above = rect.top - 10;
-      const below = above < need;
+      // 触屏设备（手机/平板）一律放到选区**下方**：安卓长按会弹出原生选择工具条，
+      // 它就长在选区上方，我们的工具条放上面会被挡住（用户实测反馈）。
+      // 触屏判定用两个信号：maxTouchPoints（安卓/平板一定 > 0）与 pointer:coarse
+      // （无头仿真里只有后者可能不准，两个取或更稳）
+      const touch =
+        (navigator.maxTouchPoints ?? 0) > 0 ||
+        (window.matchMedia?.('(pointer: coarse)').matches ?? false);
+      const below = touch || above < need;
       const y = below ? Math.min(rect.bottom + 46, window.innerHeight - 12) : above;
       setToolbar({ x, y, anchors, below });
     };
@@ -136,18 +138,32 @@ export function ReaderPage() {
     restoredRef.current = true;
   }, [book, blocks.length]);
 
-  // ── 记录阅读位置：谁在视口里，就记最小的那个块 ──
+  // ── 记录阅读位置 ──
+  // 常规情况：谁在视口里就记最小的那个块（= 你正在看的位置）。
+  // 例外（v4.4.1 修）：滑到最底部时，最后一屏里「最靠上的块」并不是最后一块，
+  // 于是进度永远差几个百分点（实测 44 块的书停在 93%）。所以到底部就直接记最后一块。
   const progressTimer = useRef<number | null>(null);
   useEffect(() => {
     const root = bookRef.current;
     if (!root || !book || !blocks.length) return;
+    const scroller = (scrollRef.current?.closest('.overflow-y-auto') ?? null) as HTMLElement | null;
     const visible = new Set<number>();
-    const flush = () => {
-      if (!visible.size) return;
-      const idx = Math.min(...visible);
+    const write = (idx: number) => {
       const st = useAppStore.getState();
       const cur = st.books.find((b) => b.id === book.id);
       if (cur && cur.lastBlockIndex !== idx) st.setBookProgress(book.id, idx);
+    };
+    const atBottom = () => {
+      if (!scroller) return false;
+      return scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 8;
+    };
+    const flush = () => {
+      if (atBottom()) {
+        write(blocks.length - 1);
+        return;
+      }
+      if (!visible.size) return;
+      write(Math.min(...visible));
     };
     const io = new IntersectionObserver(
       (entries) => {
@@ -157,13 +173,21 @@ export function ReaderPage() {
           else visible.delete(idx);
         }
         if (progressTimer.current) window.clearTimeout(progressTimer.current);
-        progressTimer.current = window.setTimeout(flush, 500);
+        progressTimer.current = window.setTimeout(flush, 300);
       },
       { threshold: 0.01 },
     );
     root.querySelectorAll('[data-block-idx]').forEach((el) => io.observe(el));
+    // 滚动到底的那一刻 IntersectionObserver 可能不再变化，所以自己也听一次 scroll
+    const onScroll = () => {
+      if (!atBottom()) return;
+      if (progressTimer.current) window.clearTimeout(progressTimer.current);
+      progressTimer.current = window.setTimeout(flush, 120);
+    };
+    scroller?.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       io.disconnect();
+      scroller?.removeEventListener('scroll', onScroll);
       if (progressTimer.current) window.clearTimeout(progressTimer.current);
     };
   }, [book?.id, blocks.length]);
@@ -193,13 +217,6 @@ export function ReaderPage() {
         : `已${kind === 'underline' ? '划线' : '高亮'}，收进书签了`,
       'success',
     );
-  };
-
-  const askAi = () => {
-    if (!toolbar) return;
-    const text = toolbar.anchors.map((a) => a.text).join('\n');
-    setCoreadQuote(text);
-    clearSelection();
   };
 
   const copySelection = async () => {
@@ -246,7 +263,7 @@ export function ReaderPage() {
   return (
     <div className="px-4 sm:px-6">
       <div className="max-w-3xl mx-auto pb-8">
-        {/* 本页工具行：返回 + 共读 + 书签（右上角） */}
+        {/* 本页工具行：返回 + 书签（右上角） */}
         <div
           className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-2 flex items-center gap-2"
           style={{ background: 'var(--bar-bg)', backdropFilter: 'blur(16px) saturate(140%)' }}
@@ -264,13 +281,6 @@ export function ReaderPage() {
               {book.charCount} 字 · 读到 {Math.round(progress * 100)}%
             </p>
           </div>
-          <button
-            onClick={() => setCoreadQuote('')}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-pill text-[11px] font-mono tracking-wider bg-bronze/10 text-bronze hover:text-candle transition-colors"
-            aria-label="共读"
-          >
-            <MessageSquareQuote size={12} strokeWidth={1.6} /> 共读
-          </button>
           <button
             onClick={() => setMarksOpen(true)}
             className={clsx(
@@ -293,6 +303,9 @@ export function ReaderPage() {
         <div
           ref={scrollRef}
           className={clsx('vd-book prose-vidaos select-text', book.format === 'txt' && 'vd-book-txt')}
+          // 屏蔽原生上下文菜单/长按菜单（安卓的「复制 / 全选 / 网页搜索」浮层会挡住我们自己的
+          // 工具条）；配合 globals.css 里 .vd-book 的 -webkit-touch-callout: none
+          onContextMenu={(e) => e.preventDefault()}
         >
           <div ref={bookRef}>
             {blocks.map((b) => (
@@ -311,7 +324,7 @@ export function ReaderPage() {
         )}
       </div>
 
-      {/* 选中后的浮动工具条 */}
+      {/* 选中后的浮动工具条（划线 / 高亮 / 复制） */}
       {toolbar && (
         <div
           className={clsx(
@@ -327,7 +340,6 @@ export function ReaderPage() {
           >
             <ToolBtn icon={Underline} label="划线" onClick={() => applyMark('underline')} />
             <ToolBtn icon={Highlighter} label="高亮" onClick={() => applyMark('highlight')} />
-            <ToolBtn icon={MessageSquareQuote} label="问 AI" onClick={askAi} />
             <ToolBtn icon={Copy} label="复制" onClick={() => void copySelection()} />
           </div>
         </div>
@@ -417,16 +429,6 @@ export function ReaderPage() {
             </p>
           </aside>
         </>
-      )}
-
-      {/* 共读抽屉 */}
-      {coreadQuote !== null && (
-        <CoreadDrawer
-          book={book}
-          quote={coreadQuote}
-          onClose={() => setCoreadQuote(null)}
-          onQuoteConsumed={() => setCoreadQuote('')}
-        />
       )}
     </div>
   );

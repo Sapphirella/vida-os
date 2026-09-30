@@ -1,8 +1,9 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-29（v4.4.0：**馆藏上线** —— 书架 + 阅读器（导入 txt/md、划线高亮、引用问 AI 的
-> 共读抽屉）；**碎片整体下线**（数据一并删除）；底栏改 主页/便签/Agent/数据/设置，主页宫格便签位改馆藏）
+> 最后更新：2026-09-29（v4.4.1：**馆藏阅读器三项实测缺陷修复** —— 高亮在浅色主题看不见、
+> 划线后下一行缩进、滑到底进度不足 100%；并按用户要求**移除阅读器内的「问 AI / 共读」入口**；
+> 另修 Agent 接口返回空内容时静默显示「（无内容）」的问题）
 
 ---
 
@@ -15,7 +16,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.4.0**（2026-09-29） |
+ | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.4.1**（2026-09-29） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -101,6 +102,15 @@
   `flex-1 min-h-0 flex flex-col`（flex 压缩）且 padding-bottom 不足。修复：内部 div
   改为 `flex flex-col`（移除 flex-1/min-h-0），`<main>` padding-bottom 调为
   `pb-[calc(80px+env(safe-area-inset-bottom))]`，确保内容完整露出在底栏上方。
+- **v4.4.1（2026-09-29）** —— **馆藏阅读器缺陷修复 + 移除阅读器内 AI 入口**（用户实测反馈）：
+  ① 高亮在浅色主题下几乎不可见 → 改用主题 token `--mark-bg/--mark-fg`（浅色主题会连文字颜色一起变）；
+  ② 电脑端划线/高亮后「下一行文本缩进」→ 包裹方式从 `Range.surroundContents` 改成
+  **按文本节点逐段包裹**（详见第 12 节教训 22）；
+  ③ 滑到底部进度只有 93% → 到底即记最后一块（100%），往回滚会回落；
+  ④ 阅读器内「问 AI / 共读抽屉」按用户要求**整体移除**；
+  ⑤ Agent 聊天回复「（无内容）」→ 接口空返回不再静默（识别推理型模型的 `reasoning_content`、
+  非流式 JSON、Ollama 形状，并把原因写进对话），`max_tokens` 500 → 2048；
+  ⑥ 阅读器内屏蔽原生右键/长按菜单 + 触摸端工具条改到**选区下方**（避开安卓原生浮层）。
 - **v4.4.0（2026-09-29）** —— **馆藏上线、碎片下线**：
   ① **碎片功能整体删除**：`DiaryPage` / `FragmentEntry` / store actions / 全局查找的「碎片」范围 /
   Agent 内置「碎片」虚拟文档 / `.frag-bubble` 样式全部清掉；旧 `fragments` 字段**不迁移、直接丢弃**
@@ -421,20 +431,29 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
 - **正文切块 `parseBook(content, format)`**：txt 按空行切段（段内换行原样保留，靠 `white-space: pre-wrap`
   让 `textContent` 与原文一致）；md 用 `marked.lexer` 逐 token 渲染成块（**一个 token = 一块**），
   每块单独过 `sanitizeHtml`。**块顺序就是标注锚点的坐标系，所以 parseBook 必须是确定性的**。
-- **标注锚点 = {块索引, 块内字符偏移}**（借鉴参考项目 IB 的共读/批注做法，用 React 架构重写）：
-  选区用 `Range` + `document.createTreeWalker` 算块内偏移（天然处理嵌套行内标签，如 `**加粗**` 里的文字），
-  **跨段选择自动拆成多条锚点**，各锚各段。**不往正文 HTML 里插标记**：渲染完成后用 DOM Range 把
-  `<mark>` 包回去（`applyMarksToDom`，**从后往前包**——`textContent` 长度不变，所以先包的不会污染后包的偏移）；
+- **标注锚点 = {块索引, 块内字符偏移}**（借鉴参考项目 IB 的批注做法，用 React 架构重写）：
+  选区用 `Range` + `document.createTreeWalker` 算块内偏移（天然处理嵌套行内标签），
+  **跨段选择自动拆成多条锚点**，各锚各段。**不往正文 HTML 里插标记**：渲染完成后再把 `<mark>` 包回去
+  （**从后往前包**——包裹只拆 Text 节点、不改 `textContent` 长度，先包的不会污染后包的偏移）；
   重新套标注前必须先 `resetBlockDom` 还原原始 HTML（React 不会重写 `dangerouslySetInnerHTML`，
   不还原就会越包越多）。
+- **包裹方式：按文本节点逐段包，别用 `range.surroundContents`**（v4.4.1 修，见第 12 节教训 22）：
+  md 书配了 `breaks: true`，软换行渲染成 `<br>`，列表块还有 `<li>`；选区跨过这类元素时
+  `surroundContents` 会抛异常，兜底的 `extractContents` 会把**块级结构整段克隆** →
+  电脑端「高亮后下一行缩进」。现在 `wrapRange` 只做 `splitText` + 换父节点，
+  一条标注因此可能对应**多个** `<mark>`（同一个 `data-mark-id`，查询要 findAll）。
 - **浮动工具条**：监听 `selectionchange` → `anchorsFromSelection` 拿到锚点 → 现场量位置。
   两个必须记住的点：① 位置判断要用**现场量的顶栏底边 + 实测的工具条高度（63px）**，拍 44px 会让它
   压住固定顶栏（实测踩到过）；② 按钮要 `onMouseDown={e => e.preventDefault()}`，否则点按钮时选区先被清掉。
 - **书签面板**：`sortMarks` 按正文顺序排；点一条 `scrollIntoView`（CSS 给 `[data-block-idx]` 留了
   `scroll-margin-top` 避开顶栏与 sticky 工具行）+ `vd-mk-flash` 闪烁；可逐条删除。
-- **共读抽屉**：复用 `lib/agentTurn.ts` —— 与 Agent 会话页**同一份**回复流程（流式 / 记忆写入 /
-  `[[读:]]` 工具标记循环），所以两处行为不会走样。引用以 Markdown 引用块写进用户消息
-  （既显示清楚，也留在会话历史里让 AI 记得在引用什么）；`books[].coreadSessionId` 记住本书用哪个会话。
+- **工具条位置**：触屏设备（`navigator.maxTouchPoints > 0` 或 `pointer: coarse`）**一律放在选区下方** ——
+  安卓长按会弹原生选择浮层，它长在选区上方，放上面会被挡（用户实测）。桌面端只在「上方放不下」时才翻到
+  下方（阈值 = 现场量的顶栏底边 + 实测工具条高度 63px）。
+- **不弹原生菜单**：`.vd-book` 上 `-webkit-touch-callout: none` + 容器 `onContextMenu` preventDefault，
+  **文本选择保留**（划线要靠它）；取舍：阅读器内的链接失去长按预览。
+- **AI 入口**：v4.4 做过「选中 → 问 AI → 共读抽屉」（复用 `lib/agentTurn.ts`），
+  **v4.4.1 按用户要求整体移除**（体感不佳）。`agentTurn.ts` 保留，现在只有 Agent 会话页一个调用方。
 - **阅读位置**：`IntersectionObserver` 取「当前可见块里最小的索引」，debounce 500ms 写 store；
   `setBookProgress` **故意不动 `updatedAt`**（否则翻两页就把书架排序刷成最新）；
   进页面时 `scrollIntoView` 回到上次那块。
@@ -588,10 +607,11 @@ VidaOS/
   标注变化都要重扫所有块、IntersectionObserver 也要 observe 上千个块；真正的解法是虚拟滚动 + 分页。
 - **馆藏 · 碎片遗留图片没有回收**：碎片功能删掉后，它引用过的图片 blob 仍留在 `files` 表里
   无人引用（**没自动删，怕误删**）。要清需要一次「孤儿文件回收」（用 `collectFileIds` 的反集）。
-- **馆藏 · 移动端长按选中受系统菜单影响**：iOS / Android 会弹自带的「拷贝 / 查询」气泡，
-  本项目的工具条与它并存（不是替换）；真机手势体验**未复测**。
-- **共读抽屉的会话选择器较朴素**：只有「新建」+ 按更新时间列的会话，没有搜索 / 分组；
-  会话切换靠左上角返回箭头。
+- **馆藏 · 阅读器内已屏蔽原生菜单，但真机未复测**：Chromium 里实测 `contextmenu` 已取消默认行为，
+  触摸端工具条也改到了选区下方（避开安卓原生浮层）；但 **iOS / 安卓真机的长按选择行为没有实测过**，
+  系统自带的「拷贝 / 查询」浮层仍可能与我们的工具条同时出现。
+- **Agent 接口兼容性**：v4.4.1 起能识别 OpenAI SSE、非流式 JSON、Ollama 形状，并在空返回时给出原因；
+  但**只支持 OpenAI 兼容协议**，其它协议（Anthropic / Gemini 原生）仍会报错。
 - 低优先级设想：文章加密、静态站点导出、自定义主题色、馆藏目录（章节目录跳转）。
 
 ### 8.2 平台 / 外部限制（如实告知用户）
@@ -857,10 +877,50 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
     它是纯图标按钮（`aria-label="发送"`、无文字），`textContent` 是空的。
     同理，`innerText` 找按钮还会踩 Tailwind `uppercase` 的坑（第 9 条）。
     **探针定位一律优先 `aria-label` / `data-*` 这类为测试存在的属性**，其次才用文案。
+22. **`range.surroundContents` / `extractContents` 会悄悄克隆块级结构（v4.4.1 实测）**：
+    阅读器的划线原本用「整段 Range 包一个 `<mark>`」。md 书开了 `breaks: true`，
+    软换行渲染成 `<br>`；列表块里还有 `<li>` —— 选区跨过这类元素时 `surroundContents` **抛异常**，
+    我写的兜底 `extractContents()` 会把被选中的**元素结构整段复制**出来再塞进 mark，
+    于是出现「高亮/划线之后下一行文本缩进」（列表还会多套一层）。
+    移动端没暴露只是因为长按往往只选到一行内。
+    正确做法：**按文本节点逐段包裹**（`splitText` + 换父节点），只碰 Text 节点、永不改元素结构；
+    代价是一条标注会对应多个 `<mark>`，查询要 findAll。
+    自查指标：标注前后**比对块高与每一行的左边界**（我做的是逐行 `Range.getBoundingClientRect()`）
+    + 比对子元素标签序列，三者不变才算没破坏版式。
+23. **「（无内容）」这种静默兜底会把真实故障藏起来（v4.4.1）**：用户配好 API 后每轮都收到
+    「（无内容）」，而真因是接口回了 HTTP 200 但正文为空（推理型模型的正文落在 `reasoning_content`、
+    或服务不支持流式、或字段形状不同）。旧实现把空结果直接写成一句无信息量的占位文案，
+    用户完全无从下手。**凡是「兜底显示成某种空值」，都要同时说明原因与下一步怎么办**；
+    修法是：多认几种响应形状 + 空返回就抛出可操作的原因 + 把 `max_tokens` 从 500 提到 2048
+    （推理型模型可能把额度全花在推理上）。另外：`max_tokens` 之外的请求参数（如 `presence_penalty`）
+    在部分服务上会直接 400，错误信息要原样透出给用户。
 
 ---
 
 ## 13. 变更日志
+
+### [v4.4.1] - 2026-09-29 —— 馆藏阅读器 6 项实测缺陷修复（含移除阅读器内 AI 入口）
+- **高亮在浅色主题下不可见**：`.vd-mk-highlight` 原来写死 `rgba(201,160,99,.26)`，日间主题上几乎看不出；
+  改用项目既有的主题 token `--mark-bg` / `--mark-fg`（三套主题都调过，浅色主题连文字颜色一起变）。
+  实测：计算样式 `background: rgb(102 98 38 / 0.3)` + `color: rgb(87,85,39)`，元素 157×22。
+- **划线/高亮后下一行缩进**：根因见第 12 节教训 22 → 改成按文本节点逐段包裹。
+  实测：跨 `<strong>` + `<br>` 的选区（4 个 `<mark>`）与跨 `<li>` 的选区，标注前后
+  **块高不变（101px / 72px）、每一行左边界不变（256px）、子元素结构无克隆**。
+- **滑到底部进度 93%**：到最后一块时「最靠上的可见块」不是最后一块；改为**滚动到底即记最后一块**。
+  实测：60 段的书初始 0% → 滑到底 100%（lastBlockIndex 59）→ 回滚到中间 51%。
+- **移除阅读器内的「问 AI / 共读」**（用户反馈体感差）：工具条只剩 划线 / 高亮 / 复制，
+  同时删掉头部共读入口、`CoreadDrawer`、`quote` 状态、`LibraryBook.coreadSessionId` 字段。
+  实测：工具条按钮 = [划线, 高亮, 复制]，页面上无「问 AI」「共读」字样、无抽屉。
+- **Agent 回复「（无内容）」**：`streamChatCompletion` 加固 —— `max_tokens` 500→2048；
+  除 `delta.content` 外还识别 `message.content` / `text` / Ollama 形状；
+  用 `raw` 累积原文兜底非流式响应；**空返回不再静默**，而是抛出可操作的原因。
+  用本地假接口（SSE / 推理型 / 非流式多行 JSON / Ollama / 空）验证：解析层 5 种形态全部符合预期；
+  端到端在 Agent 页真发消息：正常接口与非流式接口都拿到回复，推理型与空内容都得到明确提示，
+  **「（无内容）」一次都没出现**。
+- **手机端长按弹原生菜单挡住功能键**：`.vd-book` 加 `-webkit-touch-callout: none`、
+  容器 `onContextMenu` preventDefault（Chromium 实测事件已被取消默认行为），
+  并且**触摸端工具条一律放到选区下方**（安卓原生浮层在选区上方）。
+  实测：触摸仿真下工具条 3 个按钮、位于选区下方且在视口内，划线正常落库。**真机未复测。**
 
 ### [v4.4.0] - 2026-09-29 —— 馆藏上线（书架 + 阅读器 + 共读），碎片整体下线
 - **碎片整体删除**（`pages/DiaryPage.tsx` 删除 + 7 个文件清扫）：`FragmentEntry` 类型、

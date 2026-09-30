@@ -226,22 +226,6 @@ export function anchorsFromSelection(root: HTMLElement): BookAnchor[] {
 // 锚点 → DOM（把 <mark> 包回去）
 // ============================================================
 
-/** 在块内定位「第 offset 个字符」所在的文本节点与节点内偏移 */
-function locate(root: HTMLElement, offset: number): { node: Text; offset: number } | null {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let acc = 0;
-  let last: Text | null = null;
-  let n: Node | null = walker.nextNode();
-  while (n) {
-    const t = n as Text;
-    last = t;
-    if (acc + t.data.length >= offset) return { node: t, offset: offset - acc };
-    acc += t.data.length;
-    n = walker.nextNode();
-  }
-  return last ? { node: last, offset: last.data.length } : null;
-}
-
 export function markClassOf(kind: BookMark['kind']): string {
   return kind === 'underline' ? 'vd-mk-underline' : 'vd-mk-highlight';
 }
@@ -252,9 +236,54 @@ export function resetBlockDom(blockEl: HTMLElement, html: string): void {
 }
 
 /**
+ * 把块内 [start,end) 这段**按文本节点切开、逐段包 <mark>**。
+ *
+ * 为什么不直接用 `range.surroundContents`（v4.4.1 修掉的真实缺陷）：
+ *   - `marked` 配了 `breaks: true`，md 书里的软换行会渲染成 `<br>`；列表块还有 `<li>`。
+ *     选区一旦跨过这类元素边界，`surroundContents` 就抛异常；
+ *   - 兜底的 `range.extractContents()` 会把**块级结构整段克隆**出来再塞进 mark 里 ——
+ *     用户在电脑端看到的「高亮后下一行文本缩进」就是这个（移动端长按往往只选到一行，所以没暴露）。
+ * 逐文本节点包裹只做 splitText + 换父节点，永远不碰元素结构，因此：
+ *   - 不会缩进、不会丢段落结构；
+ *   - 跨 `<br>` / `<strong>` / `<li>` 都能正确上色；
+ *   - 一条标注可能对应多个 <mark>（都带同一个 data-mark-id），查询时要 findAll 而不是 findOne。
+ */
+function wrapRange(blockEl: HTMLElement, start: number, end: number, m: BookMark): void {
+  const targets: { node: Text; from: number; to: number }[] = [];
+  const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
+  let acc = 0;
+  let n: Node | null = walker.nextNode();
+  while (n) {
+    const t = n as Text;
+    const nodeStart = acc;
+    const nodeEnd = acc + t.data.length;
+    const from = Math.max(start, nodeStart);
+    const to = Math.min(end, nodeEnd);
+    if (to > from) targets.push({ node: t, from: from - nodeStart, to: to - nodeStart });
+    acc = nodeEnd;
+    if (acc >= end) break;
+    n = walker.nextNode();
+  }
+  for (const t of targets) {
+    try {
+      let node = t.node;
+      // splitText(n) 把节点切成 [0,n) 与 [n,…)，返回后半段
+      if (t.to < node.data.length) node.splitText(t.to);
+      const piece = t.from > 0 ? node.splitText(t.from) : node;
+      const el = document.createElement('mark');
+      el.className = markClassOf(m.kind);
+      el.dataset.markId = m.id;
+      piece.parentNode?.replaceChild(el, piece);
+      el.appendChild(piece);
+    } catch {
+      /* 单个文本节点失败不影响其它节点 */
+    }
+  }
+}
+
+/**
  * 把本书在该块上的标注包成 <mark>。
- * 从后往前包：包完后面的不会改变前面锚点的偏移（textContent 长度不变），
- * 所以只需要正序算好的 start/end 就够，不会互相污染。
+ * 从后往前包：包裹只拆 Text 节点、不改 textContent 长度，所以先包的不会影响后包的偏移。
  */
 export function applyMarksToDom(blockEl: HTMLElement, marks: BookMark[]): void {
   if (!marks.length) return;
@@ -264,26 +293,7 @@ export function applyMarksToDom(blockEl: HTMLElement, marks: BookMark[]): void {
     const start = Math.max(0, Math.min(m.start, total));
     const end = Math.max(start, Math.min(m.end, total));
     if (end <= start) continue;
-    const s = locate(blockEl, start);
-    const e = locate(blockEl, end);
-    if (!s || !e) continue;
-    const range = document.createRange();
-    try {
-      range.setStart(s.node, s.offset);
-      range.setEnd(e.node, e.offset);
-    } catch {
-      continue;
-    }
-    const el = document.createElement('mark');
-    el.className = markClassOf(m.kind);
-    el.dataset.markId = m.id;
-    try {
-      range.surroundContents(el);
-    } catch {
-      // 选区跨了元素边界（比如包着链接）时 surroundContents 会抛，改成先摘出来再包
-      el.appendChild(range.extractContents());
-      range.insertNode(el);
-    }
+    wrapRange(blockEl, start, end, m);
   }
 }
 

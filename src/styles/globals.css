@@ -888,12 +888,13 @@ textarea, input, [contenteditable] {
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
-/* 高亮：琥珀底色，暗色主题下降低透明度避免刺眼 */
+/* 高亮：直接复用查找高亮那套主题 token（--mark-bg / --mark-fg）——
+   三套主题都各自调过，浅色主题下连文字颜色一起变，不会「看不出来」。
+   （v4.4.1 修：原来写死 rgba(201,160,99,.26)，日间主题上几乎不可见，用户报「电脑端高亮未显示」。） */
 .vd-mk-highlight {
-  background: rgba(201, 160, 99, 0.26);
-  color: inherit;
-  border-radius: 2px;
-  box-shadow: inset 0 -1px 0 rgba(201, 160, 99, 0.35);
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  border-radius: 3px;
 }
 /* 从书签跳过来时闪一下（两种标注通用，所以用描边而不是改底色） */
 .vd-mk-flash {
@@ -909,6 +910,16 @@ textarea, input, [contenteditable] {
 /* 阅读器里的选中色：跟随主题，别用浏览器默认蓝 */
 .vd-book ::selection {
   background: rgba(106, 8, 14, 0.35);
+}
+/* 阅读器内**不弹原生菜单**：安卓长按会弹「复制 / 全选 / 网页搜索」浮层挡住我们自己的工具条
+   （用户实测反馈）。touch-callout 关掉 iOS 的呼出，ReaderPage 上的 onContextMenu
+   preventDefault 关掉安卓的上下文菜单；**文本选择本身保留**（划线要靠它）。
+   取舍：阅读器内的链接会失去「长按预览」。 */
+.vd-book,
+.vd-book a {
+  -webkit-touch-callout: none;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* 工具：单行省略 */

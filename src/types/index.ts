@@ -131,8 +131,6 @@ export interface LibraryBook {
   lastBlockIndex?: number;
   /** 本书的划线 / 高亮（阅读器右上角「书签」面板的数据源） */
   marks: BookMark[];
-  /** 共读抽屉上次用的 Agent 会话 id（下次直接续上） */
-  coreadSessionId?: string;
   createdAt: number;
   updatedAt: number;
 }

@@ -1,10 +1,9 @@
 // 一轮 Agent 回复：流式输出 + 记忆写入 + 工具标记（读资料库/馆藏/记忆）循环
 //
-// 从 AgentChatView 里原样抽出来，供两处共用：
-//   - Agent 会话页（`AgentChatView`）
-//   - 馆藏阅读器的「共读」抽屉（`CoreadDrawer`）
-// 抽出来的动机：这段逻辑包含流式续写、`[[记:]]` 记忆写入、`[[读:]]`/`[[忆:]]` 工具循环与
-// 错误兜底，两处各写一份必然会走样（项目里已经吃过「两处实现分叉」的亏）。
+// 从 AgentChatView 里原样抽出来单独成模块：这段逻辑包含流式续写、`[[记:]]` 记忆写入、
+// `[[读:]]`/`[[忆:]]` 工具循环与错误兜底，混在组件里既难读也难复用。
+// （v4.4 它曾被馆藏阅读器的「共读」抽屉共用；v4.4.1 用户反馈该入口体感差、已整体下线，
+//   现在只有 Agent 会话页一个调用方 —— 保留模块是因为它把「一轮回复」讲清楚了。）
 //
 // 本模块只通过 `useAppStore.getState()` 读写数据，不持有任何 React 状态；
 // UI 需要的状态（流式光标、停止按钮）由调用方通过回调/AbortController 接管。
@@ -139,7 +138,17 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<void> {
       }
       break;
     }
-    useAppStore.getState().replaceAgentMessage(sessionId, msgId, { content: finalText || '（无内容）' });
+    const final = finalText.trim();
+    if (!final) {
+      // 别再静默写「（无内容）」：说明白发生了什么，用户才知道下一步怎么办
+      useAppStore
+        .getState()
+        .appendAgentMessage(sessionId, {
+          role: 'sys',
+          content: '模型这轮只输出了工具标记、没有正文（已按标记去读取资料）。可以再问一次，或换个模型。',
+        });
+    }
+    useAppStore.getState().replaceAgentMessage(sessionId, msgId, { content: final || '（无内容）' });
   } catch (e) {
     const err = e as { name?: string; message?: string };
     if (err?.name === 'AbortError') return;

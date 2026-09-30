@@ -222,7 +222,9 @@ export async function streamChatCompletion(
       messages,
       stream: true,
       temperature: 0.9,
-      max_tokens: 500,
+      // 500 太小：推理型模型（deepseek-reasoner / o1 类）可能把额度全花在推理上，
+      // 最终正文一个字符都没有 —— 以前会静默变成「（无内容）」（v4.4.1 修）
+      max_tokens: 2048,
       presence_penalty: 0.3,
     }),
     signal,
@@ -241,11 +243,45 @@ export async function streamChatCompletion(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
+  /** 原始响应全文：非流式（或 SSE 行里没有可识别字段）时用它兜底 */
+  let raw = '';
   let acc = '';
+  /** 推理型模型把内容放在 reasoning_content —— 只用来解释「正文为什么是空的」 */
+  let reasoning = '';
+
+  /** 从一条 JSON 里尽量把正文抠出来（兼容 OpenAI / 类 OpenAI / Ollama 几种形状） */
+  const pickContent = (j: unknown): { text?: string; think?: string } => {
+    const o = j as {
+      choices?: Array<{
+        delta?: { content?: unknown; reasoning_content?: unknown };
+        message?: { content?: unknown };
+        text?: unknown;
+      }>;
+      message?: { content?: unknown };
+      response?: unknown;
+      content?: unknown;
+    };
+    const c = o?.choices?.[0];
+    const delta = c?.delta;
+    const text =
+      (typeof delta?.content === 'string' && delta.content) ||
+      (typeof c?.message?.content === 'string' && c.message.content) ||
+      (typeof c?.text === 'string' && c.text) ||
+      (typeof o?.message?.content === 'string' && o.message.content) ||
+      (typeof o?.response === 'string' && o.response) ||
+      (typeof o?.content === 'string' && o.content) ||
+      '';
+    const think =
+      (typeof delta?.reasoning_content === 'string' && delta.reasoning_content) || '';
+    return { text: text || undefined, think: think || undefined };
+  };
+
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += decoder.decode(value, { stream: true });
+    const chunk = decoder.decode(value, { stream: true });
+    raw += chunk;
+    buf += chunk;
     let nl: number;
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl).trim();
@@ -254,10 +290,10 @@ export async function streamChatCompletion(
       const data = line.slice(5).trim();
       if (data === '[DONE]') continue;
       try {
-        const j = JSON.parse(data);
-        const d = j.choices?.[0]?.delta?.content;
-        if (d) {
-          acc += d;
+        const picked = pickContent(JSON.parse(data));
+        if (picked.think) reasoning += picked.think;
+        if (picked.text) {
+          acc += picked.text;
           onAcc(acc);
         }
       } catch {
@@ -265,14 +301,31 @@ export async function streamChatCompletion(
       }
     }
   }
-  // 兼容非流式响应（一次返回完整 JSON）
+
+  // 兜底：整段响应可能是一次性 JSON（服务不支持流式），或用了别的字段名
   if (!acc) {
     try {
-      const j = JSON.parse(buf);
-      acc = j.choices?.[0]?.message?.content ?? '';
+      const picked = pickContent(JSON.parse(raw));
+      if (picked.think) reasoning += picked.think;
+      if (picked.text) {
+        acc = picked.text;
+        onAcc(acc);
+      }
     } catch {
       /* 忽略 */
     }
+  }
+
+  if (!acc.trim()) {
+    // 绝不静默返回空串：上层会把它显示成「（无内容）」，用户完全不知道哪里出了问题
+    if (reasoning.trim()) {
+      throw new Error(
+        '接口只返回了推理内容、没有正文。多半用了推理型模型（如 deepseek-reasoner）—— 换成对话模型（如 deepseek-chat）再试。',
+      );
+    }
+    throw new Error(
+      '接口返回了空内容（HTTP 200 但没有可识别的正文）。检查模型名是否正确、该服务是否支持 stream 流式返回。',
+    );
   }
   return acc;
 }
