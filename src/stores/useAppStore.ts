@@ -104,6 +104,8 @@ interface Actions {
   deleteBookMark: (bookId: string, markId: string) => void;
   /** 记录阅读位置（连续滚动，下次接着读） */
   setBookProgress: (bookId: string, lastBlockIndex: number) => void;
+  /** 打开阅读器时更新「最近阅读时间」（书架排序依据），不触碰 updatedAt */
+  touchBookLastRead: (bookId: string) => void;
 
   // Agent：会话
   createAgentSession: (title?: string) => string;
@@ -542,18 +544,41 @@ export const useAppStore = create<Store>((set, get) => ({
     persist(get());
   },
   removeCategory: (which, name) => {
-    set((s) => ({
-      categories: {
-        ...s.categories,
-        [which]: s.categories[which].filter((c) => c !== name),
-      },
-    }));
+    set((s) => {
+      const base = {
+        categories: {
+          ...s.categories,
+          [which]: s.categories[which].filter((c) => c !== name),
+        },
+      };
+      // 删除书籍标签时，把书里的该标签一并清掉（筛选结果与数据一致）
+      if (which === 'book') {
+        return {
+          ...base,
+          books: s.books.map((b) =>
+            b.tags?.includes(name) ? { ...b, tags: b.tags.filter((t) => t !== name) } : b,
+          ),
+        };
+      }
+      return base;
+    });
     persist(get());
   },
   renameCategory: (which, oldName, newName) => {
     set((s) => {
       if (!s.categories[which].includes(oldName)) return s;
       const list = s.categories[which].map((c) => (c === oldName ? newName : c));
+      if (which === 'book') {
+        // 书籍标签重命名：同步每本书 tags 里的旧名
+        return {
+          categories: { ...s.categories, [which]: list },
+          books: s.books.map((b) =>
+            b.tags?.includes(oldName)
+              ? { ...b, tags: b.tags.map((t) => (t === oldName ? newName : t)) }
+              : b,
+          ),
+        };
+      }
       // 同步 note.category
       const noteKey = which as 'inspiration' | 'schedule' | 'todo';
       const updatedNotes = s.notes[noteKey].map((n: any) =>
@@ -644,6 +669,14 @@ export const useAppStore = create<Store>((set, get) => ({
     // 不要在这里动 updatedAt —— 否则书架排序会被「翻了几页」刷成最新
     set((s) => ({
       books: s.books.map((b) => (b.id === bookId ? { ...b, lastBlockIndex } : b)),
+    }));
+    persist(get());
+  },
+  touchBookLastRead: (bookId) => {
+    set((s) => ({
+      books: s.books.map((b) =>
+        b.id === bookId ? { ...b, lastReadAt: now() } : b,
+      ),
     }));
     persist(get());
   },

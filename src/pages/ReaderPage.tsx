@@ -34,6 +34,7 @@ export function ReaderPage() {
   const book = useAppStore((s) => s.books.find((b) => b.id === id));
   const addBookMark = useAppStore((s) => s.addBookMark);
   const deleteBookMark = useAppStore((s) => s.deleteBookMark);
+  const touchBookLastRead = useAppStore((s) => s.touchBookLastRead);
   const showToast = useUIStore((s) => s.showToast);
 
   const content = book?.content ?? '';
@@ -125,6 +126,12 @@ export function ReaderPage() {
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => scroller.removeEventListener('scroll', onScroll);
   }, []);
+
+  // ── 打开这本书：记「最近阅读时间」（书架按此排序/置顶区排序） ──
+  useEffect(() => {
+    if (!book) return;
+    touchBookLastRead(book.id);
+  }, [book?.id, touchBookLastRead]);
 
   // ── 恢复上次读到的位置（只在进页面时执行一次） ──
   useEffect(() => {

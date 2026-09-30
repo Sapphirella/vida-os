@@ -129,6 +129,12 @@ export interface LibraryBook {
   charCount: number;
   /** 上次读到的块索引 —— 连续滚动，下次打开接着读 */
   lastBlockIndex?: number;
+  /** 最近阅读时间戳（打开阅读器时更新；书架默认按此排序） */
+  lastReadAt?: number;
+  /** 置顶（可多本；置顶区内部仍按最近阅读排序） */
+  pinned?: boolean;
+  /** 标签（一本书可有多个；标签名集合见 categories.book） */
+  tags?: string[];
   /** 本书的划线 / 高亮（阅读器右上角「书签」面板的数据源） */
   marks: BookMark[];
   createdAt: number;
@@ -186,6 +192,8 @@ export interface Categories {
   inspiration: string[];
   schedule: string[];
   todo: string[];
+  /** 书籍标签（书架分类，一本书可多标签） */
+  book: string[];
 }
 
 /** WebDAV 云同步配置（如坚果云 dav.jianguoyun.com） */

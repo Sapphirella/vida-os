@@ -61,6 +61,12 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
     ...r,
     version: 3,
     // 旧版本含内置音景轨道（WebAudio 合成，无实体文件），新版已移除
+    categories: {
+      ...d.categories,
+      ...(r.categories ?? {}),
+      // v4.4.2：书籍标签桶 —— 旧数据没有时补空数组
+      book: [...(r.categories?.book ?? d.categories.book ?? [])],
+    },
     tracks: (r.tracks ?? []).filter((t) => !(t as { builtin?: unknown }).builtin),
     // 信箱功能已移除（v4 数据模型）：清理指向已删除信件的收藏
     favorites: (r.favorites ?? []).filter((f) => (f.refType as string) !== 'letter'),
@@ -83,6 +89,8 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
       marks: b.marks ?? [],
       charCount: b.charCount ?? b.content?.length ?? 0,
       format: b.format === 'md' ? 'md' : 'txt',
+      pinned: b.pinned ?? false,
+      tags: b.tags ?? [],
     })),
     agentSessions: r.agentSessions ?? [],
     agentConfig: { ...d.agentConfig, ...(r.agentConfig ?? {}) },
@@ -144,6 +152,7 @@ export function defaultState(): AppState {
       inspiration: ['随想', '句子', '梦'],
       schedule: ['生活', '工作', '学习'],
       todo: ['生活', '工作', '学习'],
+      book: [],
     },
     tracks: [],
     // 馆藏（v4.4）：碎片流已整体移除，这一格换成书架
