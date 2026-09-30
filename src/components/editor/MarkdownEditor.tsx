@@ -83,6 +83,8 @@ export function MarkdownEditor({
   const [tagInput, setTagInput] = useState('');
   // 动态的发布时间：新建时默认当前时间，可往前调
   const [createdAt, setCreatedAt] = useState<number>(initialCreatedAt ?? Date.now());
+  /** 动态发布时间输入框的 ref：保存时直接从输入框读取最终值，不受 onChange 中间态影响 */
+  const dtRef = useRef<HTMLInputElement>(null);
   /** 拖拽排序中的源下标（桌面 HTML5 拖拽） */
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [mode_, setMode] = useState<'edit' | 'preview'>('edit');
@@ -232,6 +234,13 @@ export function MarkdownEditor({
       showToast('请填写内容', 'error');
       return;
     }
+    // 动态时间：以输入框当前显示的值为准（onChange 解析成功的中间态可能被跳过，
+    // 保存时直接读 DOM 最终值最可靠；解析失败才回退到 state）
+    let finalCreatedAt = createdAt;
+    if (mode === 'moment' && dtRef.current?.value) {
+      const t = new Date(dtRef.current.value).getTime();
+      if (!Number.isNaN(t)) finalCreatedAt = t;
+    }
     // 备选区图片 ≠ 插入：只有正文里用 fileRef 引用的图才在文章里展示。
     // 未插入的备选图不删除、不丢弃，原样保留在备选区（下次打开编辑器还能看到，随时插入）。
     const inline = new Set(collectInlineImageIds(content));
@@ -248,7 +257,7 @@ export function MarkdownEditor({
       imageIds,
       collectionId,
       tags,
-      ...(mode === 'moment' ? { createdAt } : {}),
+      ...(mode === 'moment' ? { createdAt: finalCreatedAt } : {}),
     });
   };
 
@@ -325,6 +334,7 @@ export function MarkdownEditor({
             {/* 非受控：逐段修改日期时中间态不会被 React 拉回旧值，
                 只有最终完整时间被解析成功才写入状态，一次就能保存成功 */}
             <input
+              ref={dtRef}
               type="datetime-local"
               defaultValue={formatDate(createdAt, 'YYYY-MM-DDTHH:mm')}
               onChange={(e) => {
