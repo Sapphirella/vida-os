@@ -34,7 +34,6 @@ import type { LibraryBook } from '@/types';
 
 export function LibraryPage() {
   const books = useAppStore((s) => s.books);
-  const categories = useAppStore((s) => s.categories.book);
   const addBook = useAppStore((s) => s.addBook);
   const updateBook = useAppStore((s) => s.updateBook);
   const deleteBook = useAppStore((s) => s.deleteBook);
@@ -181,23 +180,7 @@ export function LibraryPage() {
   const openBookTags = (book: LibraryBook) => {
     showModal({
       title: `《${book.title}》的标签`,
-      content: (
-        <BookTagsPanel
-          book={book}
-          allTags={categories}
-          onToggle={(tag) => {
-            const has = book.tags?.includes(tag) ?? false;
-            const tags = has
-              ? (book.tags ?? []).filter((t) => t !== tag)
-              : [...(book.tags ?? []), tag];
-            updateBook(book.id, { tags });
-          }}
-          onCreate={(name) => {
-            useAppStore.getState().addCategory('book', name);
-            updateBook(book.id, { tags: [...(book.tags ?? []), name] });
-          }}
-        />
-      ),
+      content: <BookTagsPanel bookId={book.id} />,
     });
   };
 
@@ -378,21 +361,26 @@ function BookCard({ book, onMenu }: { book: LibraryBook; onMenu: (book: LibraryB
   );
 }
 
-/** 标签面板：全部标签多选（点一下切换）；「+」新建的标签直接赋给本书 */
-function BookTagsPanel({
-  book,
-  allTags,
-  onToggle,
-  onCreate,
-}: {
-  book: LibraryBook;
-  allTags: string[];
-  onToggle: (tag: string) => void;
-  onCreate: (name: string) => void;
-}) {
+/** 标签面板：全部标签多选（点一下切换）；「+」新建的标签直接赋给本书。
+ * 数据实时订阅 store（不传快照）——新建的标签立刻出现在列表里，避免误以为没建上而重复创建。 */
+function BookTagsPanel({ bookId }: { bookId: string }) {
+  const book = useAppStore((s) => s.books.find((b) => b.id === bookId));
+  const allTags = useAppStore((s) => s.categories.book);
+  const updateBook = useAppStore((s) => s.updateBook);
+  const addCategory = useAppStore((s) => s.addCategory);
   const [adding, setAdding] = useState(false);
   const [newValue, setNewValue] = useState('');
+  if (!book) return null;
   const tags = book.tags ?? [];
+
+  const toggle = (tag: string) => {
+    const has = tags.includes(tag);
+    updateBook(book.id, { tags: has ? tags.filter((t) => t !== tag) : [...tags, tag] });
+  };
+  const create = (name: string) => {
+    addCategory('book', name);
+    updateBook(book.id, { tags: [...tags, name] });
+  };
   return (
     <div className="space-y-3">
       <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
@@ -407,7 +395,7 @@ function BookTagsPanel({
           return (
             <button
               key={t}
-              onClick={() => onToggle(t)}
+              onClick={() => toggle(t)}
               className={on ? 'tag tag-wine' : 'tag hover:brightness-110'}
             >
               <TagIcon size={10} strokeWidth={1.6} />
@@ -425,7 +413,7 @@ function BookTagsPanel({
             onChange={(e) => setNewValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newValue.trim()) {
-                onCreate(newValue.trim());
+                create(newValue.trim());
                 setNewValue('');
                 setAdding(false);
               } else if (e.key === 'Escape') {
@@ -438,7 +426,7 @@ function BookTagsPanel({
           <button
             onClick={() => {
               if (newValue.trim()) {
-                onCreate(newValue.trim());
+                create(newValue.trim());
                 setNewValue('');
                 setAdding(false);
               }
