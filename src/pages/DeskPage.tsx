@@ -2,6 +2,7 @@ import { ClockHeader } from '@/components/home/ClockHeader';
 import { FeatureGrid } from '@/components/home/FeatureGrid';
 import { CalendarCard } from '@/components/home/CalendarCard';
 import { DayScheduleCard } from '@/components/home/DayScheduleCard';
+import { DayOutputCard } from '@/components/home/DayOutputCard';
 import { TodoSummaryCard } from '@/components/home/TodoSummaryCard';
 import { MusicPlayerCard } from '@/components/home/MusicPlayerCard';
 
@@ -23,6 +24,11 @@ export function DeskPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <CalendarCard />
             <DayScheduleCard />
+          </div>
+
+          {/* 当日产出：选中日期发布的文章 / 动态 / 灵感（跟随 selected 联动） */}
+          <div className="mt-3">
+            <DayOutputCard />
           </div>
         </div>
       </section>
