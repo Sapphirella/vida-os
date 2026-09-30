@@ -695,18 +695,18 @@ textarea, input, [contenteditable] {
   border-color: rgb(var(--wine-rgb) / 0.3);
 }
 
-/* 视图过渡 */
+/* 视图过渡：只用 opacity。
+   不能带 transform —— transform 会劫持容器内 position:fixed 元素（如 FAB）
+   的包含块，动画结束后 FAB 会从被偏移的位置瞬跳到视口右下角（表现为"卡一下再贴边"）。 */
 .view-enter {
   animation: view-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes view-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
