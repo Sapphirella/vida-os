@@ -22,7 +22,7 @@ import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile, db } from '@/lib/db';
-import { base64ToBlob, saveBlob, saveText, clsx } from '@/lib/utils';
+import { base64ToBlob, saveBlob, saveText, clsx, errMsg } from '@/lib/utils';
 import {
   exportJSON,
   exportMarkdown,
@@ -185,8 +185,8 @@ export function DataPage() {
     try {
       const info = await syncToWebDav(cfg, state);
       showToast(`云备份完成：已上传 ${humanBytes(info.bytes)}`, 'success');
-    } catch (e: any) {
-      showToast(`云备份失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`云备份失败：${errMsg(e)}`, 'error');
     } finally {
       setDavBusy(false);
     }
@@ -214,7 +214,7 @@ export function DataPage() {
       }
       importState(info.state, 'overwrite');
       showToast('已从云端恢复', 'success');
-    } catch (e: any) {
+    } catch (e) {
       if (e instanceof NeedPassphraseError) {
         showModal({
           title: '输入加密口令',
@@ -223,7 +223,7 @@ export function DataPage() {
           onInputConfirm: (v) => void doDavRestore(v),
         });
       } else {
-        showToast(`云端恢复失败：${e.message}`, 'error');
+        showToast(`云端恢复失败：${errMsg(e)}`, 'error');
       }
     } finally {
       setDavRestoring(false);
@@ -258,8 +258,11 @@ export function DataPage() {
       setFolderName(name);
       await refreshSnapshots();
       showToast(`已选择文件夹：${name}`, 'success');
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') showToast(`选择失败：${e.message}`, 'error');
+    } catch (e) {
+      // 用户主动关闭选择文件夹对话框时静默退出
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        showToast(`选择失败：${errMsg(e)}`, 'error');
+      }
     }
   };
 
@@ -275,8 +278,8 @@ export function DataPage() {
           : `快照已保存（${humanBytes(info.bytes)}）`,
         'success',
       );
-    } catch (e: any) {
-      showToast(`保存失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`保存失败：${errMsg(e)}`, 'error');
     } finally {
       setSnapBusy(false);
     }
@@ -289,8 +292,8 @@ export function DataPage() {
       importState(restored, 'overwrite');
       showToast('已从快照恢复', 'success');
       await refreshSnapshots();
-    } catch (e: any) {
-      showToast(`恢复失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`恢复失败：${errMsg(e)}`, 'error');
     }
   };
 
@@ -300,8 +303,8 @@ export function DataPage() {
       await deleteSnapshot(name);
       await refreshSnapshots();
       showToast('快照已删除', 'success');
-    } catch (e: any) {
-      showToast(`删除失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`删除失败：${errMsg(e)}`, 'error');
     }
   };
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -312,8 +315,8 @@ export function DataPage() {
       const json = await exportJSON(state, scopes);
       await saveText(json, `vidaos-${scopeSlug(scopes)}-${timestamp()}.json`, 'application/json');
       showToast('导出成功', 'success');
-    } catch (e: any) {
-      showToast(`导出失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`导出失败：${errMsg(e)}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -325,8 +328,8 @@ export function DataPage() {
       const md = exportMarkdown(state, scopes);
       await saveText(md, `vidaos-${scopeSlug(scopes)}-${timestamp()}.md`, 'text/markdown');
       showToast('导出成功', 'success');
-    } catch (e: any) {
-      showToast(`导出失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`导出失败：${errMsg(e)}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -338,8 +341,8 @@ export function DataPage() {
       const txt = exportTXT(state, scopes);
       await saveText(txt, `vidaos-${scopeSlug(scopes)}-${timestamp()}.txt`, 'text/plain');
       showToast('导出成功', 'success');
-    } catch (e: any) {
-      showToast(`导出失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`导出失败：${errMsg(e)}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -351,8 +354,8 @@ export function DataPage() {
       const blob = await exportPDF(state, scopes);
       await saveBlob(blob, `vidaos-${scopeSlug(scopes)}-${timestamp()}.pdf`);
       showToast('PDF 导出成功', 'success');
-    } catch (e: any) {
-      showToast(`PDF 失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`PDF 失败：${errMsg(e)}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -365,8 +368,8 @@ export function DataPage() {
       const json = await exportJSON(state, ['all']);
       await saveText(json, `vidaos-backup-${timestamp()}.json`, 'application/json');
       showToast('备份已生成', 'success');
-    } catch (e: any) {
-      showToast(`备份失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`备份失败：${errMsg(e)}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -441,8 +444,8 @@ export function DataPage() {
       } else {
         throw new Error('不支持的格式');
       }
-    } catch (err: any) {
-      showToast(`导入失败：${err.message}`, 'error');
+    } catch (err) {
+      showToast(`导入失败：${errMsg(err)}`, 'error');
     } finally {
       e.target.value = '';
     }

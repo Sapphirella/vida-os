@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useAppStore } from '@/stores/useAppStore';
 import { hasWebDavConfig, syncToWebDav } from '@/lib/webdav';
 import { humanBytes } from '@/lib/snapshot';
+import { errMsg } from '@/lib/utils';
 
 const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/desk': { title: 'VidaOS', sub: 'A quiet place for your days' },
@@ -56,8 +57,8 @@ export function TopBar() {
     try {
       const info = await syncToWebDav(cfg, st);
       showToast(`云同步完成：已上传 ${humanBytes(info.bytes)}`, 'success');
-    } catch (e: any) {
-      showToast(`云同步失败：${e.message}`, 'error');
+    } catch (e) {
+      showToast(`云同步失败：${errMsg(e)}`, 'error');
     } finally {
       setSyncing(false);
     }

@@ -10,6 +10,21 @@ export function now(): number {
   return Date.now();
 }
 
+/**
+ * 提取错误信息：catch 到的值可能是 Error / 字符串 / 任意对象，
+ * 统一转成可展示的文案，避免 `catch (e: any) e.message` 显示 undefined。
+ */
+export function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  if (e && typeof e === 'object') {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === 'string') return m;
+    if (typeof m === 'number') return String(m);
+  }
+  return String(e);
+}
+
 export function clsx(...args: (string | false | null | undefined)[]): string {
   return args.filter(Boolean).join(' ');
 }

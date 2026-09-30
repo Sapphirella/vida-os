@@ -20,7 +20,7 @@ import {
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownView } from '@/components/common/MarkdownView';
-import { saveText, formatDate, relativeTime, clsx } from '@/lib/utils';
+import { saveText, formatDate, relativeTime, clsx, errMsg } from '@/lib/utils';
 // 逐轮回复的实现已抽到 lib/agentTurn.ts（与馆藏「共读」抽屉共用），
 // 这里只留这个组件自己还要用的几个（自检连通性 / 导出 / 资料库上传大小限制）
 import { hasApiConfig, sessionToTxt, DOC_MAX_BYTES } from '@/lib/agentEngine';
@@ -192,8 +192,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
         () => {},
       );
       showToast('连接正常，模型可响应', 'success');
-    } catch (e: any) {
-      showToast(`连接失败：${e?.message ?? e}`, 'error');
+    } catch (e) {
+      showToast(`连接失败：${errMsg(e)}`, 'error');
     } finally {
       setTesting(false);
     }

@@ -78,7 +78,14 @@ export async function pickDataFolder(): Promise<string> {
   }).showDirectoryPicker;
   const handle = await picker({ mode: 'readwrite', id: 'vidaos-data' });
   await handle.requestPermission?.({ mode: 'readwrite' });
-  await db.meta.put({ id: HANDLE_KEY, value: handle });
+  try {
+    await db.meta.put({ id: HANDLE_KEY, value: handle });
+  } catch {
+    // 部分浏览器无法把 FileSystemDirectoryHandle 结构化克隆进 IndexedDB：
+    // 本次会话仍可用这个文件夹，只是刷新后需重新选择。清掉旧句柄，
+    // 避免 getSavedFolder 取回一个失效句柄、后续写入时再报错。
+    await db.meta.delete(HANDLE_KEY);
+  }
   return handle.name;
 }
 

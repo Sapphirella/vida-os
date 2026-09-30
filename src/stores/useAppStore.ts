@@ -866,3 +866,10 @@ export const useAppStore = create<Store>((set, get) => ({
     persist(get());
   },
 }));
+
+// 兜底持久化：任何 set 都触发防抖保存（与 action 内手动 persist 共用同一防抖、
+// 最终合并为一次写库，不会重复写），防止未来新增 action 忘记调用 persist
+// 导致改动不落盘。hydrate 完成前不写（初始默认态无需入库）。
+useAppStore.subscribe((s) => {
+  if (s.hydrated) persist(s);
+});
