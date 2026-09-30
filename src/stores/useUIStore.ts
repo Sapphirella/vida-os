@@ -68,8 +68,15 @@ interface UIStore {
   } | null;
   setFocusRequest: (r: UIStore['focusRequest']) => void;
 
-  // 图片放大预览（文章/动态/灵感里的图片点击后全屏查看 + 保存/下载）
-  lightbox: { fileId: string } | null;
+  // 图片放大预览（文章/动态/灵感/相册里的图片点击后全屏查看 + 保存/下载）
+  lightbox: {
+    fileId: string;
+    /** 星标集分类标签（固定：文章/动态/灵感/相册）；不传则不显示「存入星标集」按钮 */
+    starTag?: 'article' | 'moment' | 'inspiration' | 'album';
+    /** 来源引用（文章/动态/灵感才有，星标集内双链跳转用） */
+    refType?: 'article' | 'moment' | 'inspiration';
+    refId?: string;
+  } | null;
   setLightbox: (r: UIStore['lightbox']) => void;
 
   // Toast

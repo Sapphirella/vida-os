@@ -170,7 +170,10 @@ export function ArticleReaderPage() {
 
         {/* 正文（支持 fileRef: 内嵌本地图片） */}
         <div ref={bodyRef}>
-          <MarkdownView markdown={article.content} />
+          <MarkdownView
+            markdown={article.content}
+            lightboxContext={{ starTag: 'article', refType: 'article', refId: article.id }}
+          />
         </div>
 
         {/* 配图：放在正文**下方**；已用 fileRef: 插入正文的图不在这里重复。
@@ -187,7 +190,14 @@ export function ArticleReaderPage() {
                   fileId={id}
                   alt={`${article.title} 配图 ${i + 1}`}
                   className="w-full"
-                  onOpen={(id) => setLightbox({ fileId: id })}
+                  onOpen={(id) =>
+                    setLightbox({
+                      fileId: id,
+                      starTag: 'article',
+                      refType: 'article',
+                      refId: article.id,
+                    })
+                  }
                 />
               </figure>
             ))}

@@ -24,6 +24,8 @@ import { ArticleReaderPage } from '@/pages/ArticleReaderPage';
 import { CollectionPage } from '@/pages/CollectionPage';
 import { AgentPage } from '@/pages/AgentPage';
 import { LibraryPage } from '@/pages/LibraryPage';
+import { AlbumPage } from '@/pages/album/AlbumPage';
+import { AlbumDetailPage } from '@/pages/album/AlbumDetailPage';
 import { ReaderPage } from '@/pages/ReaderPage';
 
 function App() {
@@ -107,6 +109,8 @@ function App() {
             <Route path="/moments" element={<MomentsPage />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/book/:id" element={<ReaderPage />} />
+            <Route path="/library/album" element={<AlbumPage />} />
+            <Route path="/library/album/:id" element={<AlbumDetailPage />} />
             <Route path="/agent" element={<AgentPage />} />
             <Route path="/favorites" element={<FavoritesPage />} />
           </Routes>

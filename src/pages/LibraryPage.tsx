@@ -31,6 +31,7 @@ import {
   RECOMMENDED_MAX_CHARS,
 } from '@/lib/library';
 import { formatDate, relativeTime } from '@/lib/utils';
+import { LibraryTabBar } from '@/pages/album/AlbumPage';
 import type { LibraryBook } from '@/types';
 
 export function LibraryPage() {
@@ -188,6 +189,7 @@ export function LibraryPage() {
   return (
     <div className="px-4 sm:px-6">
       <div className="max-w-5xl mx-auto pb-6">
+        <LibraryTabBar active="library" />
         <input
           ref={fileRef}
           type="file"

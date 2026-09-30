@@ -424,7 +424,7 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
               <div className="flex gap-2 mt-3 flex-wrap">
                 {item.imageIds.map((id) => (
                   <div key={id} className="w-20 h-20 rounded-lg overflow-hidden">
-                    <MediaImage fileId={id} className="w-full h-full object-cover" onOpen={(id) => setLightbox({ fileId: id })} />
+                    <MediaImage fileId={id} className="w-full h-full object-cover" onOpen={(id) => setLightbox({ fileId: id, starTag: 'inspiration', refType: 'inspiration', refId: item.id })} />
                   </div>
                 ))}
               </div>

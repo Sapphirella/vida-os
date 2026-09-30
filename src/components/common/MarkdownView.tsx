@@ -24,6 +24,12 @@ interface MarkdownViewProps {
    * 编辑器预览里关闭，避免导航把全屏编辑器留在页面上。
    */
   wikiLinks?: boolean;
+  /** 正文内嵌图片的上下文：点击放大时带上星标标签与来源，便于存入星标集 */
+  lightboxContext?: {
+    starTag?: 'article' | 'moment' | 'inspiration' | 'album';
+    refType?: 'article' | 'moment' | 'inspiration';
+    refId?: string;
+  };
 }
 
 /**
@@ -32,7 +38,7 @@ interface MarkdownViewProps {
  * renderMarkdown 是同步的，没法在里面 await 文件读取，所以先渲染出
  * src="fileRef:xxx" 的占位，挂载后再换成真实 URL（文件缺失时显示可见提示）。
  */
-export function MarkdownView({ markdown, className, htmlTransform, wikiLinks = true }: MarkdownViewProps) {
+export function MarkdownView({ markdown, className, htmlTransform, wikiLinks = true, lightboxContext }: MarkdownViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const articles = useAppStore((s) => s.articles);
@@ -60,9 +66,11 @@ export function MarkdownView({ markdown, className, htmlTransform, wikiLinks = t
         if (url) {
           img.src = url;
           img.classList.add('vd-inline-img');
-          // 点击放大预览
+          // 点击放大预览（带上打开方上下文：星标标签 + 来源引用）
           img.style.cursor = 'zoom-in';
-          img.addEventListener('click', () => setLightbox({ fileId: id }));
+          img.addEventListener('click', () =>
+            setLightbox({ fileId: id, ...lightboxContext }),
+          );
         } else {
           const box = document.createElement('span');
           box.className = 'vd-missing-img';

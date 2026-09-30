@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
-import { X, Download, ImageIcon } from 'lucide-react';
+import { X, Download, ImageIcon, Star } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
+import { useAppStore } from '@/stores/useAppStore';
 import { fileURL } from '@/lib/fileUrl';
 import { getFile } from '@/lib/db';
 
 /**
  * 图片放大预览（全局，App 挂载）：
- * 文章 / 动态 / 灵感里的图片点击后全屏查看；
- * 手机端通过系统分享保存到相册，电脑端直接下载到本地。
+ * 文章 / 动态 / 灵感 / 相册里的图片点击后全屏查看；
+ * 手机端通过系统分享保存到相册，电脑端直接下载到本地；
+ * 打开方传了 starTag 时额外提供「存入星标集」按钮（已存入可再点取消）。
  */
 export function ImageLightbox() {
   const lightbox = useUIStore((s) => s.lightbox);
   const setLightbox = useUIStore((s) => s.setLightbox);
+  const albumStars = useAppStore((s) => s.albumStars);
+  const addAlbumStar = useAppStore((s) => s.addAlbumStar);
+  const deleteAlbumStar = useAppStore((s) => s.deleteAlbumStar);
+  const showToast = useUIStore((s) => s.showToast);
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,6 +68,31 @@ export function ImageLightbox() {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   };
 
+  // 存入星标集：同一张图在同一标签下只留一条；已存则再点取消
+  const starTag = lightbox.starTag;
+  const existing = starTag
+    ? albumStars.find((s) => s.imageId === fileId && s.tag === starTag)
+    : undefined;
+
+  const toggleStar = () => {
+    if (!starTag) return;
+    if (existing) {
+      deleteAlbumStar(existing.id);
+      showToast('已从星标集移除', 'info');
+    } else {
+      addAlbumStar({
+        imageId: fileId,
+        tag: starTag,
+        refType: lightbox.refType,
+        refId: lightbox.refId,
+      });
+      showToast('已存入星标集', 'success');
+    }
+  };
+
+  const tagLabel =
+    starTag === 'article' ? '文章' : starTag === 'moment' ? '动态' : starTag === 'inspiration' ? '灵感' : starTag === 'album' ? '相册' : '';
+
   return (
     <div
       className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-5"
@@ -92,17 +123,30 @@ export function ImageLightbox() {
       )}
 
       {url && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            void save();
-          }}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-pill text-[13px] text-moon transition-all"
-          style={{ background: 'var(--wine)', boxShadow: '0 0 20px rgba(106,8,14,0.4)' }}
-        >
-          <Download size={15} strokeWidth={1.6} />
-          {isTouch ? '保存到相册' : '下载图片'}
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => void save()}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-pill text-[13px] text-moon transition-all"
+            style={{ background: 'var(--wine)', boxShadow: '0 0 20px rgba(106,8,14,0.4)' }}
+          >
+            <Download size={15} strokeWidth={1.6} />
+            {isTouch ? '保存到相册' : '下载图片'}
+          </button>
+          {starTag && (
+            <button
+              onClick={toggleStar}
+              className={
+                'flex items-center gap-2 px-5 py-2.5 rounded-pill text-[13px] transition-all ' +
+                (existing
+                  ? 'text-amber border border-amber/40 bg-amber/10'
+                  : 'text-moon border border-bronze/30 bg-bronze/10 hover:bg-bronze/20')
+              }
+            >
+              <Star size={15} strokeWidth={1.6} fill={existing ? 'currentColor' : 'none'} />
+              {existing ? `已在星标集·${tagLabel}（点击移除）` : `存入星标集·${tagLabel}`}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

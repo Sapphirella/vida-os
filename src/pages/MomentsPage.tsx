@@ -251,6 +251,7 @@ export function MomentsPage() {
                               markdown={m.content}
                               className="prose-moment"
                               htmlTransform={(h) => find.hl(h, m.id)}
+                              lightboxContext={{ starTag: 'moment', refType: 'moment', refId: m.id }}
                             />
                           </div>
 
@@ -275,7 +276,14 @@ export function MomentsPage() {
                                     fileId={id}
                                     alt={`动态配图 ${i + 1}`}
                                     className="w-full h-full object-cover"
-                                    onOpen={(id) => setLightbox({ fileId: id })}
+                                    onOpen={(id) =>
+                                      setLightbox({
+                                        fileId: id,
+                                        starTag: 'moment',
+                                        refType: 'moment',
+                                        refId: m.id,
+                                      })
+                                    }
                                   />
                                 </div>
                               ))}
