@@ -120,10 +120,12 @@ export function MomentsPage() {
     setDrafts((d) => ({ ...d, [momentId]: '' }));
   };
 
-  // 时间线：按日期分组，日期变化处插入分隔标签
+  // 时间线：完全按「设置的时间」排序（最近在上、以前的在下），
+  // 而不是按发布/编辑顺序——用户改过时间后位置要跟着变
   const groups = useMemo(() => {
+    const sorted = [...moments].sort((a, b) => b.createdAt - a.createdAt);
     const out: Array<{ date: string; items: typeof moments }> = [];
-    for (const m of moments) {
+    for (const m of sorted) {
       const key = todayKey(new Date(m.createdAt));
       const last = out[out.length - 1];
       if (last && last.date === key) last.items.push(m);

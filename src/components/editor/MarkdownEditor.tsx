@@ -322,9 +322,11 @@ export function MarkdownEditor({
         {mode === 'moment' && (
           <label className="flex items-center gap-1.5 mr-1" title="发布/记录时间">
             <Clock size={13} strokeWidth={1.5} className="text-bronze-deep flex-none" />
+            {/* 非受控：逐段修改日期时中间态不会被 React 拉回旧值，
+                只有最终完整时间被解析成功才写入状态，一次就能保存成功 */}
             <input
               type="datetime-local"
-              value={formatDate(createdAt, 'YYYY-MM-DDTHH:mm')}
+              defaultValue={formatDate(createdAt, 'YYYY-MM-DDTHH:mm')}
               onChange={(e) => {
                 const t = new Date(e.target.value).getTime();
                 if (!Number.isNaN(t)) setCreatedAt(t);
