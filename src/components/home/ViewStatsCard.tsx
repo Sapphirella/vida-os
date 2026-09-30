@@ -5,9 +5,7 @@ import { plainText } from '@/lib/utils';
 
 const fmt = (n: number) => n.toLocaleString('zh-CN');
 
-/** 主页 · 视图：文章/动态/灵感/书 的数量与字数统计
- *  数量与字数分开展示，且单位显式（篇/条/本、字），避免把字数误读成条数。
- *  字数口径与编辑器一致：剥掉 Markdown 标记后统计 */
+/** 主页 · 视图：文章/动态/灵感/书 的数量与字数统计（字数口径与编辑器一致：剥掉 Markdown 标记） */
 export function ViewStatsCard() {
   const articles = useAppStore((s) => s.articles);
   const moments = useAppStore((s) => s.moments);
@@ -33,10 +31,10 @@ export function ViewStatsCard() {
   }, [articles, moments, inspirations, books]);
 
   const counts = [
-    { label: '文章', value: stats.articleCount, unit: '篇' },
-    { label: '动态', value: stats.momentCount, unit: '条' },
-    { label: '灵感', value: stats.inspirationCount, unit: '条' },
-    { label: '书', value: stats.bookCount, unit: '本' },
+    { label: '文章', value: stats.articleCount },
+    { label: '动态', value: stats.momentCount },
+    { label: '灵感', value: stats.inspirationCount },
+    { label: '书', value: stats.bookCount },
   ];
   const charRows = [
     { label: '文章', value: stats.articleChars },
@@ -57,17 +55,14 @@ export function ViewStatsCard() {
         <div className="flex-1 h-px bg-bronze/10" />
       </div>
 
-      {/* 数量：数字带单位（篇 / 条 / 本） */}
+      {/* 数量 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         {counts.map((c) => (
           <div
             key={c.label}
             className="rounded-xl bg-bronze/5 border border-bronze/10 px-3 py-3 text-center"
           >
-            <p className="font-serif text-headline text-xl leading-none">
-              {fmt(c.value)}
-              <span className="text-sm text-bronze ml-0.5">{c.unit}</span>
-            </p>
+            <p className="font-serif text-headline text-xl leading-none">{fmt(c.value)}</p>
             <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mt-1.5">
               {c.label}
             </p>
@@ -75,22 +70,19 @@ export function ViewStatsCard() {
         ))}
       </div>
 
-      {/* 字数：每项显式「字」，底部合计 */}
+      {/* 字数 */}
       <div className="rounded-xl border border-bronze/10 px-4 py-3">
         <div className="flex items-center justify-between font-mono text-[10px] tracking-widest text-bronze-deep uppercase mb-2">
           <span>字数统计</span>
+          <span>合计 {fmt(stats.totalChars)} 字</span>
         </div>
-        <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 mb-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-4">
           {charRows.map((r) => (
-            <div key={r.label} className="flex items-baseline">
+            <div key={r.label} className="flex items-baseline justify-between gap-2">
               <span className="font-serif text-bronze text-xs">{r.label}</span>
-              <span className="font-mono text-sm text-paper">{fmt(r.value)}字</span>
+              <span className="font-mono text-sm text-paper">{fmt(r.value)}</span>
             </div>
           ))}
-        </div>
-        <div className="border-t border-bronze/10 pt-2.5 flex items-baseline justify-between">
-          <span className="font-serif text-bronze text-sm">合计</span>
-          <span className="font-mono text-lg text-headline">{fmt(stats.totalChars)} 字</span>
         </div>
       </div>
     </Card>
