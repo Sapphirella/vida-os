@@ -38,6 +38,7 @@ export function MarkdownView({ markdown, className, htmlTransform, wikiLinks = t
   const articles = useAppStore((s) => s.articles);
   const addArticle = useAppStore((s) => s.addArticle);
   const showToast = useUIStore((s) => s.showToast);
+  const setLightbox = useUIStore((s) => s.setLightbox);
 
   // 解析结果按 markdown 缓存：输入评论/重渲染时不会对每条动态重复整段 markdown 解析
   const rawHtml = useMemo(() => renderMarkdown(markdown), [markdown]);
@@ -59,6 +60,9 @@ export function MarkdownView({ markdown, className, htmlTransform, wikiLinks = t
         if (url) {
           img.src = url;
           img.classList.add('vd-inline-img');
+          // 点击放大预览
+          img.style.cursor = 'zoom-in';
+          img.addEventListener('click', () => setLightbox({ fileId: id }));
         } else {
           const box = document.createElement('span');
           box.className = 'vd-missing-img';

@@ -24,6 +24,7 @@ export function InspirationView() {
   const convertInspirationToArticle = useAppStore((s) => s.convertInspirationToArticle);
   const showToast = useUIStore((s) => s.showToast);
   const focusRequest = useUIStore((s) => s.focusRequest);
+  const setLightbox = useUIStore((s) => s.setLightbox);
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [composing, setComposing] = useState<{ content: string; category: string; imageIds: string[] } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -141,7 +142,7 @@ export function InspirationView() {
             <div className="flex gap-2 mt-2 flex-wrap">
               {composing.imageIds.map((id) => (
                 <div key={id} className="relative w-16 h-16 rounded-lg overflow-hidden">
-                  <MediaImage fileId={id} className="w-full h-full object-cover" />
+                  <MediaImage fileId={id} className="w-full h-full object-cover" onOpen={(id) => setLightbox({ fileId: id })} />
                   <button
                     onClick={() => setComposing({ ...composing, imageIds: composing.imageIds.filter((x) => x !== id) })}
                     className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-moon"
@@ -285,6 +286,7 @@ interface ItemProps {
 }
 
 function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, onStar, onConvert, converted, contentHtml, findCardProps }: ItemProps) {
+  const setLightbox = useUIStore((s) => s.setLightbox);
   const [draft, setDraft] = useState(item.content);
   const [draftImages, setDraftImages] = useState(item.imageIds);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -343,7 +345,7 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
             <div className="flex gap-2 mt-2 flex-wrap">
               {draftImages.map((id) => (
                 <div key={id} className="relative w-16 h-16 rounded-lg overflow-hidden">
-                  <MediaImage fileId={id} className="w-full h-full object-cover" />
+                  <MediaImage fileId={id} className="w-full h-full object-cover" onOpen={(id) => setLightbox({ fileId: id })} />
                   <button
                     onClick={() => setDraftImages(draftImages.filter((x) => x !== id))}
                     className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-moon"
@@ -420,7 +422,7 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
               <div className="flex gap-2 mt-3 flex-wrap">
                 {item.imageIds.map((id) => (
                   <div key={id} className="w-20 h-20 rounded-lg overflow-hidden">
-                    <MediaImage fileId={id} className="w-full h-full object-cover" />
+                    <MediaImage fileId={id} className="w-full h-full object-cover" onOpen={(id) => setLightbox({ fileId: id })} />
                   </div>
                 ))}
               </div>

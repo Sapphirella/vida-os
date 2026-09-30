@@ -9,6 +9,7 @@ import { EditorOverlay } from '@/components/editor/EditorOverlay';
 import { GlobalFindReplaceCard } from '@/components/search/GlobalFindReplaceCard';
 import { Toast } from '@/components/common/Toast';
 import { Modal } from '@/components/common/Modal';
+import { ImageLightbox } from '@/components/common/ImageLightbox';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 import { DeskPage } from '@/pages/DeskPage';
@@ -116,6 +117,7 @@ function App() {
       <EditorOverlay />
       {/* 全局查找替换：全屏覆盖层，桌面/移动两端经 TopBar 搜索按钮或 ⌘K 打开 */}
       <GlobalFindReplaceCard />
+      <ImageLightbox />
       <Toast />
       <Modal />
     </div>

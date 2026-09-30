@@ -27,6 +27,7 @@ export function ArticleReaderPage() {
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
+  const setLightbox = useUIStore((s) => s.setLightbox);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -187,6 +188,7 @@ export function ArticleReaderPage() {
                   fileId={id}
                   alt={`${article.title} 配图 ${i + 1}`}
                   className="w-full"
+                  onOpen={(id) => setLightbox({ fileId: id })}
                 />
               </figure>
             ))}

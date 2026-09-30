@@ -62,6 +62,7 @@ export function MomentsPage() {
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
   const setCommentInputFocused = useUIStore((s) => s.setCommentInputFocused);
+  const setLightbox = useUIStore((s) => s.setLightbox);
 
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -272,6 +273,7 @@ export function MomentsPage() {
                                     fileId={id}
                                     alt={`动态配图 ${i + 1}`}
                                     className="w-full h-full object-cover"
+                                    onOpen={(id) => setLightbox({ fileId: id })}
                                   />
                                 </div>
                               ))}

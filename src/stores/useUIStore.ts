@@ -68,6 +68,10 @@ interface UIStore {
   } | null;
   setFocusRequest: (r: UIStore['focusRequest']) => void;
 
+  // 图片放大预览（文章/动态/灵感里的图片点击后全屏查看 + 保存/下载）
+  lightbox: { fileId: string } | null;
+  setLightbox: (r: UIStore['lightbox']) => void;
+
   // Toast
   toasts: ToastItem[];
   showToast: (message: string, kind?: ToastItem['kind']) => void;
@@ -114,6 +118,9 @@ export const useUIStore = create<UIStore>((set) => ({
 
   focusRequest: null,
   setFocusRequest: (r) => set({ focusRequest: r }),
+
+  lightbox: null,
+  setLightbox: (r) => set({ lightbox: r }),
 
   toasts: [],
   showToast: (message, kind = 'info') => {
