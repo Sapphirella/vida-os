@@ -1,9 +1,8 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-29（v4.4.1：**馆藏阅读器三项实测缺陷修复** —— 高亮在浅色主题看不见、
-> 划线后下一行缩进、滑到底进度不足 100%；并按用户要求**移除阅读器内的「问 AI / 共读」入口**；
-> 另修 Agent 接口返回空内容时静默显示「（无内容）」的问题）
+> 最后更新：2026-09-29（v4.4.1 代码状态 + **交接文档整理**：重写第 11 节验证方法（无头 Chrome 实操套路
+> 与三个环境坑）、新增第 15 节「让外部 AI 读写 VidaOS 的候选方案与推进顺序」、校正已下线功能的残留描述）
 
 ---
 
@@ -119,8 +118,8 @@
   ② **底栏**「碎片」那格换成 **便签** → 主页 / 便签 / Agent / 数据 / 设置。
   ③ **主页宫格**「便签」那格换成 **馆藏** → 空间 / 动态 / 馆藏 / 收藏夹。
   ④ **馆藏**：导入本地 txt / md 成书（正文存主数据、md 按 Markdown 渲染、连续滚动 + 记住读到哪）；
-  阅读器里长按选中 → 划线 / 高亮 / 引用问 AI / 复制；划线高亮收进右上角**书签**面板；
-  AI 走阅读器内**共读抽屉**（挑已有会话或新建「共读 · 书名」）。详见第 4 节之 21) 与第 13 节。
+  阅读器里长按选中 → 划线 / 高亮 / 复制；划线高亮收进右上角**书签**面板。
+  （v4.4 曾配「选中→问 AI」的共读抽屉，**v4.4.1 已按用户要求移除**。）详见第 4 节之 21) 与第 13 节。
 - **v4.3.3（2026-09-29）** —— **备份与恢复的数据安全修复**：灵感的 `imageIds` 与碎片的
   `imageIds` 此前不在 `collectFileIds` 里（导出 JSON / WebDAV / 快照三条备份路径都共用它），
   **备份只有条目没有图、原图不可恢复**；导入 JSON / WebDAV 取回 / 快照恢复三条路又都绕过
@@ -424,8 +423,8 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
   会让根容器高度变 auto，上面整条链一起退化。
 - 验证口径见第 12 节教训 17、18；`BottomTabBar` 保持 `fixed`（不要改成流内）。
 
-### 21) 馆藏（v4.4，`lib/library.ts` + `pages/LibraryPage` + `pages/ReaderPage` + `components/library/CoreadDrawer`）
-- **数据模型**：`LibraryBook { id, title, format:'txt'|'md', content, charCount, lastBlockIndex?, marks[], coreadSessionId? }`，
+### 21) 馆藏（v4.4，`lib/library.ts` + `pages/LibraryPage` + `pages/ReaderPage`）
+- **数据模型**：`LibraryBook { id, title, format:'txt'|'md', content, charCount, lastBlockIndex?, marks[] }`，
   `BookMark { id, kind:'underline'|'highlight', text, blockIndex, start, end, createdAt }`；
   正文**直接存主数据**（`state.books`）。单本建议 ≤1 万字（硬上限 20 万字，导入时两级提示）。
 - **正文切块 `parseBook(content, format)`**：txt 按空行切段（段内换行原样保留，靠 `white-space: pre-wrap`
@@ -491,7 +490,6 @@ VidaOS/
 │   │   ├── home/                # ClockHeader / FeatureGrid(4 宫格) / CalendarCard / DayScheduleCard / MusicPlayerCard / TodoSummaryCard
 │   │   ├── notes/               # SegmentedControl / CategoryChips / Inspiration / Schedule / Todo / ScheduleEditor
 │   │   ├── agent/               # ★ AgentChatView（气泡流 + 输入区 + 配置/资料库/记忆馆抽屉）
-│   │   ├── library/             # ★ CoreadDrawer（阅读器里引用选段问 AI 的共读抽屉）
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
 │   │   ├── search/              # GlobalFindReplaceCard / PageFindBar / usePageFind
 │   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
@@ -537,7 +535,7 @@ VidaOS/
 
 ---
 
-## 7. 已实现功能清单（当前，v4.2）
+## 7. 已实现功能清单（当前，v4.4.1）
 
 - **桌面**：大时钟 Hero + 4 功能宫格（空间/动态/便签/收藏夹）+ 双卡月历/当日日程
   （**点日期联动**、**「今」按钮**）+ 主页**待办模块**（未完成待办、快速添加/勾选）+ 音景播放器
@@ -550,9 +548,8 @@ VidaOS/
   + 待办**自动置底 / textarea 多行 / 长按拖拽排序**
 - **收藏夹**：跨类型聚合（文章 / 动态）；副标题「收藏的项目」
 - **馆藏**（v4.4）：**书架**（导入本地 txt / md、卡片显示字数/标注数/进度、重命名、移出书架）+
-  **阅读器**（连续滚动、记住读到哪、md 按 Markdown 渲染）；选中一段 → **划线 / 高亮 / 问 AI / 复制**，
-  划线高亮收进**右上角书签**（按序排列、点击定位闪烁、可删）；**共读抽屉**挑会话或新建
-  「共读 · 书名」，引用选段继续聊（与 Agent 页共用回复流程）
+  **阅读器**（连续滚动、记住读到哪、md 按 Markdown 渲染）；选中一段 → **划线 / 高亮 / 复制**，
+  划线高亮收进**右上角书签**（按序排列、点击定位闪烁、可删）；滑到底部进度即 100%
 - **Agent**：**多会话聊天**（会话列表 → 点进 → 聊天，新建自动开场白）；气泡流界面
   （借鉴 Ventana React 化，适配三版书房皮肤）；**演示模式**兜底（未配置 API 可全交互体验）；
   资料库 `[[读:文档]]` 按需读取 + 记忆馆 `[[记:]]`/`[[忆:]]`；会话重命名/归档/导出 txt/删除；
@@ -572,7 +569,7 @@ VidaOS/
 
 ---
 
-## 8. 已知问题与待处理（真实未修项，截至 2026-09-29 / v4.3.2）
+## 8. 已知问题与待处理（真实未修项，截至 2026-09-29 / v4.4.1）
 
 ### 8.1 功能/代码缺陷
 - **`DataPage` 用 `useAppStore()` 订阅了整个 store**（`DataPage.tsx:127`）：任一字段
@@ -712,13 +709,23 @@ VidaOS/
 
 ## 11. Agent 接力指南
 
-### 快速上手
+### 接手第一小时（照着做，别跳）
+1. 读第 0 节（一页速览）、第 3 节（设计语言与色板，**不要擅自改色**）、第 4 节（关键设计决策）。
+2. `git log --oneline -10` 看最近做了什么；`git status` 确认工作区干净（**别 `git add -A`**）。
+3. 起服务：双击 `打开VidaOS.command`，或 `npm run dev` → http://localhost:5173。
+   起不来先看端口：脚本现在会明确提示「端口被占用」（`vite.config.ts` 已开 `strictPort`）。
+4. `npm run typecheck` 过一遍；然后**按第 11 节「怎么验证」跑一次无头 Chrome**，
+   确认你能真的驱动到这个应用（这一步过不去，后面所有结论都不可信）。
+5. 交付前提醒用户 **`Cmd+Shift+R` 强刷**（dev server 重启会断 HMR，旧标签页不会自己刷新）。
+6. 用户报「改了没用」→ 先怀疑他看的是旧页面，再怀疑缓存/Service Worker。
+
+### 常用命令
 ```bash
 cd "/Users/amarisgo/Documents/DeepSeek Harness/VidaOS"
 npm install          # 首次
 npm run dev          # → http://localhost:5173（或双击 打开VidaOS.command）
-npm run typecheck    # 改了代码先跑这个
-npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
+npm run typecheck    # 改了代码先跑这个（strict + noUnusedLocals，编译即闸门）
+npm run build        # 出 dist/（gitignore，按惯例验完可删）
 ```
 
 ### 常见修改场景 → 该改哪些文件
@@ -735,32 +742,60 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
 | 改首页 | `pages/DeskPage.tsx` + `components/home/*` |
 | 改编辑器 | `components/editor/*` + `globals.css` 的 `.prose-vidaos` |
 | 改查找 | `components/search/*` + `lib/focusRequest.ts` + `useUIStore`（findPanel / focusRequest / FocusKind） |
-| 改馆藏 | `pages/LibraryPage.tsx`（书架/导入）+ `pages/ReaderPage.tsx`（阅读器/工具条/书签）+ `components/library/CoreadDrawer.tsx`（共读）+ `lib/library.ts`（切块与锚点数学）+ store 的 book actions |
+| 改馆藏 | `pages/LibraryPage.tsx`（书架/导入）+ `pages/ReaderPage.tsx`（阅读器/工具条/书签）+ `lib/library.ts`（切块与锚点数学）+ store 的 book actions |
 | 改 Agent 对话 | `lib/agentEngine.ts`（纯函数：端点/消息/索引/截取/标记/演示模式）+ `lib/agentTurn.ts`（一轮回复，**改这里两处同时生效**）+ `components/agent/AgentChatView.tsx`（会话页 UI）+ `components/library/CoreadDrawer.tsx`（共读 UI）+ `pages/AgentPage.tsx`（会话列表）——**逻辑改完跑引擎单测** |
 
-### 怎么验证（本项目标准做法）
-1. `npm run typecheck` + `npm run build`（最低要求，**不等于修好了**）；
-2. **无头 Chrome 走真实 UI**：在项目根建一个临时 `__probe.html`（Vite 会伺服它），
-   里面用 `iframe` 加载应用、用 JS 模拟点击/输入，再把结论 `POST` 给一个本地 HTTP 收集器；
-   或复用本会话的 `/tmp/vidaos-verify/`（playwright-core 1.63.0 + 系统 Chrome 脚本）；
-   ⚠️ 当前环境 GUI 自动化可能不可用（BU 平面禁用 / 用户占用 Chrome 时 CU 被拒），
-   此时退化为「构建 + 生产包字符串 + 纯逻辑测试」，并如实告知用户浏览器实测未做；
-3. **Agent 引擎单测**（纯逻辑层，不依赖浏览器）：
+### 怎么验证（本项目标准做法，v4.4.1 重写）
+> 这一节是**唯一被反复踩坑的环节**，请照着做，别只看构建通过就宣布修好。
+
+1. **最低门槛**：`npm run typecheck` + `npm run build`（只证明能编译打包，**不等于功能对**）。
+2. **无头 Chrome 走真实 UI**（真正算数的验证）。本机可用的一套写法：
    ```bash
-   cd "/Users/amarisgo/Documents/DeepSeek Harness/VidaOS"
+   CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+   UDD=$(mktemp -d); PORT=$((9400 + RANDOM % 400))
+   "$CHROME" --headless=new --remote-debugging-port=$PORT --user-data-dir="$UDD" \
+     --no-first-run --no-default-browser-check --no-sandbox --disable-setuid-sandbox \
+     --disable-dev-shm-usage --disable-crash-reporter --disable-breakpad \
+     --disable-gpu --disable-software-rasterizer --window-size=1280,900 --hide-scrollbars about:blank &
+   curl -s http://127.0.0.1:$PORT/json/version   # 拿到 webSocketDebuggerUrl
+   # 然后自己写个 50 行的 CDP 客户端（Node 全局 WebSocket 即可，不需要 playwright）
+   ```
+   驱动要点（都实测过）：
+   - `Runtime.evaluate` 里**不能有顶层 `await`** —— 要包 `(async()=>{…})()`，否则报
+     `SyntaxError: Unexpected token 'import'`；`returnByValue` 遇到 Promise 会得到 `{}`。
+   - 真实交互：`Input.insertText` 打字、`Input.dispatchKeyEvent` 回车、
+     `DOM.setFileInputFiles` 选本地文件（导入书籍/备份都靠它）、
+     `Browser.setDownloadBehavior` 收下载（导出 JSON 靠它）。
+   - 站点上的原生 `confirm()` 会**阻塞渲染进程**让后续 evaluate 全部超时 →
+     必须先监听 `Page.javascriptDialogOpening` 并 `Page.handleJavaScriptDialog`。
+   - 触摸/移动端：`Emulation.setDeviceMetricsOverride(390,844,3,mobile:true)` +
+     `Emulation.setTouchEmulationEnabled`（后者才让 `pointer: coarse` 为真）。
+   - 模拟选区：`document.createRange()` + `getSelection().addRange()`（真机长按的等价物）。
+   - 读完 DOM 结论**必须 POST/回传出来**（或像本会话一样直接在 Node 侧接收 evaluate 结果）。
+3. **要验证「AI 接口」相关逻辑时，不要依赖用户真 Key**：起一个本地假的 OpenAI 兼容接口
+   （SSE 流式 / 非流式多行 JSON / 只有 `reasoning_content` / 空内容 / Ollama 形状各一条路由，
+   记得 `Access-Control-Allow-Origin: *` 且只 `writeHead` 一次），
+   页面里 `await import('/src/lib/agentEngine.ts')` 直接调 `streamChatCompletion` 做契约测试。
+   v4.4.1 就是这么定位并验证「（无内容）」的。
+4. **纯逻辑层单测**（不依赖浏览器，改 `agentEngine` / `library` 这类纯函数时用）：
+   ```bash
    npx esbuild src/lib/agentEngine.ts --bundle --format=esm \
      --outfile=/tmp/vidaos-agent-engine.mjs --alias:@=./src
-   node -e "import('/tmp/vidaos-agent-engine.mjs').then(m=>{ /* 断言：端点/索引/截取/标记/导出/演示 */ })"
+   node -e "import('/tmp/vidaos-agent-engine.mjs').then(m=>{ /* 断言 */ })"
    ```
-   v4.2 基线 26 项断言全 PASS；
-4. 用完**删掉探针文件/临时目录**，别提交。
+5. **写指标时给「已知好」和「已知坏」各跑一次**（第 12 节教训 2/9/18），
+   并优先用**可量化的口径**（坐标、`scrollHeight`、元素数量、行左边界），不要用「看着对」。
+6. 探针脚本放 `/tmp`，**用完删掉、不要提交**；不要 `git add -A`（第 12 节教训 11）。
 
-⚠️ **两个已踩过的坑**：
-- Chrome 的 `--virtual-time-budget` 会让 **IndexedDB 回调永不完成** →
-  凡是依赖 IndexedDB 的探针都会卡住。改用「真实时间运行 + 探针把结果 POST 到本地收集器」。
-- 探针里读元素样式/尺寸时注意 **`cssText` 会被浏览器规范化**
-  （`width:620px` 读出来是 `width: 620px`，而且 `line-height` 里含 `height`）——
-  先 `replace(/\s+/g,'')` 再比较。
+⚠️ **三个必须记住的环境坑**：
+- **固定调试端口 + 探针中途抛错 = 后面的结论全被污染**：上一次的 Chrome 没被收掉会一直占着
+  调试端口，新的 `launchChrome` 会**连到那个旧实例**（旧 profile、旧的 IndexedDB 数据）。
+  所以：**端口随机 + 起之前先探测端口是否被占（占了就报错退出）+ 给进程挂 `exit` 钩子兜底杀 Chrome**
+  （第 12 节教训 19）。
+- **`--virtual-time-budget` 会让 IndexedDB 回调永不完成**，凡是依赖 IndexedDB 的探针都会卡死，别加。
+- **选择器会漂**：按钮文案一变（`转为文章` → `已转为文章`），`querySelector` 就点到下一条数据上，
+  看起来像「功能没生效」。定位一律**锚定到具体条目**（`:first-child`）并优先用 `aria-label` / `data-*`
+  （第 12 节教训 19/21）。
 
 ### Git 提交约定
 `feat:` / `fix:` / `style:`（不改逻辑）/ `refactor:` / `chore:` / `docs:`；
@@ -948,7 +983,7 @@ npm run build        # 出 dist/（记得之后删掉，它被 gitignore）
     `{kind:'underline', text:'乡愁是一枚小', block:0, start:0, end:6}`（锚点精确）；
   - 高亮：另一段同样通过；两种标注并存（各 1 处）；
   - 书签面板：2 条、按序带「第 N 段 + 预览」；点击跳回正文并闪烁；删除后 DOM 与 store 同步变 1；
-  - 共读：选中 →「问 AI」→ 抽屉带引用打开 → 新建「共读 · 书名」→ 发送 → 会话里
+  - 共读（**该入口已在 v4.4.1 移除**，此处是 v4.4.0 当时的实测记录）：选中 →「问 AI」→ 抽屉带引用打开 → 新建「共读 · 书名」→ 发送 → 会话里
     `[greet, user, assistant]` 三条，用户消息里带着引用原文，AI 有回复（演示模式），全程零报错；
   - 移动端：工具条 4 键在视口内、不压顶栏（贴顶时自动翻到选区下方）、无横向溢出（正文宽 358/390）、
     划线成功落库；
@@ -1194,4 +1229,53 @@ amber/parchment/ash 与语义色、错误边界两层、9 项 P0 缺陷、死代
   卡片 #fce8dd 六版迭代定稿）、v4.3/v4.3.1 会话（碎片/Agent 布局卡顿 fixed→flex、
   灵感星标/转文章/多图上传、桌面端三页底部遮挡修复与文档更新）
 - **v4.4 会话**（馆藏/碎片下线/底栏与宫格调整/agentTurn 抽取/共读抽屉与全部实测）
+- **v4.4.1 会话**（馆藏阅读器 6 项实测缺陷修复：高亮主题化 / 逐文本节点包裹 / 底部进度 / 移除阅读器内 AI / 接口空返回诊断 / 原生菜单屏蔽；重写第 11 节验证方法、新增第 15 节外部 AI 接入规划）
 - **最后更新日期**：2026-09-29
+
+---
+
+## 15. 规划：让**外部 AI** 读写 VidaOS 的内容（用户 2026-09-29 提的需求，**尚未实施**）
+
+### 用户的原始诉求
+「文本数据存在 VidaOS 里，然后 AI 从**外部**读取/访问我的内容并跟我聊天。
+内置 Agent 不好用，所以希望从外部访问。能不能有个 API key 或者 MCP 连上 AI？」
+
+### 必须先讲清的技术前提（决定了所有方案）
+**浏览器里的 IndexedDB 是浏览器沙箱内的私有数据，外部程序（MCP server、脚本、别的 App）
+拿不到它**—— 没有"连接串"、没有监听端口、没有文件路径可指。网页**也无法**自己开监听端口对外提供 API。
+所以「外部 AI 直接连 VidaOS」这条路在技术上不存在；任何方案都必须是**在浏览器外面放一个"数据出口"**：
+
+- 出口形态一：**文件/文件夹**（VidaOS 自己把数据写出去，外部程序读文件）
+- 出口形态二：**本地小服务**（有进程常驻，外部程序连它；VidaOS 再与服务同步）
+- 出口形态三：**复制一份到外部 AI 已经能读的地方**（例如某个工作区目录，零代码）
+
+### 候选方案（按"从最省事到最彻底"排序）
+
+| # | 方案 | 外部 AI 怎么读到 | 要写多少代码 | 实时性 | 风险 / 代价 |
+|---|---|---|---|---|---|
+| A | **内置 Agent 换成好用的模型/端点**（已支持） | 不用外部：应用内对话，数据不出本机 | 0 | 实时 | 只能在 VidaOS 自己的聊天窗里用；模型/UI 体感取决于配置 |
+| B | **导出明文到固定文件夹**（用现成的 JSON/MD 导出 + 本地文件夹快照） | AI 直接读那些文件（DSH 这类有文件权限的 AI 今天就能读） | 0（手工）；1 天（自动写） | 手动/准实时 | 是**副本**：明文落盘，别把这个文件夹同步到云盘；写回要另做 |
+| C | **VidaOS 侧加一个「数据出口」**：每次改动后把 `snapshot.json` 写到用户指定的文件夹（File System Access API，快照功能已有句柄持久化） | MCP server / 脚本读这个文件 | 1–2 天 | 准实时（改动后即可见） | 需要用户在 Chrome 里授权一次文件夹；Safari/Firefox 不支持该 API |
+| D | **写一个 VidaOS MCP server**（只读先行：`list_articles` / `read_article` / `search` / `list_books` / `read_book` / `list_marks`），配到 DSH / Claude Desktop 等 MCP 客户端 | 标准 MCP 工具调用 | 2–4 天（骨架半天，工具设计是大头） | 取决于它读的是文件还是服务 | 数据源仍是 C/B 的文件；工具一旦给写权限，模型就能改用户数据，建议先只读 + 写操作走"待确认队列" |
+| E | **本地小服务 + 待确认队列**（Node/Bun 常驻，管数据、提供 HTTP API 与 MCP，VidaOS 开应用时拉取/提交改动） | HTTP API 或 MCP | 1–2 周 | 准实时 | 多一个要常驻的进程；要定义冲突规则（建议 last-write-wins + 冲突留副本）；好处是顺手解决 WebDAV CORS、PDF、文件系统、将来 Tauri 壳 |
+| F | 浏览器扩展 / 自动化读页面里的 IndexedDB | 扩展桥接 | 3–5 天 | 实时 | 平台绑定、极脆、上架麻烦，**不建议** |
+
+### 建议的推进顺序
+1. **今天就能用（零代码）**：数据页导出 JSON/Markdown 到一个 DSH 能读的目录 → 让外部 AI 直接读副本聊天。
+   先用它验证「外部 AI 读我的东西」到底有没有用。
+2. **值得做再上 C**：把「导出」自动化成"每次改动后写一份到指定文件夹"，这是所有后续方案的公共地基。
+3. **要标准接口再上 D**：只读 MCP server 起步，接进 DSH/Claude Desktop；写权限后置。
+4. **只有确实需要实时双向，才上 E**。不要为了 MCP 丢掉「无后端 / 数据只在本地」这个核心卖点。
+
+### 实施时的注意点
+- **隐私**：B/C/D 都会在磁盘上产生**明文副本**。要么把出口目录排除在云同步/备份之外，
+  要么复用现成的端到端加密（WebDAV 那条链路已有 PBKDF2 + AES-256-GCM 的实现可参考）。
+- **冲突**：外部写入与浏览器内写入必然冲突。v1 建议**外部只读**；要写就走
+  `pending.json` 由用户在 VidaOS 里确认合并（复用 `importState(…, 'merge')` 的既有能力）。
+- **不要动 IndexedDB 作为唯一真源**：外部程序无法直接读写它；所有方案都应理解为
+  「把真源**投影**出去」或「让服务成为新的真源（= E 方案，代价最大）」。
+- **API key 不解决这个问题**：API key 是 VidaOS 主动**往外调**用的（内置 Agent 已在用）；
+  外部 AI 读进来需要的是**入口**，而浏览器的沙箱不允许网页提供入口。
+
+---
+
