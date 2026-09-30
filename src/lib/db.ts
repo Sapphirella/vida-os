@@ -1,6 +1,6 @@
 // VidaOS 数据持久化 - Dexie 封装
 import Dexie, { type Table } from 'dexie';
-import type { AppState, MediaFile, TabKey } from '@/types';
+import type { AppState, MediaFile, TabKey, Album } from '@/types';
 import { isTabKey } from '@/types';
 import { DEFAULT_BACKGROUND_PRESET } from './backgrounds';
 
@@ -92,6 +92,17 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
       pinned: b.pinned ?? false,
       tags: b.tags ?? [],
     })),
+    // 相册（v4.5）：旧数据没有时补默认星标集；任何情况下都保证星标集存在
+    albums: (() => {
+      const raw = r.albums ?? [];
+      return raw.some((a) => a.starred) ? raw : [STARRED_ALBUM, ...raw];
+    })(),
+    albumGroups: (r.albumGroups ?? []).map((g) => ({
+      ...g,
+      caption: g.caption ?? '',
+      imageIds: g.imageIds ?? [],
+    })),
+    albumStars: r.albumStars ?? [],
     agentSessions: r.agentSessions ?? [],
     agentConfig: { ...d.agentConfig, ...(r.agentConfig ?? {}) },
     agentDocs: r.agentDocs ?? [],
@@ -131,6 +142,16 @@ export async function listFiles(): Promise<MediaFile[]> {
 // 初始状态
 // ============================================================
 
+/** 星标集：全应用唯一、置顶显示、不可改名/删除（相册 v4.5） */
+export const STARRED_ALBUM_ID = 'album-starred';
+const STARRED_ALBUM: Album = {
+  id: STARRED_ALBUM_ID,
+  name: '星标集',
+  starred: true,
+  createdAt: 0,
+  updatedAt: 0,
+};
+
 export function defaultState(): AppState {
   return {
     version: 3,
@@ -157,6 +178,10 @@ export function defaultState(): AppState {
     tracks: [],
     // 馆藏（v4.4）：碎片流已整体移除，这一格换成书架
     books: [],
+    // 相册（v4.5）：预置星标集，其余图集由用户新建
+    albums: [STARRED_ALBUM],
+    albumGroups: [],
+    albumStars: [],
     agentSessions: [],
     agentConfig: {
       baseUrl: '',

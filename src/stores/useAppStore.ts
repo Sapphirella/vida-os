@@ -16,6 +16,9 @@ import type {
   TabKey,
   LibraryBook,
   BookMark,
+  Album,
+  AlbumGroup,
+  AlbumStar,
   AgentSession,
   AgentMessage,
   AgentConfig,
@@ -107,6 +110,22 @@ interface Actions {
   /** 打开阅读器时更新「最近阅读时间」（书架排序依据），不触碰 updatedAt */
   touchBookLastRead: (bookId: string) => void;
 
+  // 相册（馆藏 v4.5）：图集 / 图片组 / 星标集
+  addAlbum: (name: string) => string;
+  updateAlbum: (id: string, patch: Partial<Album>) => void;
+  /** 删除图集（连带删它的全部图片组；星标集不可删） */
+  deleteAlbum: (id: string) => void;
+  /** 打开图集时更新「最近阅读时间」（图集列表排序依据） */
+  touchAlbumLastRead: (id: string) => void;
+  /** 发布一组照片（图集内一次上传 = 一组） */
+  addAlbumGroup: (albumId: string, group: { caption: string; imageIds: string[] }) => string;
+  /** 编辑一组照片（只改文案/图片顺序，不动 createdAt —— 更新不算发布） */
+  updateAlbumGroup: (id: string, patch: Partial<Pick<AlbumGroup, 'caption' | 'imageIds'>>) => void;
+  deleteAlbumGroup: (id: string) => void;
+  /** 存入星标集（单张图 + 标签 + 来源引用） */
+  addAlbumStar: (star: Omit<AlbumStar, 'id' | 'createdAt'>) => void;
+  deleteAlbumStar: (id: string) => void;
+
   // Agent：会话
   createAgentSession: (title?: string) => string;
   updateAgentSession: (id: string, patch: Partial<AgentSession>) => void;
@@ -155,6 +174,9 @@ function snapshot(s: Store): AppState {
     categories: s.categories,
     tracks: s.tracks,
     books: s.books,
+    albums: s.albums,
+    albumGroups: s.albumGroups,
+    albumStars: s.albumStars,
     agentSessions: s.agentSessions,
     agentConfig: s.agentConfig,
     agentDocs: s.agentDocs,
@@ -677,6 +699,88 @@ export const useAppStore = create<Store>((set, get) => ({
       books: s.books.map((b) =>
         b.id === bookId ? { ...b, lastReadAt: now() } : b,
       ),
+    }));
+    persist(get());
+  },
+
+  // ── 相册（馆藏 v4.5）──
+  addAlbum: (name) => {
+    const id = uid('alb_');
+    const t = now();
+    set((s) => ({
+      albums: [
+        { id, name, starred: false, createdAt: t, updatedAt: t },
+        ...s.albums,
+      ],
+    }));
+    persist(get());
+    return id;
+  },
+  updateAlbum: (id, patch) => {
+    set((s) => ({
+      albums: s.albums.map((a) =>
+        a.id === id ? { ...a, ...patch, updatedAt: now() } : a,
+      ),
+    }));
+    persist(get());
+  },
+  deleteAlbum: (id) => {
+    // 星标集不可删（UI 上也不给入口，这里再兜一道）
+    if (id === 'album-starred') return;
+    set((s) => ({
+      albums: s.albums.filter((a) => a.id !== id),
+      albumGroups: s.albumGroups.filter((g) => g.albumId !== id),
+    }));
+    persist(get());
+  },
+  touchAlbumLastRead: (id) => {
+    set((s) => ({
+      albums: s.albums.map((a) => (a.id === id ? { ...a, lastReadAt: now() } : a)),
+    }));
+    persist(get());
+  },
+  addAlbumGroup: (albumId, group) => {
+    const id = uid('alg_');
+    const t = now();
+    set((s) => ({
+      albumGroups: [
+        { id, albumId, caption: group.caption, imageIds: group.imageIds, createdAt: t, updatedAt: t },
+        ...s.albumGroups,
+      ],
+    }));
+    persist(get());
+    return id;
+  },
+  updateAlbumGroup: (id, patch) => {
+    // 只改文案 / 图片顺序；createdAt（发布时间）不动 —— 更新不算发布
+    set((s) => ({
+      albumGroups: s.albumGroups.map((g) =>
+        g.id === id ? { ...g, ...patch, updatedAt: now() } : g,
+      ),
+    }));
+    persist(get());
+  },
+  deleteAlbumGroup: (id) => {
+    set((s) => ({
+      albumGroups: s.albumGroups.filter((g) => g.id !== id),
+    }));
+    persist(get());
+  },
+  addAlbumStar: (star) => {
+    // 同一张图在同一标签下只留一条，防止连点重复
+    const dup = get().albumStars.find(
+      (x) => x.imageId === star.imageId && x.tag === star.tag,
+    );
+    if (dup) return;
+    const id = uid('als_');
+    set((s) => ({
+      albumStars: [{ ...star, id, createdAt: now() }, ...s.albumStars],
+    }));
+    persist(get());
+  },
+  deleteAlbumStar: (id) => {
+    set((s) => ({
+      albumStars: s.albumStars.filter((x) => x.id !== id),
     }));
     persist(get());
   },

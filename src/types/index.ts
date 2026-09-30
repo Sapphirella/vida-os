@@ -118,8 +118,7 @@ export interface BookMark {
  * 馆藏 · 一本书（用户从本地导入的 txt / md 文本）
  * 正文直接存进主数据（state）：单本建议 ≤1 万字，再长渲染与标注都会卡。
  */
-export interface LibraryBook {
-  id: string;
+export interface LibraryBook {  id: string;
   title: string;
   /** 来源格式，决定阅读器是否按 Markdown 渲染 */
   format: 'txt' | 'md';
@@ -139,6 +138,47 @@ export interface LibraryBook {
   marks: BookMark[];
   createdAt: number;
   updatedAt: number;
+}
+
+/** 相册 · 图集（馆藏 v4.5：书架收文档，相册收照片） */
+export interface Album {
+  id: string;
+  name: string;
+  /** 星标集标记：全应用唯一、置顶显示，不可改名 / 删除 */
+  starred: boolean;
+  createdAt: number;
+  updatedAt: number;
+  /** 最近阅读时间（图集列表排序依据，打开图集时更新） */
+  lastReadAt?: number;
+}
+
+/** 相册 · 图集中的一组照片（一次上传发布 = 一组） */
+export interface AlbumGroup {
+  id: string;
+  albumId: string;
+  /** 这组照片的文案 */
+  caption: string;
+  /** 照片 fileId 列表（顺序即展示顺序） */
+  imageIds: string[];
+  /** 发布时间：时间轴排序依据；更新不算发布，不改这个字段 */
+  createdAt: number;
+  /** 最近编辑时间 */
+  updatedAt: number;
+}
+
+/** 星标集条目（单张图 + 来源） */
+export interface AlbumStar {
+  id: string;
+  /** 图片 fileId */
+  imageId: string;
+  /** 固定标签：文章 / 动态 / 灵感 / 相册 */
+  tag: 'article' | 'moment' | 'inspiration' | 'album';
+  /** 来源引用（双链跳转；tag=album 时没有来源） */
+  refType?: 'article' | 'moment' | 'inspiration';
+  refId?: string;
+  /** 可选备注 */
+  caption?: string;
+  createdAt: number;
 }
 
 /** Agent 会话消息 */
@@ -231,6 +271,10 @@ export interface AppState {
   tracks: Track[];
   /** 馆藏（v4.4 新增，取代已移除的碎片流） */
   books: LibraryBook[];
+  /** 相册（馆藏 v4.5）：图集 + 图片组 + 星标集 */
+  albums: Album[];
+  albumGroups: AlbumGroup[];
+  albumStars: AlbumStar[];
   agentSessions: AgentSession[];
   agentConfig: AgentConfig;
   agentDocs: AgentDoc[];

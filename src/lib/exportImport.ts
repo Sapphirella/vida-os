@@ -145,6 +145,14 @@ export function collectFileIds(state: AppState): Set<string> {
     (n.imageIds ?? []).forEach((id) => ids.add(id));
     scanText(n.content);
   });
+  // 相册（v4.5）：图集图片组 + 星标集条目里的图都要收，
+  // 否则三条备份路径只备份相册结构不备份照片
+  (state.albumGroups ?? []).forEach((g) => {
+    (g.imageIds ?? []).forEach((id) => ids.add(id));
+  });
+  (state.albumStars ?? []).forEach((st) => {
+    if (st.imageId) ids.add(st.imageId);
+  });
   if (state.profile.avatarId) ids.add(state.profile.avatarId);
   if (state.profile.backgroundFileId) ids.add(state.profile.backgroundFileId);
   return ids;
