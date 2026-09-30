@@ -56,7 +56,7 @@ export function EditorOverlay() {
           });
           showToast('已保存', 'success');
         } else {
-          addMoment({ content, imageIds });
+          addMoment({ content, imageIds, ...(createdAt ? { createdAt } : {}) });
           showToast('动态已发布', 'success');
         }
         break;

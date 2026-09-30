@@ -56,7 +56,7 @@ interface Actions {
   deleteArticle: (id: string) => void;
 
   // 动态
-  addMoment: (moment: Omit<Moment, 'id' | 'createdAt'>) => string;
+  addMoment: (moment: Omit<Moment, 'id' | 'createdAt'> & { createdAt?: number }) => string;
   updateMoment: (id: string, patch: Partial<Moment>) => void;
   deleteMoment: (id: string) => void;
   addMomentComment: (momentId: string, content: string, author?: string) => string;
@@ -247,7 +247,7 @@ export const useAppStore = create<Store>((set, get) => ({
   addMoment: (moment) => {
     const id = uid('mom_');
     set((s) => ({
-      moments: [{ ...moment, id, createdAt: now() }, ...s.moments],
+      moments: [{ ...moment, id, createdAt: moment.createdAt ?? now() }, ...s.moments],
     }));
     persist(get());
     return id;

@@ -227,7 +227,7 @@ export function MomentsPage() {
                               }
                               aria-label="编辑动态"
                               title="编辑（可同时修改时间）"
-                              className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center text-bronze hover:text-candle transition-all"
+                              className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle transition-all"
                             >
                               <Edit2 size={13} strokeWidth={1.5} />
                             </button>
@@ -239,7 +239,7 @@ export function MomentsPage() {
                                 }
                               }}
                               aria-label="删除动态"
-                              className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center text-bronze hover:text-wine-bright transition-all"
+                              className="w-7 h-7 flex items-center justify-center text-bronze hover:text-wine-bright transition-all"
                             >
                               <Trash2 size={13} strokeWidth={1.5} />
                             </button>
