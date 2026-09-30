@@ -127,8 +127,12 @@ export function SettingsPage() {
             <p className="text-paper">
               文章：支持 Markdown 长文与双链笔记。写{' '}
               <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[文章标题]]</code>{' '}
-              即可互相链接，页面底部会显示反向链接 / 正向链接；正文可内嵌本地图片
-              （编辑器的图库里点「插入」），图片点击可放大并保存 / 下载。
+              即可互相链接，页面底部会显示反向链接 / 正向链接；图片点击可放大并保存 / 下载。
+            </p>
+            <p className="text-paper mt-1">
+              图片插入：选图先进入底部备选区（此时还没插入，预览看不到）。点缩略图右下角
+              的插入按钮，图片才会写进正文光标处并生效；未插入的备选图保存后仍保留在
+              备选区（下次编辑还能看到），但不会出现在文章展示里。缩略图金色描边 = 已插入正文。
             </p>
             <p className="text-paper mt-1">
               合集：把文章归到合集里整理。收藏夹：收藏的文章、动态统一查看。
@@ -139,7 +143,8 @@ export function SettingsPage() {
             <h4 className="font-serif text-candle font-semibold mb-1">馆藏</h4>
             <p className="text-paper">
               导入本地 txt / md 文本当书读：长按 / 选中一段可划线、高亮，都收在书里
-              右上角的「书签」。书架按最近阅读排序，可置顶多本；支持给书打标签，
+              右上角的「书签」——点书签会精确跳到标注所在的那一行。书架按最近阅读
+              排序，可置顶多本，进度条按真实阅读进度走；支持给书打标签，
               点标签筛选（双击重命名、悬停 × 删除）。
             </p>
           </section>

@@ -34,7 +34,7 @@ import { MarkdownView, collectInlineImageIds } from '@/components/common/Markdow
 import { compressImage, uid, clsx, formatDate } from '@/lib/utils';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { putFile, deleteFile } from '@/lib/db';
+import { putFile } from '@/lib/db';
 import { MediaImage } from '@/components/common/MediaImage';
 
 interface MarkdownEditorProps {
@@ -111,8 +111,6 @@ export function MarkdownEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const collections = useAppStore((s) => s.collections);
   const articles = useAppStore((s) => s.articles);
-  const moments = useAppStore((s) => s.moments);
-  const inspirations = useAppStore((s) => s.notes.inspiration);
   const isFavorited = useAppStore((s) =>
     favoriteId ? s.isFavorited(favoriteId.refType, favoriteId.refId) : false,
   );
@@ -252,34 +250,20 @@ export function MarkdownEditor({
       showToast('请填写内容', 'error');
       return;
     }
-    // 备选区图片 ≠ 插入：只有正文里用 fileRef 引用的才算是文章的图片。
-    // 未插入的备选图不进入文章；若它也不再被任何文章/动态/灵感引用，就把文件删掉。
+    // 备选区图片 ≠ 插入：只有正文里用 fileRef 引用的图才在文章里展示。
+    // 未插入的备选图不删除、不丢弃，原样保留在备选区（下次打开编辑器还能看到，随时插入）。
     const inline = new Set(collectInlineImageIds(content));
-    const keep = imageIds.filter((id) => inline.has(id));
-    const drop = imageIds.filter((id) => !inline.has(id));
-    const stillUsed = (id: string) =>
-      [
-        content,
-        ...articles.map((a) => a.content),
-        ...moments.map((m) => m.content),
-        ...inspirations.map((n) => n.content),
-      ].some((c) => c.includes(`fileRef:${id}`)) ||
-      [...articles.map((a) => a.imageIds), ...moments.map((m) => m.imageIds), ...inspirations.map((n) => n.imageIds)].some(
-        (ids) => ids.includes(id),
-      );
-    for (const id of drop) {
-      if (!stillUsed(id)) void deleteFile(id);
-    }
-    if (drop.length > 0) {
+    const pending = imageIds.filter((id) => !inline.has(id));
+    if (pending.length > 0) {
       showToast(
-        drop.length === 1 ? '1 张未插入的备选图未保存进文章' : `${drop.length} 张未插入的备选图未保存进文章`,
+        pending.length === 1 ? '1 张未插入的图保留在备选区' : `${pending.length} 张未插入的图保留在备选区`,
         'info',
       );
     }
     onSave({
       title: title.trim(),
       content,
-      imageIds: keep,
+      imageIds,
       collectionId,
       tags,
       ...(mode === 'moment' ? { createdAt } : {}),

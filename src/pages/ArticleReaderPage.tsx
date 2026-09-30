@@ -92,12 +92,10 @@ export function ArticleReaderPage() {
     );
   }
 
-  // 图片统一放在正文下方（不再有任何图片出现在全文上方）；
-  // 已经用 fileRef: 插进正文的图片不在这里重复显示。
+  // 正文下方只放封面图；imageIds 里的其余图是编辑器备选区资源（可能未插入），不在这里展示。
+  // 已经用 fileRef: 插进正文的封面图不重复显示。
   const inlineIds = new Set(collectInlineImageIds(article.content));
-  const galleryIds = Array.from(
-    new Set([article.coverId, ...article.imageIds].filter((x): x is string => !!x)),
-  ).filter((id) => !inlineIds.has(id));
+  const galleryIds = (article.coverId ? [article.coverId] : []).filter((id) => !inlineIds.has(id));
 
   return (
     <article className="px-4 sm:px-6 view-enter">
