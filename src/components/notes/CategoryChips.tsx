@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Tag as TagIcon, Plus, X, Check } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
+import type { Categories } from '@/types';
 import { useUIStore } from '@/stores/useUIStore';
 import { clsx } from '@/lib/utils';
 
 interface CategoryChipsProps {
-  which: 'inspiration' | 'schedule' | 'todo';
+  which: keyof Categories;
   selected: string | null;
   onSelect: (cat: string | null) => void;
 }
