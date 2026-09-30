@@ -499,7 +499,7 @@ function BookTagsPanel({ bookId }: { bookId: string }) {
         </button>
       )}
       <p className="font-mono text-[10px] text-bronze-deep tracking-wider">
-        删除标签请回书架顶部的标签栏（悬停标签右侧的 ×）
+        删除标签请回书架顶部的标签栏（点标签右侧的 ×）
       </p>
     </div>
   );

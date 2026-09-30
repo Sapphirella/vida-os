@@ -93,7 +93,7 @@ export function CategoryChips({ which, selected, onSelect }: CategoryChipsProps)
                     showToast('已删除分类', 'success');
                   }
                 }}
-                className="opacity-0 group-hover:opacity-100 ml-0.5 w-4 h-4 flex items-center justify-center text-bronze hover:text-wine-light transition-all"
+                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ml-0.5 w-4 h-4 flex items-center justify-center text-bronze hover:text-wine-light transition-all"
               >
                 <X size={9} strokeWidth={1.6} />
               </button>

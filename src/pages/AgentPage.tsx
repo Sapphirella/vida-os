@@ -115,7 +115,7 @@ export function AgentPage() {
                           updateAgentSession(s.id, { archived: true });
                           showToast('已归档', 'info');
                         }}
-                        className="w-7 h-7 flex items-center justify-center text-bronze opacity-0 group-hover:opacity-100 hover:text-candle transition-all"
+                        className="w-7 h-7 flex items-center justify-center text-bronze opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-candle transition-all"
                         aria-label="归档会话"
                         title="归档"
                       >
