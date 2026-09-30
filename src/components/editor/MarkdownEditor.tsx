@@ -4,7 +4,6 @@ import {
   useState,
   useCallback,
   useLayoutEffect,
-  useEffect,
   useMemo,
 } from 'react';
 import {
@@ -27,7 +26,6 @@ import {
   Star,
   Clock,
   CornerUpLeft,
-  GripVertical,
   Waypoints,
 } from 'lucide-react';
 import { MarkdownView, collectInlineImageIds } from '@/components/common/MarkdownView';
@@ -87,12 +85,6 @@ export function MarkdownEditor({
   const [createdAt, setCreatedAt] = useState<number>(initialCreatedAt ?? Date.now());
   /** 拖拽排序中的源下标（桌面 HTML5 拖拽） */
   const [dragFrom, setDragFrom] = useState<number | null>(null);
-  /** 编辑区当前选区（非空时显示浮动格式条） */
-  const [selRange, setSelRange] = useState<{ start: number; end: number } | null>(null);
-  /** 已经插进正文的图片（正文里用 fileRef:<id> 引用），缩略图上会打标记 */
-  const inlineIds = new Set(
-    Array.from(content.matchAll(/fileRef:([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
-  );
   const [mode_, setMode] = useState<'edit' | 'preview'>('edit');
   const [showCollections, setShowCollections] = useState(false);
   /** 双链文章选择器是否打开（桌面工具栏） */
@@ -116,6 +108,7 @@ export function MarkdownEditor({
   );
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const showToast = useUIStore((s) => s.showToast);
+  const setLightbox = useUIStore((s) => s.setLightbox);
   /** 是否触屏设备（触摸上使用长按拖拽、插入不抢键盘）；
    *  宽屏触屏（iPad）也走移动端交互，统一按指针类型划分 */
   const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -204,23 +197,6 @@ export function MarkdownEditor({
     if (Math.abs(curPx - sh) > 2) ta.style.height = `${sh}px`;
   }, [content, mode_]);
 
-  // 跟踪文本选区：非空选中时在编辑区底部弹出浮动格式条
-  useEffect(() => {
-    const onSel = () => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      setSelRange((prev) => {
-        const next = start !== end ? { start, end } : null;
-        if (!next && !prev) return prev;
-        if (next && prev && next.start === prev.start && next.end === prev.end) return prev;
-        return next;
-      });
-    };
-    document.addEventListener('selectionchange', onSel);
-    return () => document.removeEventListener('selectionchange', onSel);
-  }, []);
 
   /** 在当前光标处插入一段文本 */
   const insertText = (text: string) => {
@@ -588,24 +564,6 @@ export function MarkdownEditor({
           </div>
         )}
 
-        {/* 选区浮动格式条：选中文字后浮于编辑区底部、工具栏上方 */}
-        {selRange && mode_ === 'edit' && (
-          <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none z-20">
-            <div
-              className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-bronze/25 backdrop-blur px-1.5 py-1"
-              style={{ background: 'var(--editor-float-bg)', boxShadow: '0 4px 18px rgba(0,0,0,0.4)' }}
-            >
-              <span className="font-mono text-[10px] text-bronze-deep px-1.5 select-none">
-                {selRange.end - selRange.start}
-              </span>
-              <FloatBtn onClick={() => insert('**', '**', '粗体')} icon={<Bold size={16} />} label="粗体" />
-              <FloatBtn onClick={() => insert('*', '*', '斜体')} icon={<Italic size={16} />} label="斜体" />
-              <FloatBtn onClick={insertLink} icon={<LinkIcon size={16} />} label="链接" />
-              <FloatBtn onClick={insertWiki} icon={<Waypoints size={16} />} label="双链" />
-              <FloatBtn onClick={() => insert('> ', '', '引用')} icon={<Quote size={16} />} label="引用" />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 移动端内联语法工具栏：光标在编辑区时显示，单行细窄条，
@@ -681,7 +639,6 @@ export function MarkdownEditor({
         {imageIds.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-[62%] py-1">
             {imageIds.map((id, i) => {
-              const inText = inlineIds.has(id);
               return (
                 <div
                   key={id}
@@ -697,19 +654,19 @@ export function MarkdownEditor({
                   className={clsx(
                     'relative w-14 h-14 rounded overflow-hidden border flex-shrink-0 group transition-all',
                     dragFrom === i ? 'border-candle opacity-60' : 'border-bronze/20',
-                    inText && 'ring-1 ring-amber',
                     !isCoarse && 'cursor-grab active:cursor-grabbing',
                   )}
-                  title={inText ? '已插入正文' : '未插入正文：点右下角按钮插入到光标处'}
+                  title="点击缩略图可预览大图；点右下角按钮插入到正文光标处（同一张图可多次插入）"
+                  aria-label={`配图 ${i + 1}，点击预览`}
                 >
                   <MediaImage
                     fileId={id}
                     alt={`配图 ${i + 1}`}
                     className="w-full h-full object-cover"
+                    onOpen={() => setLightbox({ fileId: id })}
                   />
-                  {/* 序号 / 拖拽把手 */}
+                  {/* 序号 */}
                   <span className="absolute top-0 left-0 flex items-center px-0.5 font-mono text-[9px] leading-4 text-moon bg-ink/75">
-                    <GripVertical size={9} strokeWidth={2} />
                     {i + 1}
                   </span>
                   {/* 移除 */}
@@ -723,11 +680,11 @@ export function MarkdownEditor({
                   >
                     ×
                   </button>
-                  {/* 插入正文 */}
+                  {/* 插入正文：每次点击都插入一次（同一张图可在正文出现多次） */}
                   <button
                     onClick={() => insertText(`\n![图片](fileRef:${id})\n`)}
                     aria-label={`把第 ${i + 1} 张插入正文`}
-                    title="插入到正文光标处"
+                    title="插入到正文光标处（可多次插入同一张图）"
                     className="absolute bottom-0 right-0 w-5 h-5 flex items-center justify-center bg-wine/85 text-moon"
                   >
                     <CornerUpLeft size={11} strokeWidth={1.8} />
@@ -799,29 +756,6 @@ function SBtn({
           ? 'text-candle bg-candle/10'
           : 'text-bronze hover:text-candle active:bg-bronze/10 active:text-candle',
       )}
-    >
-      {icon}
-    </button>
-  );
-}
-
-/** 选区浮动条按钮：44px 触控目标 */
-function FloatBtn({
-  onClick,
-  icon,
-  label,
-}: {
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      onMouseDown={(e) => e.preventDefault()}
-      className="w-11 h-11 flex items-center justify-center rounded-full text-bronze hover:text-candle hover:bg-bronze/10 transition-colors"
     >
       {icon}
     </button>
