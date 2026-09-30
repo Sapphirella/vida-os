@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Tag as TagIcon, Plus, X, Check, Pencil } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, Check } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import type { Categories } from '@/types';
 import { useUIStore } from '@/stores/useUIStore';
@@ -85,33 +85,18 @@ export function CategoryChips({ which, selected, onSelect }: CategoryChipsProps)
               </button>
             )}
             {!isEditing && (
-              <>
-                <button
-                  onClick={() => {
-                    setEditingCat(c);
-                    setEditValue(c);
-                  }}
-                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 ml-0.5 w-4 h-4 flex items-center justify-center text-bronze hover:text-candle transition-all"
-                  aria-label={`重命名 ${c}`}
-                  title="重命名"
-                >
-                  <Pencil size={9} strokeWidth={1.6} />
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`删除分类「${c}」？该分类下的便签不会被删除。`)) {
-                      removeCategory(which, c);
-                      if (selected === c) onSelect(null);
-                      showToast('已删除分类', 'success');
-                    }
-                  }}
-                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 ml-0.5 w-4 h-4 flex items-center justify-center text-bronze hover:text-wine-light transition-all"
-                  aria-label={`删除分类 ${c}`}
-                  title="删除"
-                >
-                  <X size={9} strokeWidth={1.6} />
-                </button>
-              </>
+              <button
+                onClick={() => {
+                  if (confirm(`删除分类「${c}」？该分类下的便签不会被删除。`)) {
+                    removeCategory(which, c);
+                    if (selected === c) onSelect(null);
+                    showToast('已删除分类', 'success');
+                  }
+                }}
+                className="opacity-0 group-hover:opacity-100 ml-0.5 w-4 h-4 flex items-center justify-center text-bronze hover:text-wine-light transition-all"
+              >
+                <X size={9} strokeWidth={1.6} />
+              </button>
             )}
           </div>
         );

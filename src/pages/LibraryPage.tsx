@@ -431,26 +431,19 @@ function BookTagsPanel({ bookId }: { bookId: string }) {
             );
           }
           return (
-            <div key={t} className="group flex items-center">
-              <button
-                onClick={() => toggle(t)}
-                className={on ? 'tag tag-wine' : 'tag hover:brightness-110'}
-              >
-                <TagIcon size={10} strokeWidth={1.6} />
-                {t}
-              </button>
-              <button
-                onClick={() => {
-                  setEditingTag(t);
-                  setEditValue(t);
-                }}
-                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 ml-0.5 w-4 h-4 flex items-center justify-center text-bronze hover:text-candle transition-all"
-                aria-label={`重命名标签 ${t}`}
-                title="重命名"
-              >
-                <Pencil size={9} strokeWidth={1.6} />
-              </button>
-            </div>
+            <button
+              key={t}
+              onClick={() => toggle(t)}
+              onDoubleClick={() => {
+                setEditingTag(t);
+                setEditValue(t);
+              }}
+              className={on ? 'tag tag-wine' : 'tag hover:brightness-110'}
+              title="双击重命名"
+            >
+              <TagIcon size={10} strokeWidth={1.6} />
+              {t}
+            </button>
           );
         })}
       </div>
