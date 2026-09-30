@@ -460,32 +460,32 @@ export function SettingsPage() {
           />
         </Card>
 
-        {/* 关于：使用说明 + 更新日志 */}
+        {/* 关于：使用说明 + 更新日志 + 清除缓存 */}
         <Card className="p-5 sm:p-6">
           <h3 className="font-serif text-headline text-lg mb-3">关于</h3>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={openGuide}
-              className="flex items-center justify-center gap-2 px-3 py-3 rounded-card border border-bronze/15 text-sm font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
+              className="flex items-center justify-center gap-1.5 px-2 py-3 rounded-card border border-bronze/15 text-[13px] font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
             >
-              <BookOpen size={15} strokeWidth={1.5} className="text-wine-light" />
+              <BookOpen size={14} strokeWidth={1.5} className="text-wine-light flex-none" />
               使用说明
             </button>
             <button
               onClick={openChangelog}
-              className="flex items-center justify-center gap-2 px-3 py-3 rounded-card border border-bronze/15 text-sm font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
+              className="flex items-center justify-center gap-1.5 px-2 py-3 rounded-card border border-bronze/15 text-[13px] font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
             >
-              <History size={15} strokeWidth={1.5} className="text-wine-light" />
+              <History size={14} strokeWidth={1.5} className="text-wine-light flex-none" />
               更新日志
             </button>
+            <button
+              onClick={() => void clearCache()}
+              className="flex items-center justify-center gap-1.5 px-2 py-3 rounded-card border border-bronze/15 text-[13px] font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
+            >
+              <Trash2 size={14} strokeWidth={1.5} className="text-wine-light flex-none" />
+              清除缓存
+            </button>
           </div>
-          <button
-            onClick={() => void clearCache()}
-            className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-card border border-bronze/15 text-sm font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
-          >
-            <Trash2 size={14} strokeWidth={1.5} className="text-wine-light" />
-            清除缓存
-          </button>
         </Card>
 
         {/* 品牌栏 */}
