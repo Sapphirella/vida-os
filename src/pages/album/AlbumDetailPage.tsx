@@ -384,7 +384,7 @@ export function AlbumDetailPage() {
           onSubmit={(images, caption) => {
             if (editor.mode === 'edit') {
               updateAlbumGroup(editor.group.id, { caption, imageIds: images });
-              showToast('已保存（更新不改排序）', 'success');
+              showToast('已保存', 'success');
             } else {
               addAlbumGroup(album.id, { caption, imageIds: images });
               showToast('已发布', 'success');
