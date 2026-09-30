@@ -34,15 +34,9 @@ export function DeskPage() {
         </div>
       </section>
 
-      {/* 待办：展示所有未完成待办 */}
+      {/* 待办：展示所有未完成待办（无标题分隔线） */}
       <section className="px-4 sm:px-6 pb-4">
         <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-3 mb-3 px-1">
-            <span className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
-              todo
-            </span>
-            <div className="flex-1 h-px bg-bronze/10" />
-          </div>
           <TodoSummaryCard />
         </div>
       </section>
@@ -57,6 +51,12 @@ export function DeskPage() {
       {/* 音乐播放器 */}
       <section className="px-4 sm:px-6 pb-6">
         <div className="max-w-5xl mx-auto">
+          <div className="flex items-center gap-3 mb-3 px-1">
+            <span className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
+              soundscape
+            </span>
+            <div className="flex-1 h-px bg-bronze/10" />
+          </div>
           <MusicPlayerCard />
         </div>
       </section>
