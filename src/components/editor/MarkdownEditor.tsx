@@ -263,13 +263,31 @@ export function MarkdownEditor({
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    // 压缩 + 写入 IndexedDB 可能较慢，先给「正在上传」反馈，避免用户以为没选上
+    showToast(
+      files.length === 1 ? '正在上传图片…' : `正在上传 ${files.length} 张图片…`,
+      'info',
+    );
+    let ok = 0;
     for (const f of files) {
-      const compressed = await compressImage(f, 1600, 0.82);
-      const id = uid('img_');
-      await putFile({ id, blob: compressed, mime: compressed.type, name: f.name, size: compressed.size });
-      setImageIds((prev) => [...prev, id]);
+      try {
+        const compressed = await compressImage(f, 1600, 0.82);
+        const id = uid('img_');
+        await putFile({ id, blob: compressed, mime: compressed.type, name: f.name, size: compressed.size });
+        setImageIds((prev) => [...prev, id]);
+        ok++;
+      } catch {
+        // 单张失败不中断整批，最后统一提示
+      }
     }
-    showToast(`已添加 ${files.length} 张图片`, 'success');
+    if (ok === files.length) {
+      showToast(`已添加 ${ok} 张图片`, 'success');
+    } else if (ok > 0) {
+      showToast(`${ok} 张已添加，${files.length - ok} 张上传失败`, 'error');
+    } else {
+      showToast('图片上传失败', 'error');
+    }
     e.target.value = '';
   };
 
