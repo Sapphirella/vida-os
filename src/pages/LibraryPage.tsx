@@ -24,6 +24,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import {
   bookCharCount,
   formatFromFilename,
+  parseBook,
   progressOf,
   titleFromFilename,
   HARD_MAX_CHARS,
@@ -286,7 +287,9 @@ export function LibraryPage() {
 /** 书架单本书卡片（置顶区与最近阅读区共用） */
 function BookCard({ book, onMenu }: { book: LibraryBook; onMenu: (book: LibraryBook) => void }) {
   const navigate = useNavigate();
-  const progress = progressOf(book, 1);
+  // 进度按本书真实段落数算（之前写死传 1，导致进度条要么短条要么满格、读一半和读完一个样）
+  const blocks = useMemo(() => parseBook(book.content, book.format), [book.content, book.format]);
+  const progress = progressOf(book, blocks.length);
   return (
     <li>
       <Card className="group p-0 overflow-hidden h-full flex flex-col">
