@@ -84,9 +84,9 @@ export function CollectionPage() {
                 重命名
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    confirm(
+                    await useUIStore.getState().confirmDialog(
                       `删除合集「${collection.name}」？\n合集下的文章不会被删除，但会移出此合集。`,
                     )
                   ) {

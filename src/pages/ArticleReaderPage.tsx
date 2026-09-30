@@ -153,8 +153,8 @@ export function ArticleReaderPage() {
               <Edit2 size={14} strokeWidth={1.5} /> 编辑
             </button>
             <button
-              onClick={() => {
-                if (confirm('删除该文章？此操作无法撤销。')) {
+              onClick={async () => {
+                if (await useUIStore.getState().confirmDialog('删除该文章？此操作无法撤销。')) {
                   deleteArticle(article.id);
                   navigate('/space');
                   showToast('文章已删除', 'success');

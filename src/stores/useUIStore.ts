@@ -88,6 +88,12 @@ interface UIStore {
   };
   showModal: (m: Partial<UIStore['modal']>) => void;
   closeModal: () => void;
+
+  // 确认对话框（Promise 风格，替代 window.confirm）
+  // 微信内置浏览器等环境里原生 confirm 没有「取消」按钮，必须用应用内弹窗
+  confirmRequest: { message: string; resolve: (ok: boolean) => void } | null;
+  confirmDialog: (message: string) => Promise<boolean>;
+  confirmRespond: (ok: boolean) => void;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -134,4 +140,16 @@ export const useUIStore = create<UIStore>((set) => ({
   modal: { open: false },
   showModal: (m) => set((s) => ({ modal: { ...s.modal, ...m, open: true } })),
   closeModal: () => set({ modal: { open: false } }),
+
+  confirmRequest: null,
+  confirmDialog: (message) =>
+    new Promise((resolve) => {
+      set({ confirmRequest: { message, resolve } });
+    }),
+  confirmRespond: (ok) => {
+    set((s) => {
+      s.confirmRequest?.resolve(ok);
+      return { confirmRequest: null };
+    });
+  },
 }));

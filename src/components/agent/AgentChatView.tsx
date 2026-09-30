@@ -136,8 +136,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
     }
   };
 
-  const delMsg = (m: AgentMessage) => {
-    if (confirm('删除这条消息？')) {
+  const delMsg = async (m: AgentMessage) => {
+    if (await useUIStore.getState().confirmDialog('删除这条消息？')) {
       useAppStore.getState().removeAgentMessage(sessionId, m.id);
     }
   };
@@ -708,7 +708,7 @@ function PanelInner({
                   <Download size={13} strokeWidth={1.5} />
                 </button>
                 <button
-                  onClick={() => { if (confirm(`删除会话「${s.title}」？`)) { deleteAgentSession(s.id); if (sessionId === s.id) setAgentSessionId(null); } }}
+                  onClick={async () => { if (await useUIStore.getState().confirmDialog(`删除会话「${s.title}」？`)) { deleteAgentSession(s.id); if (sessionId === s.id) setAgentSessionId(null); } }}
                   className="text-bronze hover:text-wine-bright flex-none"
                   aria-label="删除"
                 >

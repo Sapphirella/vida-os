@@ -83,9 +83,9 @@ export function LibraryPage() {
           }
           if (
             charCount > RECOMMENDED_MAX_CHARS &&
-            !confirm(
+            !(await useUIStore.getState().confirmDialog(
               `「${title}」约 ${charCount} 字，超过建议的 1 万字，阅读与划线可能会卡。\n仍要导入吗？`,
-            )
+            ))
           ) {
             continue;
           }
@@ -145,9 +145,9 @@ export function LibraryPage() {
             </button>
             <button
               className="btn-ghost text-wine-light"
-              onClick={() => {
+              onClick={async () => {
                 useUIStore.getState().closeModal();
-                if (confirm(`把《${book.title}》从书架移除？划线记录会一起删掉。`)) {
+                if (await useUIStore.getState().confirmDialog(`把《${book.title}》从书架移除？划线记录会一起删掉。`)) {
                   deleteBook(book.id);
                   showToast('已移出书架', 'info');
                 }

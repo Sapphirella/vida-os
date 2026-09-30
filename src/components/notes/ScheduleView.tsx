@@ -96,8 +96,8 @@ export function ScheduleView() {
                       updateSchedule(it.id, data);
                       setEditingId(null);
                     }}
-                    onDelete={() => {
-                      if (confirm('删除该日程？')) deleteSchedule(it.id);
+                    onDelete={async () => {
+                      if (await useUIStore.getState().confirmDialog('删除该日程？')) deleteSchedule(it.id);
                     }}
                     onToggle={() => toggleDone(it.id)}
                   />
@@ -133,8 +133,8 @@ export function ScheduleView() {
                             updateSchedule(it.id, data);
                             setEditingId(null);
                           }}
-                          onDelete={() => {
-                            if (confirm('删除该日程？')) deleteSchedule(it.id);
+                          onDelete={async () => {
+                            if (await useUIStore.getState().confirmDialog('删除该日程？')) deleteSchedule(it.id);
                           }}
                           onToggle={() => toggleDone(it.id)}
                         />

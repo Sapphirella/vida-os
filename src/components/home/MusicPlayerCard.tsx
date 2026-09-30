@@ -56,7 +56,7 @@ export function MusicPlayerCard() {
   };
 
   const handleDelete = async (t: Track) => {
-    if (!window.confirm(`删除歌曲「${t.title}」？\n对应的音频文件也会一并删除。`)) return;
+    if (!(await useUIStore.getState().confirmDialog(`删除歌曲「${t.title}」？\n对应的音频文件也会一并删除。`))) return;
     // 正在播放这首时先彻底停止并释放资源
     if (t.id === music.currentTrackId) music.stop();
     if (t.fileId) {

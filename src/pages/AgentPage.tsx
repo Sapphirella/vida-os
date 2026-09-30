@@ -176,8 +176,8 @@ export function AgentPage() {
                       <Download size={14} strokeWidth={1.5} />
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm(`删除会话「${s.title}」？此操作不可恢复。`)) {
+                      onClick={async () => {
+                        if (await useUIStore.getState().confirmDialog(`删除会话「${s.title}」？此操作不可恢复。`)) {
                           deleteAgentSession(s.id);
                           showToast('已删除', 'info');
                         }

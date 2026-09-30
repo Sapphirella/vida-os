@@ -132,8 +132,8 @@ export function DayScheduleCard() {
                     <Edit2 size={12} strokeWidth={1.4} />
                   </button>
                   <button
-                    onClick={() => {
-                      if (confirm('确认删除该日程？')) del(it.id);
+                    onClick={async () => {
+                      if (await useUIStore.getState().confirmDialog('确认删除该日程？')) del(it.id);
                     }}
                     className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 w-6 h-6 flex items-center justify-center text-bronze hover:text-wine-light transition-all"
                     aria-label="删除"

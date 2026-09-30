@@ -206,9 +206,9 @@ export function DataPage() {
     try {
       const info = await downloadFromWebDav(cfg, pass);
       if (
-        !confirm(
+        !(await useUIStore.getState().confirmDialog(
           `用云端这份备份覆盖当前全部数据？\n\n${new Date(info.createdAt).toLocaleString('zh-CN')} · ${humanBytes(info.bytes)}${info.encrypted ? ' · 已加密' : ''}\n\n当前数据将被替换（建议先手动导出一份 JSON 再恢复）。`,
-        )
+        ))
       ) {
         return;
       }
@@ -283,7 +283,7 @@ export function DataPage() {
   };
 
   const doRestore = async (name: string) => {
-    if (!confirm(`用这份快照覆盖当前全部数据？\n\n${name}\n\n当前数据将被替换（建议先手动导出一份 JSON 再恢复）。`)) return;
+    if (!(await useUIStore.getState().confirmDialog(`用这份快照覆盖当前全部数据？\n\n${name}\n\n当前数据将被替换（建议先手动导出一份 JSON 再恢复）。`))) return;
     try {
       const restored = await restoreSnapshot(name);
       importState(restored, 'overwrite');
@@ -295,7 +295,7 @@ export function DataPage() {
   };
 
   const doDeleteSnapshot = async (name: string) => {
-    if (!confirm(`删除这份快照？\n\n${name}`)) return;
+    if (!(await useUIStore.getState().confirmDialog(`删除这份快照？\n\n${name}`))) return;
     try {
       await deleteSnapshot(name);
       await refreshSnapshots();
@@ -416,8 +416,8 @@ export function DataPage() {
                 <button
                   className="btn-primary"
                   style={{ background: 'var(--wine-deep)' }}
-                  onClick={() => {
-                    if (confirm('覆盖将清空所有现有数据，确认？')) {
+                  onClick={async () => {
+                    if (await useUIStore.getState().confirmDialog('覆盖将清空所有现有数据，确认？')) {
                       importState(parsed.state, 'overwrite');
                       useUIStore.getState().closeModal();
                       showToast('已覆盖', 'success');
@@ -828,9 +828,9 @@ export function DataPage() {
           <h3 className="font-serif text-headline text-lg mb-1">重置</h3>
           <p className="text-bronze text-xs mb-4">清空所有数据，回到初始状态</p>
           <button
-            onClick={() => {
-              if (confirm('这将清空所有数据，无法恢复。确认？')) {
-                if (confirm('再次确认：所有数据将被永久删除。')) {
+            onClick={async () => {
+              if (await useUIStore.getState().confirmDialog('这将清空所有数据，无法恢复。确认？')) {
+                if (await useUIStore.getState().confirmDialog('再次确认：所有数据将被永久删除。')) {
                   useAppStore.getState().resetAll();
                   db.files.clear();
                   showToast('已重置', 'success');

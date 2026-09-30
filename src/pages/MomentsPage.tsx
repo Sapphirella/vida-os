@@ -232,8 +232,8 @@ export function MomentsPage() {
                               <Edit2 size={13} strokeWidth={1.5} />
                             </button>
                             <button
-                              onClick={() => {
-                                if (confirm('删除该动态？')) {
+                              onClick={async () => {
+                                if (await useUIStore.getState().confirmDialog('删除该动态？')) {
                                   deleteMoment(m.id);
                                   showToast('已删除', 'success');
                                 }

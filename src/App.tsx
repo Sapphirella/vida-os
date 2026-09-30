@@ -9,6 +9,7 @@ import { EditorOverlay } from '@/components/editor/EditorOverlay';
 import { GlobalFindReplaceCard } from '@/components/search/GlobalFindReplaceCard';
 import { Toast } from '@/components/common/Toast';
 import { Modal } from '@/components/common/Modal';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ImageLightbox } from '@/components/common/ImageLightbox';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
@@ -120,6 +121,7 @@ function App() {
       <ImageLightbox />
       <Toast />
       <Modal />
+      <ConfirmDialog />
     </div>
   );
 }

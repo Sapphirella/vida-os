@@ -334,8 +334,8 @@ export function TodoView() {
                 setEditingId(null);
               }}
               onToggle={() => toggleTodo(t.id)}
-              onDelete={() => {
-                if (confirm('删除该待办？')) deleteTodo(t.id);
+              onDelete={async () => {
+                if (await useUIStore.getState().confirmDialog('删除该待办？')) deleteTodo(t.id);
               }}
             />
           ))}

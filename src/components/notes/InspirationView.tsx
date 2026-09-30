@@ -237,8 +237,8 @@ export function InspirationView() {
                 updateInspiration(item.id, { content, imageIds });
                 setEditingId(null);
               }}
-              onDelete={() => {
-                if (confirm('删除这条灵感？')) deleteInspiration(item.id);
+              onDelete={async () => {
+                if (await useUIStore.getState().confirmDialog('删除这条灵感？')) deleteInspiration(item.id);
               }}
               onStar={() => toggleInspirationStar(item.id)}
               onConvert={() => handleConvert(item.id)}

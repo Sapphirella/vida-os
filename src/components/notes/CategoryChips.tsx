@@ -86,8 +86,8 @@ export function CategoryChips({ which, selected, onSelect }: CategoryChipsProps)
             )}
             {!isEditing && (
               <button
-                onClick={() => {
-                  if (confirm(`删除分类「${c}」？该分类下的便签不会被删除。`)) {
+                onClick={async () => {
+                  if (await useUIStore.getState().confirmDialog(`删除分类「${c}」？该分类下的便签不会被删除。`)) {
                     removeCategory(which, c);
                     if (selected === c) onSelect(null);
                     showToast('已删除分类', 'success');
