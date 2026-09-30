@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { User, Image as ImageIcon, BookOpen, History } from 'lucide-react';
+import { User, Image as ImageIcon, BookOpen, History, Trash2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MediaImage } from '@/components/common/MediaImage';
-import { putFile, deleteFile } from '@/lib/db';
-import { uid, compressImage } from '@/lib/utils';
+import { putFile, deleteFile, db } from '@/lib/db';
+import { uid, compressImage, humanBytes } from '@/lib/utils';
+import { collectFileIds } from '@/lib/exportImport';
 import { setThemeMode, readThemeMode, resolveTheme, type ThemeMode } from '@/lib/theme';
 
 const THEME_OPTIONS: { key: ThemeMode; label: string; hint: string }[] = [
@@ -216,6 +217,32 @@ export function SettingsPage() {
     });
   };
 
+
+  /** 清除缓存：删除正文中已不再引用的图片文件（孤儿 blob），不动任何数据 */
+  const clearCache = async () => {
+    if (
+      !(await useUIStore.getState().confirmDialog(
+        '清除未使用的图片缓存？\n\n只会删除正文中已经不再引用的图片文件（例如编辑时留下的废弃图片）。文章、动态、灵感、相册、收藏夹等所有数据都不受影响。',
+      ))
+    ) {
+      return;
+    }
+    try {
+      const st = useAppStore.getState();
+      const used = collectFileIds(st);
+      const all = await db.files.toArray();
+      const orphan = all.filter((f) => !used.has(f.id));
+      if (orphan.length === 0) {
+        showToast('没有需要清理的缓存', 'info');
+        return;
+      }
+      await db.files.bulkDelete(orphan.map((f) => f.id));
+      const freed = orphan.reduce((sum, f) => sum + (f.size ?? 0), 0);
+      showToast(`已清理 ${orphan.length} 个无引用图片，释放 ${humanBytes(freed)}`, 'success');
+    } catch {
+      showToast('清理缓存失败，请稍后重试', 'error');
+    }
+  };
 
   // 猩红书房：独立外观主题（scarlet）；兼容旧数据（夜间 × 深紫预设 × 无自定义图）
   const isScarletStudy =
@@ -451,6 +478,13 @@ export function SettingsPage() {
               更新日志
             </button>
           </div>
+          <button
+            onClick={() => void clearCache()}
+            className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-card border border-bronze/15 text-sm font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
+          >
+            <Trash2 size={14} strokeWidth={1.5} className="text-wine-light" />
+            清除缓存
+          </button>
         </Card>
 
         {/* 品牌栏 */}
