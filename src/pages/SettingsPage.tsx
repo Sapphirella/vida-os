@@ -5,7 +5,8 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MediaImage } from '@/components/common/MediaImage';
 import { putFile, deleteFile, db } from '@/lib/db';
-import { uid, compressImage, humanBytes } from '@/lib/utils';
+import { uid, compressImage } from '@/lib/utils';
+import { humanBytes } from '@/lib/snapshot';
 import { collectFileIds } from '@/lib/exportImport';
 import { setThemeMode, readThemeMode, resolveTheme, type ThemeMode } from '@/lib/theme';
 
