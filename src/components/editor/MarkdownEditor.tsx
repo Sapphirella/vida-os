@@ -30,11 +30,11 @@ import {
   GripVertical,
   Waypoints,
 } from 'lucide-react';
-import { MarkdownView } from '@/components/common/MarkdownView';
+import { MarkdownView, collectInlineImageIds } from '@/components/common/MarkdownView';
 import { compressImage, uid, clsx, formatDate } from '@/lib/utils';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { putFile } from '@/lib/db';
+import { putFile, deleteFile } from '@/lib/db';
 import { MediaImage } from '@/components/common/MediaImage';
 
 interface MarkdownEditorProps {
@@ -87,8 +87,6 @@ export function MarkdownEditor({
   const [createdAt, setCreatedAt] = useState<number>(initialCreatedAt ?? Date.now());
   /** 拖拽排序中的源下标（桌面 HTML5 拖拽） */
   const [dragFrom, setDragFrom] = useState<number | null>(null);
-  /** 长按拖拽中当前持有的下标（触摸设备） */
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
   /** 编辑区当前选区（非空时显示浮动格式条） */
   const [selRange, setSelRange] = useState<{ start: number; end: number } | null>(null);
   /** 已经插进正文的图片（正文里用 fileRef:<id> 引用），缩略图上会打标记 */
@@ -102,6 +100,8 @@ export function MarkdownEditor({
   /** 打开选择器时记录的选区（点击工具栏后 textarea 失焦，selectionStart 会失效） */
   const wikiSelRef = useRef<{ start: number; end: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** 最近一次真实光标/选区：失焦后 selectionStart 会归零，插入图片等按钮用它兜底，避免插到文首并滚到顶部 */
+  const lastSelRef = useRef<{ start: number; end: number } | null>(null);
   /** 插入文本后要恢复到的光标位置（渲染完成后再设，避免跳到文首） */
   const caretRef = useRef<number | null>(null);
   /** insert 语法标记后要恢复的选区（标记中间内容处于选中态，可直接打字替换） */
@@ -109,12 +109,10 @@ export function MarkdownEditor({
   /** 编辑区是否聚焦：控制移动端内联语法工具栏显隐 */
   const [editing, setEditing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  /** 长按计时器（触摸图片排序） */
-  const pressTimer = useRef<number | null>(null);
-  /** 缩略图元素引用（长按移动时计算目标下标） */
-  const thumbRefs = useRef<(HTMLDivElement | null)[]>([]);
   const collections = useAppStore((s) => s.collections);
   const articles = useAppStore((s) => s.articles);
+  const moments = useAppStore((s) => s.moments);
+  const inspirations = useAppStore((s) => s.notes.inspiration);
   const isFavorited = useAppStore((s) =>
     favoriteId ? s.isFavorited(favoriteId.refType, favoriteId.refId) : false,
   );
@@ -145,8 +143,9 @@ export function MarkdownEditor({
     (before: string, after = '', placeholder = '') => {
       const ta = textareaRef.current;
       if (!ta) return;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
+      const saved = lastSelRef.current;
+      const start = saved?.start ?? ta.selectionStart;
+      const end = saved?.end ?? ta.selectionEnd;
       const selected = content.slice(start, end) || placeholder;
       const newText = content.slice(0, start) + before + selected + after + content.slice(end);
       // 光标放到标记中间：偏移起点 + before 长度 ～ +before+selected 处，
@@ -226,8 +225,9 @@ export function MarkdownEditor({
       setContent((c) => c + text);
       return;
     }
-    const start = ta.selectionStart ?? content.length;
-    const end = ta.selectionEnd ?? start;
+    const saved = lastSelRef.current;
+    const start = saved?.start ?? ta.selectionStart ?? content.length;
+    const end = saved?.end ?? ta.selectionEnd ?? start;
     caretRef.current = start + text.length;
     setContent(content.slice(0, start) + text + content.slice(end));
   };
@@ -243,42 +243,6 @@ export function MarkdownEditor({
     });
   };
 
-  /** 触摸长按（350ms）进入拖拽模式；期间横向移动即与所指缩略图实时交换 */
-  const startLongPress = (i: number) => {
-    if (!isCoarse) return;
-    if (pressTimer.current) window.clearTimeout(pressTimer.current);
-    pressTimer.current = window.setTimeout(() => {
-      setDragFrom(null);
-      setDragIdx(i);
-      try {
-        navigator.vibrate?.(12);
-      } catch {
-        /* 无震动能力时忽略 */
-      }
-    }, 350);
-  };
-
-  const handleLongPressMove = (e: React.PointerEvent) => {
-    if (dragIdx === null) return;
-    const target = thumbRefs.current.findIndex((el) => {
-      if (!el) return false;
-      const r = el.getBoundingClientRect();
-      return e.clientX >= r.left && e.clientX <= r.right;
-    });
-    if (target >= 0 && target !== dragIdx) {
-      moveImage(dragIdx, target);
-      setDragIdx(target);
-    }
-  };
-
-  const endLongPress = () => {
-    if (pressTimer.current) {
-      window.clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-    setDragIdx(null);
-  };
-
   const handleSave = () => {
     if (mode === 'article' && !title.trim()) {
       showToast('请填写标题', 'error');
@@ -288,10 +252,34 @@ export function MarkdownEditor({
       showToast('请填写内容', 'error');
       return;
     }
+    // 备选区图片 ≠ 插入：只有正文里用 fileRef 引用的才算是文章的图片。
+    // 未插入的备选图不进入文章；若它也不再被任何文章/动态/灵感引用，就把文件删掉。
+    const inline = new Set(collectInlineImageIds(content));
+    const keep = imageIds.filter((id) => inline.has(id));
+    const drop = imageIds.filter((id) => !inline.has(id));
+    const stillUsed = (id: string) =>
+      [
+        content,
+        ...articles.map((a) => a.content),
+        ...moments.map((m) => m.content),
+        ...inspirations.map((n) => n.content),
+      ].some((c) => c.includes(`fileRef:${id}`)) ||
+      [...articles.map((a) => a.imageIds), ...moments.map((m) => m.imageIds), ...inspirations.map((n) => n.imageIds)].some(
+        (ids) => ids.includes(id),
+      );
+    for (const id of drop) {
+      if (!stillUsed(id)) void deleteFile(id);
+    }
+    if (drop.length > 0) {
+      showToast(
+        drop.length === 1 ? '1 张未插入的备选图未保存进文章' : `${drop.length} 张未插入的备选图未保存进文章`,
+        'info',
+      );
+    }
     onSave({
       title: title.trim(),
       content,
-      imageIds,
+      imageIds: keep,
       collectionId,
       tags,
       ...(mode === 'moment' ? { createdAt } : {}),
@@ -573,7 +561,11 @@ export function MarkdownEditor({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onFocus={() => setEditing(true)}
-                onBlur={() => setEditing(false)}
+                onBlur={() => {
+                  setEditing(false);
+                  const ta = textareaRef.current;
+                  if (ta) lastSelRef.current = { start: ta.selectionStart, end: ta.selectionEnd };
+                }}
                 placeholder={mode === 'article' ? '开始书写...' : '说点什么...'}
                 className="block w-full min-h-[52vh] sm:min-h-[70vh] bg-transparent font-serif text-reading text-paper placeholder:text-bronze-deep outline-none resize-none leading-[1.7] sm:leading-[1.95]"
                 spellCheck={false}
@@ -703,9 +695,6 @@ export function MarkdownEditor({
               return (
                 <div
                   key={id}
-                  ref={(el) => {
-                    thumbRefs.current[i] = el;
-                  }}
                   draggable={!isCoarse}
                   onDragStart={() => setDragFrom(i)}
                   onDragOver={(e) => e.preventDefault()}
@@ -715,21 +704,13 @@ export function MarkdownEditor({
                     setDragFrom(null);
                   }}
                   onDragEnd={() => setDragFrom(null)}
-                  onPointerDown={() => startLongPress(i)}
-                  onPointerMove={handleLongPressMove}
-                  onPointerUp={endLongPress}
-                  onPointerCancel={endLongPress}
-                  onPointerLeave={endLongPress}
                   className={clsx(
-                    'relative w-14 h-14 rounded overflow-hidden border flex-shrink-0 group cursor-grab active:cursor-grabbing transition-all',
-                    dragIdx === i
-                      ? 'border-candle opacity-70 scale-105 z-10 touch-none'
-                      : dragFrom === i
-                        ? 'border-candle opacity-60'
-                        : 'border-bronze/20',
+                    'relative w-14 h-14 rounded overflow-hidden border flex-shrink-0 group transition-all',
+                    dragFrom === i ? 'border-candle opacity-60' : 'border-bronze/20',
                     inText && 'ring-1 ring-amber',
+                    !isCoarse && 'cursor-grab active:cursor-grabbing',
                   )}
-                  title={inText ? '已插入正文' : '未插入正文（显示在文章下方）'}
+                  title={inText ? '已插入正文' : '未插入正文：点右下角按钮插入到光标处'}
                 >
                   <MediaImage
                     fileId={id}
@@ -743,7 +724,10 @@ export function MarkdownEditor({
                   </span>
                   {/* 移除 */}
                   <button
-                    onClick={() => setImageIds(imageIds.filter((x) => x !== id))}
+                    onClick={() => {
+                      setImageIds((prev) => prev.filter((x) => x !== id));
+                      setContent((c) => c.replace(new RegExp(`!\\[\\[^\\]]*\\]\\(fileRef:${id}\\)`, 'g'), ''));
+                    }}
                     aria-label={`移除第 ${i + 1} 张图片`}
                     className="absolute top-0 right-0 w-4 h-4 flex items-center justify-center bg-ink/80 text-moon text-[11px] leading-none"
                   >
