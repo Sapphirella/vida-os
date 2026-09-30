@@ -3,6 +3,7 @@ import { FeatureGrid } from '@/components/home/FeatureGrid';
 import { CalendarCard } from '@/components/home/CalendarCard';
 import { DayScheduleCard } from '@/components/home/DayScheduleCard';
 import { DayOutputCard } from '@/components/home/DayOutputCard';
+import { ViewStatsCard } from '@/components/home/ViewStatsCard';
 import { TodoSummaryCard } from '@/components/home/TodoSummaryCard';
 import { MusicPlayerCard } from '@/components/home/MusicPlayerCard';
 
@@ -30,6 +31,13 @@ export function DeskPage() {
           <div className="mt-3">
             <DayOutputCard />
           </div>
+        </div>
+      </section>
+
+      {/* 视图：内容数据一览 */}
+      <section className="px-4 sm:px-6 pb-4">
+        <div className="max-w-5xl mx-auto">
+          <ViewStatsCard />
         </div>
       </section>
 
