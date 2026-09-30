@@ -371,8 +371,11 @@ function BookTagsPanel({ bookId }: { bookId: string }) {
   const allTags = useAppStore((s) => s.categories.book);
   const updateBook = useAppStore((s) => s.updateBook);
   const addCategory = useAppStore((s) => s.addCategory);
+  const renameCategory = useAppStore((s) => s.renameCategory);
   const [adding, setAdding] = useState(false);
   const [newValue, setNewValue] = useState('');
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
   if (!book) return null;
   const tags = book.tags ?? [];
 
@@ -395,15 +398,59 @@ function BookTagsPanel({ bookId }: { bookId: string }) {
         )}
         {allTags.map((t) => {
           const on = tags.includes(t);
+          if (editingTag === t) {
+            return (
+              <div key={t} className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && editValue.trim()) {
+                      renameCategory('book', t, editValue.trim());
+                      setEditingTag(null);
+                    } else if (e.key === 'Escape') {
+                      setEditingTag(null);
+                    }
+                  }}
+                  className="px-2 py-0.5 text-xs bg-bronze/10 rounded-pill text-paper outline-none w-24"
+                />
+                <button
+                  onClick={() => {
+                    if (editValue.trim()) {
+                      renameCategory('book', t, editValue.trim());
+                      setEditingTag(null);
+                    }
+                  }}
+                  className="w-5 h-5 flex items-center justify-center text-candle"
+                  aria-label="确认重命名"
+                >
+                  <Check size={11} strokeWidth={2} />
+                </button>
+              </div>
+            );
+          }
           return (
-            <button
-              key={t}
-              onClick={() => toggle(t)}
-              className={on ? 'tag tag-wine' : 'tag hover:brightness-110'}
-            >
-              <TagIcon size={10} strokeWidth={1.6} />
-              {t}
-            </button>
+            <div key={t} className="group flex items-center">
+              <button
+                onClick={() => toggle(t)}
+                className={on ? 'tag tag-wine' : 'tag hover:brightness-110'}
+              >
+                <TagIcon size={10} strokeWidth={1.6} />
+                {t}
+              </button>
+              <button
+                onClick={() => {
+                  setEditingTag(t);
+                  setEditValue(t);
+                }}
+                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 ml-0.5 w-4 h-4 flex items-center justify-center text-bronze hover:text-candle transition-all"
+                aria-label={`重命名标签 ${t}`}
+                title="重命名"
+              >
+                <Pencil size={9} strokeWidth={1.6} />
+              </button>
+            </div>
           );
         })}
       </div>
