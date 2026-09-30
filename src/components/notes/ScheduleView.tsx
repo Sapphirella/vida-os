@@ -239,23 +239,28 @@ function ScheduleItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, onT
                 {item.note}
               </p>
             )}
-            <div className="flex items-center gap-1.5 mt-2">
+            {/* 标签与编辑/删除放在主体文字下方，不再挤占正文一行 */}
+            <div className="flex items-center gap-1.5 mt-1.5">
               <Tag>{item.category}</Tag>
+              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={onEdit}
+                  aria-label="编辑"
+                  title="编辑"
+                  className="w-5 h-5 flex items-center justify-center text-bronze hover:text-candle"
+                >
+                  <Edit2 size={11} strokeWidth={1.5} />
+                </button>
+                <button
+                  onClick={onDelete}
+                  aria-label="删除"
+                  title="删除"
+                  className="w-5 h-5 flex items-center justify-center text-bronze hover:text-wine-light"
+                >
+                  <Trash2 size={11} strokeWidth={1.5} />
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={onEdit}
-              className="w-6 h-6 flex items-center justify-center text-bronze hover:text-candle"
-            >
-              <Edit2 size={11} strokeWidth={1.5} />
-            </button>
-            <button
-              onClick={onDelete}
-              className="w-6 h-6 flex items-center justify-center text-bronze hover:text-wine-light"
-            >
-              <Trash2 size={11} strokeWidth={1.5} />
-            </button>
           </div>
         </div>
       </Card>

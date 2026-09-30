@@ -30,9 +30,11 @@ export function InspirationView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 按「最近修改时间」排序：有更新的灵感自动提到最前面
+  const sorted = [...inspiration].sort((a, b) => b.updatedAt - a.updatedAt);
   const filtered = selectedCat
-    ? inspiration.filter((i) => i.category === selectedCat)
-    : inspiration;
+    ? sorted.filter((i) => i.category === selectedCat)
+    : sorted;
 
   // 全局查找跳到灵感时，清空分类筛选保证目标可见
   useEffect(() => {
@@ -434,7 +436,7 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
           <span className="font-mono text-[10px] text-bronze-deep tracking-wider">
             {relativeTime(item.createdAt)}
           </span>
-          <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="ml-auto flex items-center gap-1">
             <button
               onClick={onConvert}
               className={clsx(
