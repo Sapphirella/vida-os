@@ -5,7 +5,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { MarkdownView } from '@/components/common/MarkdownView';
+import { MarkdownView, collectInlineImageIds } from '@/components/common/MarkdownView';
 import { formatDate, relativeTime, todayKey } from '@/lib/utils';
 import { useGlobalFocus } from '@/lib/focusRequest';
 import { usePageFind } from '@/components/search/usePageFind';
@@ -189,6 +189,9 @@ export function MomentsPage() {
                     const comments = m.comments ?? [];
                     const fav = isFav(m.id);
                     const showComments = openComments[m.id] ?? false;
+                    // 已用 fileRef: 插进正文的图片不在这里（文末配图）重复显示 —— 与文章阅读页一致
+                    const inlineIds = new Set(collectInlineImageIds(m.content));
+                    const galleryIds = m.imageIds.filter((id) => !inlineIds.has(id));
                     return (
                       <li key={m.id} className="relative">
                         {/* 时间线节点 */}
@@ -248,22 +251,22 @@ export function MomentsPage() {
                             />
                           </div>
 
-                          {/* 配图 */}
-                          {m.imageIds.length > 0 && (
+                          {/* 配图（已插入正文的图不重复展示） */}
+                          {galleryIds.length > 0 && (
                             <div
                               className={`mt-3 grid gap-1.5 ${
-                                m.imageIds.length === 1
+                                galleryIds.length === 1
                                   ? 'grid-cols-1'
-                                  : m.imageIds.length === 2
+                                  : galleryIds.length === 2
                                     ? 'grid-cols-2'
                                     : 'grid-cols-3'
                               }`}
                             >
-                              {m.imageIds.map((id, i) => (
+                              {galleryIds.map((id, i) => (
                                 <div
                                   key={id}
                                   className="rounded-card overflow-hidden border border-line/50"
-                                  style={{ aspectRatio: m.imageIds.length === 1 ? '16/10' : '1/1' }}
+                                  style={{ aspectRatio: galleryIds.length === 1 ? '16/10' : '1/1' }}
                                 >
                                   <MediaImage
                                     fileId={id}
