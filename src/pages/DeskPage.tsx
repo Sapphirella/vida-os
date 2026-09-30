@@ -13,7 +13,7 @@ export function DeskPage() {
       <ClockHeader />
       <FeatureGrid />
 
-      {/* 日历 + 日程：双卡式 */}
+      {/* 日历 + 当日产出：双卡式（日程卡在其下方） */}
       <section className="px-4 sm:px-6 pb-4">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-3 mb-3 px-1">
@@ -24,20 +24,13 @@ export function DeskPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <CalendarCard />
-            <DayScheduleCard />
-          </div>
-
-          {/* 当日产出：选中日期发布的文章 / 动态 / 灵感（跟随 selected 联动） */}
-          <div className="mt-3">
             <DayOutputCard />
           </div>
-        </div>
-      </section>
 
-      {/* 视图：内容数据一览 */}
-      <section className="px-4 sm:px-6 pb-4">
-        <div className="max-w-5xl mx-auto">
-          <ViewStatsCard />
+          {/* 当日日程：选中日期的日程（跟随 selected 联动） */}
+          <div className="mt-3">
+            <DayScheduleCard />
+          </div>
         </div>
       </section>
 
@@ -51,6 +44,13 @@ export function DeskPage() {
             <div className="flex-1 h-px bg-bronze/10" />
           </div>
           <TodoSummaryCard />
+        </div>
+      </section>
+
+      {/* 视图：内容数据一览 */}
+      <section className="px-4 sm:px-6 pb-4">
+        <div className="max-w-5xl mx-auto">
+          <ViewStatsCard />
         </div>
       </section>
 
