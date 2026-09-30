@@ -82,15 +82,15 @@ export function ViewStatsCard() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-4 mb-3">
           {charRows.map((r) => (
-            <div key={r.label} className="flex items-baseline justify-between gap-2">
+            <div key={r.label} className="flex items-baseline gap-1">
               <span className="font-serif text-bronze text-xs">{r.label}</span>
-              <span className="font-mono text-sm text-paper">{fmt(r.value)} 字</span>
+              <span className="font-mono text-sm text-paper">{fmt(r.value)}字</span>
             </div>
           ))}
         </div>
         <div className="border-t border-bronze/10 pt-2.5 flex items-baseline justify-between">
           <span className="font-serif text-bronze text-sm">合计</span>
-          <span className="font-mono text-lg text-headline">{fmt(stats.totalChars)} 字</span>
+          <span className="font-mono text-lg text-headline">{fmt(stats.totalChars)}字</span>
         </div>
       </div>
     </Card>
