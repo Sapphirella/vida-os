@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   Bookmark,
   Copy,
   Highlighter,
@@ -263,18 +262,11 @@ export function ReaderPage() {
   return (
     <div className="px-4 sm:px-6">
       <div className="max-w-3xl mx-auto pb-8">
-        {/* 本页工具行：返回 + 书签（右上角） */}
+        {/* 本页工具行：书名 + 书签（右上角）；返回箭头统一走顶栏 */}
         <div
           className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-2 flex items-center gap-2"
           style={{ background: 'var(--bar-bg)', backdropFilter: 'blur(16px) saturate(140%)' }}
         >
-          <button
-            onClick={() => navigate('/library')}
-            className="w-8 h-8 flex items-center justify-center text-bronze hover:text-candle"
-            aria-label="回书架"
-          >
-            <ArrowLeft size={16} strokeWidth={1.6} />
-          </button>
           <div className="flex-1 min-w-0">
             <p className="font-serif text-headline text-sm truncate">{book.title}</p>
             <p className="font-mono text-[9px] tracking-widest text-bronze-deep uppercase">
