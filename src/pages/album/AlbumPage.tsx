@@ -2,7 +2,7 @@
 // 书架收文档、相册收照片。图集列表：
 //   - 星标集固定置顶（不可改名/删除）；
 //   - 其余图集按「最近阅读时间」排序（lastReadAt ?? createdAt，打开图集时更新）。
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Images,
@@ -25,23 +25,23 @@ import type { Album } from '@/types';
 export function LibraryTabBar({ active }: { active: 'library' | 'album' }) {
   const navigate = useNavigate();
   const cls = (on: boolean) =>
-    'flex items-center gap-1.5 px-3.5 py-1.5 rounded-pill font-mono text-[11px] tracking-wider transition-all ' +
+    'flex items-center gap-2 px-5 py-2.5 rounded-pill font-mono text-[12px] tracking-wider transition-all ' +
     (on ? 'text-moon' : 'text-bronze hover:text-candle');
   return (
-    <div className="flex items-center gap-1 mb-4">
+    <div className="flex items-center gap-1.5 mb-4">
       <button
         onClick={() => navigate('/library')}
         className={cls(active === 'library')}
         style={active === 'library' ? { background: 'var(--wine)' } : undefined}
       >
-        <BookOpen size={13} strokeWidth={1.6} /> 书架
+        <BookOpen size={16} strokeWidth={1.6} /> 书架
       </button>
       <button
         onClick={() => navigate('/library/album')}
         className={cls(active === 'album')}
         style={active === 'album' ? { background: 'var(--wine)' } : undefined}
       >
-        <Images size={13} strokeWidth={1.6} /> 相册
+        <Images size={16} strokeWidth={1.6} /> 相册
       </button>
     </div>
   );
@@ -55,7 +55,6 @@ export function AlbumPage() {
   const deleteAlbum = useAppStore((s) => s.deleteAlbum);
   const showToast = useUIStore((s) => s.showToast);
   const showModal = useUIStore((s) => s.showModal);
-  const [name, setName] = useState('');
 
   // 星标集永远第一格；其余按最近阅读排序（没打开过的按创建时间兜底）
   const sorted = useMemo(() => {
@@ -77,49 +76,19 @@ export function AlbumPage() {
     return groups[0]?.imageIds[0];
   };
 
+  /** 新建图集：用 Modal 内置输入框（自管 state，输入即时可见） */
   const openNewAlbum = () => {
     showModal({
       title: '新建图集',
-      content: (
-        <div className="space-y-3">
-          <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-            图集是照片的容器 · 第一次上传照片前先建一个
-          </p>
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && name.trim()) commit();
-            }}
-            placeholder="图集名称"
-            className="w-full px-3 py-2 rounded-card border border-line/50 bg-bg-base text-paper text-sm focus:border-wine/60 focus:outline-none"
-          />
-          <div className="flex justify-end gap-2">
-            <button className="btn-text" onClick={() => useUIStore.getState().closeModal()}>
-              取消
-            </button>
-            <button
-              className="btn-primary"
-              disabled={!name.trim()}
-              onClick={commit}
-            >
-              创建
-            </button>
-          </div>
-        </div>
-      ),
+      inputMode: { placeholder: '图集名称' },
+      onInputConfirm: (name) => {
+        const n = name.trim();
+        if (!n) return;
+        const id = addAlbum(n);
+        showToast('图集已创建', 'success');
+        navigate(`/library/album/${id}`);
+      },
     });
-  };
-
-  const commit = () => {
-    const n = name.trim();
-    if (!n) return;
-    const id = addAlbum(n);
-    useUIStore.getState().closeModal();
-    setName('');
-    showToast('图集已创建', 'success');
-    navigate(`/library/album/${id}`);
   };
 
   const openDelete = (album: Album) => {
@@ -128,8 +97,7 @@ export function AlbumPage() {
       content: (
         <div className="space-y-3">
           <p className="text-bronze text-sm leading-relaxed">
-            图集里的 {photoCount(album.id)} 张照片（{groupCount(album.id)} 组）会一并移除。
-            已存入星标集的照片不受影响。此操作无法撤销。
+            图集里的照片会一并移除；已存入星标集的不受影响。
           </p>
           <div className="flex justify-end gap-2">
             <button className="btn-text" onClick={() => useUIStore.getState().closeModal()}>
@@ -169,7 +137,7 @@ export function AlbumPage() {
           <div className="flex-1 min-w-0">
             <h2 className="font-serif text-headline text-lg leading-tight">相册</h2>
             <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-              {albums.length} 个图集 · 按最近打开排序 · 星标集置顶
+              {albums.length} 个图集 · 星标集置顶
             </p>
           </div>
           <button
@@ -182,15 +150,13 @@ export function AlbumPage() {
         </div>
 
         <p className="text-bronze text-xs leading-relaxed mb-5">
-          书架是收藏文档的地方，<span className="text-candle">相册</span>是收藏照片的地方。
-          先建一个图集，再往里面上传照片（一组最多 30 张，可以配一段文案）。
-          文章、动态、灵感里的图片都可以在点开大图后存入<span className="text-candle">星标集</span>。
+          文章、动态、灵感里的图片，点开大图后可以存入<span className="text-candle">星标集</span>。
         </p>
 
         {isEmpty ? (
           <EmptyState
             title="相册还空着"
-            hint="先建一个图集，再上传第一组照片"
+            hint="先建一个图集，再上传照片"
             action={
               <button onClick={openNewAlbum} className="btn-primary">
                 <Plus size={14} strokeWidth={1.6} /> 新建图集

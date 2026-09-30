@@ -1,9 +1,10 @@
 // 相册 · 上传 / 编辑一组照片（v4.5）
-// - 新组：选图（≤30 张）→ 压缩入库 → 排顺序 → 写文案 → 发布；
+// - 新组：选图（≤30 张）→ 压缩入库 → 排顺序 → 写文案 → 发布；支持无图纯文字发布；
 // - 编辑组：预填旧图片顺序与文案，保存只改内容不动发布时间（更新不算发布）；
 // - 拖动排序：桌面用 HTML5 拖拽；触屏用「长按 350ms 进入拖拽」，
-//   容器禁用选择复制（-webkit-touch-callout / select-none），长按不会呼出系统菜单。
-import { useEffect, useRef, useState } from 'react';
+//   容器禁长按选择与系统菜单（-webkit-touch-callout / user-select / onContextMenu），
+//   长按只会进入拖拽，不会呼出「查看图片」菜单。
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ArrowUpDown, Check, ImagePlus } from 'lucide-react';
 import { MediaImage } from '@/components/common/MediaImage';
 import { useUIStore } from '@/stores/useUIStore';
@@ -57,7 +58,7 @@ export function AlbumUploadEditor({
     setDragFrom(n);
   };
 
-  const moveImage = (from: number, to: number) => {
+  const moveImage = useCallback((from: number, to: number) => {
     if (from === to) return;
     setImages((prev) => {
       const next = [...prev];
@@ -65,7 +66,7 @@ export function AlbumUploadEditor({
       next.splice(to, 0, moved);
       return next;
     });
-  };
+  }, []);
 
   const pickFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -80,16 +81,24 @@ export function AlbumUploadEditor({
     }
     setUploading(true);
     showToast('正在上传…', 'info');
-    const ids: string[] = [];
-    for (const file of picked) {
+    // 压缩与入库是 CPU/IO 密集，逐张串行在手机上 30 张可能等十几秒；
+    // 分批并行（每批 4 张），既快又不会一次性占满内存
+    const process = async (file: File): Promise<string | null> => {
       try {
         const blob = await compressImage(file);
         const id = uid('img_');
         await putFile({ id, blob, mime: 'image/jpeg', name: file.name, size: blob.size });
-        ids.push(id);
+        return id;
       } catch {
         showToast(`「${file.name}」处理失败，已跳过`, 'error');
+        return null;
       }
+    };
+    const ids: string[] = [];
+    const CHUNK = 4;
+    for (let i = 0; i < picked.length; i += CHUNK) {
+      const batch = await Promise.all(picked.slice(i, i + CHUNK).map(process));
+      ids.push(...batch.filter((x): x is string => !!x));
     }
     if (ids.length > 0) setImages((prev) => [...prev, ...ids]);
     setUploading(false);
@@ -157,8 +166,8 @@ export function AlbumUploadEditor({
   }, [isCoarse, moveImage]);
 
   const submit = () => {
-    if (images.length === 0) {
-      showToast('至少选一张照片', 'error');
+    if (images.length === 0 && !caption.trim()) {
+      showToast('写点文案，或选一张照片', 'error');
       return;
     }
     onSubmit(images, caption.trim());
@@ -175,13 +184,16 @@ export function AlbumUploadEditor({
         <span className="w-14 text-right font-mono text-[10px] text-bronze-deep">{images.length}/{MAX_IMAGES}</span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4 select-none" style={{ WebkitTouchCallout: 'none' }}>
+      <div
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4 vd-album-editor"
+        onContextMenu={(e) => e.preventDefault()}
+      >
         {/* 图片网格（可拖动排序） */}
         {images.length > 0 && (
           <div>
             <p className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-bronze-deep uppercase mb-2">
               <ArrowUpDown size={11} strokeWidth={1.6} />
-              拖动调整顺序 · 点击缩略图预览大图
+              拖动排序 · 点击预览
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
               {images.map((id, i) => (

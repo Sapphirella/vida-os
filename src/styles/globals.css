@@ -1074,6 +1074,19 @@ li.vd-dragging {
   box-shadow: var(--shadow-card-elevated);
 }
 
+/* ===== 相册上传/编辑界面（AlbumUploadEditor）===== */
+/* 触屏长按拖拽排序：禁长按复制与系统「查看图片」菜单（iOS -webkit-touch-callout；
+   Android 由组件 onContextMenu preventDefault 兜底）。textarea 受下方
+   「移动端输入防护」全局 !important 保护，仍可正常输入选字。 */
+.vd-album-editor {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.vd-album-editor * {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
 /* 顶栏 / 底栏颜色由背景预设驱动（见 src/lib/backgrounds.ts 的 bar 字段）。
    组件里是内联样式，所以这里必须用 !important 才能覆盖。
    日间主题下 --bar-bg 换成奶油玻璃，同一机制生效。 */

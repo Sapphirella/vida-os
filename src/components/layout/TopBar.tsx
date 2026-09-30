@@ -14,7 +14,8 @@ const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/settings': { title: '设置', sub: '个人主页 · 主题' },
   '/space': { title: '空间', sub: '长文与合集' },
   '/moments': { title: '动态', sub: '生活碎碎念' },
-  '/library': { title: '馆藏', sub: 'Library · 书架与阅读' },
+  '/library': { title: '馆藏', sub: 'Collections · 书架与相册' },
+  '/library/album': { title: '馆藏', sub: 'Collections · 书架与相册' },
   '/agent': { title: 'Agent', sub: 'AI · Assistant' },
   '/favorites': { title: '收藏夹', sub: '收藏的项目' },
 };
@@ -28,6 +29,10 @@ function matchTitle(pathname: string): { title: string; sub?: string; canBack: b
   }
   if (pathname.startsWith('/space/article/')) {
     return { title: '文章', sub: 'Space · Article', canBack: true };
+  }
+  if (pathname.startsWith('/library/album')) {
+    // 相册与书架同属「馆藏」：列表页与书架页一样显示云同步，图集详情页可返回
+    return { ...ROUTE_TITLES['/library/album'], canBack: pathname !== '/library/album' };
   }
   if (ROUTE_TITLES[pathname]) {
     return { ...ROUTE_TITLES[pathname], canBack: false };

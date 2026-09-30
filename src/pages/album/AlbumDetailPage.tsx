@@ -149,7 +149,7 @@ export function AlbumDetailPage() {
               {album.name}
             </h2>
             <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-              {isStarred ? '从各处收藏的照片 · 固定分类 · 可跳回来源' : `相册 · ${groups.length} 组 · 按发布时间排序`}
+              {isStarred ? '从各处收藏的照片 · 可跳回来源' : `相册 · ${groups.length} 组`}
             </p>
           </div>
         </div>
@@ -176,7 +176,7 @@ export function AlbumDetailPage() {
             {filteredStars.length === 0 ? (
               <EmptyState
                 title={starTag === 'all' ? '星标集还空着' : `还没有「${TAG_LABEL[starTag as AlbumStar['tag']]}」的星标`}
-                hint="文章、动态、灵感里的图片点开大图后，选择「存入星标集」就会出现在这里"
+                hint="文章、动态、灵感里的图片，点开大图后可存入星标集"
               />
             ) : (
               <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -240,24 +240,24 @@ export function AlbumDetailPage() {
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
-                {groups.length} 组 · 一组一次上传 · 更新不改排序
+                {groups.length} 组
               </p>
               <button
                 onClick={() => setEditor({ mode: 'create' })}
                 className="btn-primary flex items-center gap-1.5"
                 style={{ padding: '8px 14px' }}
               >
-                <Plus size={14} strokeWidth={1.8} /> 添加照片
+                <Plus size={14} strokeWidth={1.8} /> 添加一组
               </button>
             </div>
 
             {groups.length === 0 ? (
               <EmptyState
-                title="这个图集还没有照片"
-                hint="一组最多 30 张，可以配一段文案；发布后按时间排在这里"
+                title="这个图集还没有内容"
+                hint="一组最多 30 张，可配文案；也可以直接发文字"
                 action={
                   <button onClick={() => setEditor({ mode: 'create' })} className="btn-primary">
-                    <Images size={14} strokeWidth={1.6} /> 上传第一组照片
+                    <Images size={14} strokeWidth={1.6} /> 发布第一组
                   </button>
                 }
               />
@@ -384,7 +384,7 @@ export function AlbumDetailPage() {
           onSubmit={(images, caption) => {
             if (editor.mode === 'edit') {
               updateAlbumGroup(editor.group.id, { caption, imageIds: images });
-              showToast('已保存（不影响发布时间与排序）', 'success');
+              showToast('已保存（更新不改排序）', 'success');
             } else {
               addAlbumGroup(album.id, { caption, imageIds: images });
               showToast('已发布', 'success');
