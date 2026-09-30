@@ -156,46 +156,52 @@ export function MarkdownEditor({
 
   // 内容更新后（渲染完成）再恢复光标：受控 textarea 重新赋值会把光标重置到文首，
   // 所以必须在 DOM 更新之后设 selectionRange，并且 preventScroll 以免整页跳动。
+  // 未聚焦时（触屏点完按钮编辑器已失焦）不设光标：setSelectionRange 会把滚动容器
+  // 强行拖到光标处，造成「插入图片后回滚一段距离」；用户点回正文时自然恢复。
   useLayoutEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const sel = selRef.current;
     if (sel) {
       selRef.current = null;
-      const ta = textareaRef.current;
-      if (ta) {
-        ta.setSelectionRange(sel.start, sel.end);
-        // 桌面：恢复键盘焦点，保持连续输入；触屏：不抢键盘——
-        // 手机/iPad 上点完格式按钮不该再次拉起键盘，用户点正文区时自然唤出。
-        if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      if (ta !== document.activeElement) {
+        if (isDesktop) {
           ta.focus({ preventScroll: true });
+          ta.setSelectionRange(sel.start, sel.end);
         }
         return;
       }
+      ta.setSelectionRange(sel.start, sel.end);
+      return;
     }
     const pos = caretRef.current;
     if (pos === null) return;
     caretRef.current = null;
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.setSelectionRange(pos, pos);
-    // 桌面：恢复键盘焦点，保持连续输入；触屏：不抢键盘——
-    // 手机/iPad 上点完格式按钮不该再次拉起键盘，用户点正文区时自然唤出。
-    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-      ta.focus({ preventScroll: true });
+    if (ta !== document.activeElement) {
+      if (isDesktop) {
+        ta.focus({ preventScroll: true });
+        ta.setSelectionRange(pos, pos);
+      }
+      return;
     }
+    ta.setSelectionRange(pos, pos);
   }, [content]);
 
   // textarea 高度自动撑开：由外层滚动容器统一滚动（标题/标签随之一起滚动），
   // 避免移动端 textarea 自身滚动与页面滚动叠加造成的卡顿；
   // 内容变长时高度=scrollHeight，编辑区永远可整段滚动，不出现「钉住」。
+  // 注意不能用 height='auto' 先重置再设回：那会让容器可滚高度瞬间收缩，
+  // 浏览器把滚动位置钳制回滚，表现为「换行 / 插入图片后回滚一段距离」。
   useLayoutEffect(() => {
     const ta = textareaRef.current;
     if (!ta || mode_ !== 'edit') return;
-    const prev = ta.style.height;
-    ta.style.height = 'auto';
     const sh = ta.scrollHeight;
-    // 高度未变化时还原原值：避免每次击键都改写 style.height 触发 iOS WebKit
-    // 布局抖动（光标跳动 / 输入合成被中断），仅内容换行时才调整。
-    ta.style.height = Math.abs(ta.offsetHeight - sh) > 2 ? `${sh}px` : prev;
+    const cur = ta.style.height;
+    const curPx = cur ? parseFloat(cur) : ta.offsetHeight;
+    // 高度未变化时不改写 style.height：避免每次击键触发 iOS WebKit 布局抖动
+    // （光标跳动 / 输入合成被中断），仅内容换行时才调整。
+    if (Math.abs(curPx - sh) > 2) ta.style.height = `${sh}px`;
   }, [content, mode_]);
 
   // 跟踪文本选区：非空选中时在编辑区底部弹出浮动格式条
