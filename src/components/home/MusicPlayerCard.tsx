@@ -166,52 +166,52 @@ export function MusicPlayerCard() {
         </div>
       )}
 
-      {/* 控制 */}
-      <div className="flex items-center justify-center gap-5 mb-4">
-        <button
-          onClick={() => music.prev(tracks)}
-          className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-          aria-label="上一首"
-        >
-          <SkipBack size={18} strokeWidth={1.4} />
-        </button>
-        <button
-          onClick={handlePlay}
-          className="w-12 h-12 rounded-full flex items-center justify-center transition-all music-play-btn"
-          style={{
-            background: 'var(--wine)',
-            boxShadow: '0 0 20px rgba(106, 8, 14, 0.4)',
-          }}
-          aria-label="播放"
-        >
-          {music.isPlaying ? (
-            <Pause size={18} strokeWidth={1.5} className="text-moon" />
-          ) : (
-            <Play size={18} strokeWidth={1.5} className="text-moon ml-0.5" />
-          )}
-        </button>
-        <button
-          onClick={() => music.next(tracks)}
-          className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-          aria-label="下一首"
-        >
-          <SkipForward size={18} strokeWidth={1.4} />
-        </button>
-      </div>
-
-      {/* 音量 */}
-      <div className="flex items-center gap-2 mb-4">
-        <Volume2 size={14} strokeWidth={1.4} className="text-bronze-deep" />
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={music.volume}
-          onChange={(e) => music.setVolume(parseFloat(e.target.value))}
-          className="flex-1 h-1 appearance-none rounded-full bg-bronze/15 accent-wine-light"
-          style={{ accentColor: 'var(--wine-light)' }}
-        />
+      {/* 控制 + 音量：短音量条在左，播放组件右移 */}
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <Volume2 size={14} strokeWidth={1.4} className="text-bronze-deep flex-shrink-0" />
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={music.volume}
+            onChange={(e) => music.setVolume(parseFloat(e.target.value))}
+            className="w-24 sm:w-32 h-1 appearance-none rounded-full bg-bronze/15 accent-wine-light"
+            style={{ accentColor: 'var(--wine-light)' }}
+          />
+        </div>
+        <div className="flex items-center gap-5 flex-shrink-0">
+          <button
+            onClick={() => music.prev(tracks)}
+            className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
+            aria-label="上一首"
+          >
+            <SkipBack size={18} strokeWidth={1.4} />
+          </button>
+          <button
+            onClick={handlePlay}
+            className="w-12 h-12 rounded-full flex items-center justify-center transition-all music-play-btn"
+            style={{
+              background: 'var(--wine)',
+              boxShadow: '0 0 20px rgba(106, 8, 14, 0.4)',
+            }}
+            aria-label="播放"
+          >
+            {music.isPlaying ? (
+              <Pause size={18} strokeWidth={1.5} className="text-moon" />
+            ) : (
+              <Play size={18} strokeWidth={1.5} className="text-moon ml-0.5" />
+            )}
+          </button>
+          <button
+            onClick={() => music.next(tracks)}
+            className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
+            aria-label="下一首"
+          >
+            <SkipForward size={18} strokeWidth={1.4} />
+          </button>
+        </div>
       </div>
 
       {/* 歌曲列表入口 */}
