@@ -80,11 +80,11 @@ export function ViewStatsCard() {
         <div className="flex items-center justify-between font-mono text-[10px] tracking-widest text-bronze-deep uppercase mb-2">
           <span>字数统计</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-4 mb-3">
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 mb-3">
           {charRows.map((r) => (
-            <div key={r.label} className="flex items-baseline justify-between gap-2">
+            <div key={r.label} className="flex items-baseline gap-1.5">
               <span className="font-serif text-bronze text-xs">{r.label}</span>
-              <span className="font-mono text-sm text-paper">{fmt(r.value)} 字</span>
+              <span className="font-mono text-sm text-paper">{fmt(r.value)}字</span>
             </div>
           ))}
         </div>
