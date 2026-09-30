@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { User, Image as ImageIcon } from 'lucide-react';
+import { User, Image as ImageIcon, BookOpen, History } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -67,10 +67,121 @@ export function SettingsPage() {
   const profile = useAppStore((s) => s.profile);
   const updateProfile = useAppStore((s) => s.updateProfile);
   const showToast = useUIStore((s) => s.showToast);
+  const showModal = useUIStore((s) => s.showModal);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(profile.name);
   const [signature, setSignature] = useState(profile.signature);
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => readThemeMode());
+
+  // ── 关于 · 使用说明（初稿，后续会大改） ──
+  const openGuide = () => {
+    showModal({
+      title: '使用说明',
+      content: (
+        <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-4 text-[13px] leading-relaxed">
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">VidaOS 是什么</h4>
+            <p className="text-paper">
+              你的私密生活记录空间。文章、动态、灵感、日程、待办、馆藏书籍全部存在
+              本机（IndexedDB），不上传任何服务器，可离线使用，也能随时整体导出备份。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">主页</h4>
+            <p className="text-paper">
+              日历：点任意日期，下方「当日产出」会列出这一天写的文章、动态与灵感；
+              点条目可直接跳到对应内容。
+            </p>
+            <p className="text-paper mt-1">
+              日程 / 待办：按天安排日程、管理未完成待办，勾选即完成。
+            </p>
+            <p className="text-paper mt-1">
+              视图：统计你的文章、动态、灵感与书的字数与条数。
+            </p>
+            <p className="text-paper mt-1">
+              soundscape：本地音乐播放（上一首 / 暂停 / 下一首，音量在左侧）。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">便签</h4>
+            <p className="text-paper">
+              灵感：像发消息一样随手记碎片；可加图片、星标（标记值得整理）、分类标签
+              （点标签筛选，双击重命名，悬停 × 删除）；一条灵感可一键转为文章。
+            </p>
+            <p className="text-paper mt-1">
+              日程：按日期安排事项。待办：随时记下要做的事，完成后勾掉。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">动态</h4>
+            <p className="text-paper">
+              生活时间线：发动态支持 Markdown 与图片，可评论、收藏；按日期分组展示。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">空间</h4>
+            <p className="text-paper">
+              文章：支持 Markdown 长文与双链笔记。写{' '}
+              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[文章标题]]</code>{' '}
+              即可互相链接，页面底部会显示反向链接 / 正向链接；正文可内嵌本地图片
+              （编辑器的图库里点「插入」），图片点击可放大并保存 / 下载。
+            </p>
+            <p className="text-paper mt-1">
+              合集：把文章归到合集里整理。收藏夹：收藏的文章、动态统一查看。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">馆藏</h4>
+            <p className="text-paper">
+              导入本地 txt / md 文本当书读：长按 / 选中一段可划线、高亮，都收在书里
+              右上角的「书签」。书架按最近阅读排序，可置顶多本；支持给书打标签，
+              点标签筛选（双击重命名、悬停 × 删除）。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">Agent</h4>
+            <p className="text-paper">
+              多会话聊天助手：可以帮你整理文章、聊生活与学习。会话列表点进某个会话
+              再对话，随时新建会话。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">数据与全局</h4>
+            <p className="text-paper">
+              数据页：JSON 全量导出 / 导入、WebDAV 云备份、本地文件夹备份、重置。
+              设置页可换主题（跟随系统 / 白昼 / 暗夜 / 猩红书房）。
+            </p>
+            <p className="text-paper mt-1">
+              顶栏搜索按钮或 ⌘K 打开全局查找替换；页面右上角另有页内查找替换。
+              这是 PWA，可「添加到主屏幕」当 App 用。
+            </p>
+          </section>
+        </div>
+      ),
+    });
+  };
+
+  // ── 关于 · 更新日志（占位，暂为空） ──
+  const openChangelog = () => {
+    showModal({
+      title: '更新日志',
+      content: (
+        <div className="max-h-[60vh] overflow-y-auto pr-1">
+          <p className="text-bronze text-sm leading-relaxed">
+            更新日志整理中，稍后会在这里列出每次更新的内容。
+          </p>
+        </div>
+      ),
+    });
+  };
+
 
   // 猩红书房：独立外观主题（scarlet）；兼容旧数据（夜间 × 深紫预设 × 无自定义图）
   const isScarletStudy =
@@ -287,7 +398,28 @@ export function SettingsPage() {
           />
         </Card>
 
-        {/* 关于 */}
+        {/* 关于：使用说明 + 更新日志 */}
+        <Card className="p-5 sm:p-6">
+          <h3 className="font-serif text-headline text-lg mb-3">关于</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={openGuide}
+              className="flex items-center justify-center gap-2 px-3 py-3 rounded-card border border-bronze/15 text-sm font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
+            >
+              <BookOpen size={15} strokeWidth={1.5} className="text-wine-light" />
+              使用说明
+            </button>
+            <button
+              onClick={openChangelog}
+              className="flex items-center justify-center gap-2 px-3 py-3 rounded-card border border-bronze/15 text-sm font-serif text-paper hover:border-wine/50 hover:bg-wine/5 transition-all"
+            >
+              <History size={15} strokeWidth={1.5} className="text-wine-light" />
+              更新日志
+            </button>
+          </div>
+        </Card>
+
+        {/* 品牌栏 */}
         <Card className="p-5 sm:p-6 text-center">
           <p className="font-serif text-headline text-lg tracking-widest">VidaOS</p>
           <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mt-1">
