@@ -235,11 +235,13 @@ export function ReaderPage() {
     }
   };
 
-  /** 从书签跳到正文对应位置 */
+  /** 从书签跳到正文对应位置：优先定位到标注本身（同一段内多条标注也能精确分开），兜底段落 */
   const jumpTo = (m: BookMark) => {
-    const el = bookRef.current?.querySelector<HTMLElement>(`[data-block-idx="${m.blockIndex}"]`);
+    const root = bookRef.current;
+    const markEl = root?.querySelector<HTMLElement>(`[data-mark-id="${m.id}"]`);
+    const el = markEl ?? root?.querySelector<HTMLElement>(`[data-block-idx="${m.blockIndex}"]`);
     if (!el) return;
-    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     setFlashId(null);
     window.setTimeout(() => setFlashId(m.id), 320);
     setMarksOpen(false);
