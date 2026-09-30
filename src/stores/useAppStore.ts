@@ -36,6 +36,20 @@ function mergeById<T extends { id: string }>(cur: T[], incoming?: T[]): T[] {
   return [...cur, ...incoming.filter((x) => !cur.some((c) => c.id === x.id))];
 }
 
+/** 合并标签桶（灵感 / 日程 / 待办 / 书籍）：保留现有 + 追加 incoming 中新标签，去重 */
+function mergeCategories(cur: Categories, incoming?: Partial<Categories>): Categories {
+  const mergeList = (a: string[], b?: string[]) => {
+    if (!b || b.length === 0) return a;
+    return [...new Set([...a, ...b])];
+  };
+  return {
+    inspiration: mergeList(cur.inspiration, incoming?.inspiration),
+    schedule: mergeList(cur.schedule, incoming?.schedule),
+    todo: mergeList(cur.todo, incoming?.todo),
+    book: mergeList(cur.book, incoming?.book),
+  };
+}
+
 // ============================================================
 // Store
 // ============================================================
@@ -947,9 +961,17 @@ export const useAppStore = create<Store>((set, get) => ({
           schedule: mergeById(cur.notes.schedule, incoming.notes?.schedule),
           todo: mergeById(cur.notes.todo, incoming.notes?.todo),
         },
-        categories: cur.categories,
+        // v4.5.1：合并导入时标签桶必须一起合 —— 此前直接丢 incoming 的 categories，
+        // 换机导入后书/灵感条目在（tags 字段随对象保留）但标签桶（categories.book /
+        // categories.inspiration）是空的，筛选与标签列表全部丢失，用户只能手动重建
+        categories: mergeCategories(cur.categories, incoming.categories),
         tracks: mergeById(cur.tracks, incoming.tracks),
         books: mergeById(cur.books, incoming.books),
+        // v4.5.1：相册三件此前也未在 merge 里合入（albums/albumGroups/albumStars
+        // 只靠 ...cur 保留本机旧值，incoming 的相册数据被静默丢弃）
+        albums: mergeById(cur.albums, incoming.albums),
+        albumGroups: mergeById(cur.albumGroups, incoming.albumGroups),
+        albumStars: mergeById(cur.albumStars, incoming.albumStars),
         agentSessions: mergeById(cur.agentSessions, incoming.agentSessions),
         // 备份不带 API Key：合并时若 incoming 为空 key，保留本机已有的 key
         agentConfig: {

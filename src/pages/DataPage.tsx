@@ -64,6 +64,9 @@ const SCOPES: { key: ExportScopeKey; label: string; en: string; desc: string }[]
   { key: 'notes', label: '便签', en: 'Notes', desc: '灵感 + 日程 + 待办' },
   { key: 'favorites', label: '收藏夹', en: 'Favorites', desc: '收藏记录 + 被收藏的内容' },
   { key: 'profile', label: '个人资料', en: 'Profile', desc: '头像 / 昵称 / 签名 / 背景' },
+  { key: 'library', label: '馆藏·书架', en: 'Library', desc: '书籍 + 划线 + 书籍标签' },
+  { key: 'album', label: '馆藏·相册', en: 'Album', desc: '图集 + 图片组 + 星标集' },
+  { key: 'agent', label: 'Agent 全数据', en: 'Agent', desc: '会话 + 资料库 + 记忆馆 + 人格' },
 ];
 
 /** 「备份配置说明书」弹窗内容 */
@@ -72,14 +75,14 @@ const BACKUP_GUIDE = (
     {/* 一、配置教程 */}
     <p className="font-serif text-base text-candle mb-1.5">一、配置教程</p>
     <p className="text-bronze text-[12px] leading-relaxed mb-1.5">
-      本功能把全部数据（含图片 / 音频）压缩成一个 gzip 快照，经 WebDAV 上传到你指定的云空间（如坚果云），取回时一键恢复。
+      本功能把全部数据（含图片 / 音频）整理成一份 JSON，经 WebDAV 上传到你指定的云空间（如坚果云），取回时一键恢复。云端保存明文 JSON，方便随时查看与管理。
     </p>
     <div className="text-bronze text-[12px] leading-relaxed space-y-1 mb-2">
       <p>① 准备坚果云账号：注册并登录坚果云（免费版即可），进入「账户信息 → 安全选项 → 添加应用密码」，生成一个专用密码。这个密码与网页登录密码不同，是 WebDAV 访问凭证。</p>
       <p>② 创建备份目录：建议在坚果云中新建一个文件夹（如 vidaos），把它的路径记下来。</p>
       <p>③ 填写配置：接口地址填「https://dav.jianguoyun.com/dav/vidaos/」（目录以 / 结尾）；账号填坚果云注册邮箱；应用密码填第 ① 步生成的专用密码。</p>
       <p>④ 点击「保存配置」：配置将存入本机浏览器数据库（下次打开自动回显）。</p>
-      <p>⑤ 点击「云备份」：立即上传一次全量快照（vidaos-backup.json.gz，固定文件名、每次覆盖）。</p>
+      <p>⑤ 点击「云备份」：立即上传一次全量快照（vidaos-backup.json，固定文件名、每次覆盖）。<span className="text-candle">同步是全量覆盖：新增、修改、删除都会同步</span>——本地删掉的内容，下次云备份后云端也不再存在。</p>
       <p>⑥ 需要取回时点击「云端恢复」：下载 → 若已加密则输入口令 → 确认后覆盖恢复本地数据。</p>
     </div>
 
@@ -469,9 +472,9 @@ export function DataPage() {
             <h3 className="font-serif text-headline text-lg">WebDAV 全量备份</h3>
           </div>
           <p className="text-bronze text-xs mb-4 leading-relaxed">
-            把全部数据（含图片 / 音频）压缩成一个{' '}
+            把全部数据（含图片 / 音频）整理成一份{' '}
             <span className="font-mono text-bronze-light">{BACKUP_FILENAME}</span>{' '}
-            上传到你的 WebDAV 空间（坚果云等）。每次同步覆盖同一份，只保留最新备份。
+            上传到你的 WebDAV 空间（坚果云等）。每次同步覆盖同一份，只保留最新备份；<span className="text-bronze-light">删除的内容也会同步消失</span>。
           </p>
 
           <div className="space-y-3 mb-4">

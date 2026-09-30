@@ -5,7 +5,21 @@
 // - 记忆馆用 [[忆:标题]] 读、[[记:标题]]正文 写
 // - 所有数据只存在本机 IndexedDB，调用外部 API 时仅发送必要上下文
 // v4.4：碎片流已整体移除，它的生态位由「馆藏」接手（索引列书名，[[读:书名]] 读正文）
-import type { AgentMessage, AgentConfig, AgentDoc, AgentMemory, LibraryBook } from '@/types';
+import type {
+  AgentMessage,
+  AgentConfig,
+  AgentDoc,
+  AgentMemory,
+  LibraryBook,
+  Article,
+  Moment,
+  InspirationNote,
+  Favorite,
+  Album,
+  AlbumGroup,
+  ScheduleNote,
+  TodoNote,
+} from '@/types';
 import { formatDate } from '@/lib/utils';
 
 export const MAX_TOOL_ROUNDS = 3;
@@ -14,19 +28,27 @@ export const DOC_MAX_BYTES = 400 * 1024;
 
 /** 默认人格：空人格时兜底，让 Agent 知道它能读馆藏/资料库 */
 export const DEFAULT_PERSONA =
-  '你是 VidaOS 的 Agent，一个住在用户本地生活库里的助手。你能读取用户的馆藏书籍、资料库文档与记忆馆，' +
-  '帮助整理成结构化文章，也擅长聊生活、学习与身边的事。保持自然、亲切、简洁；需要资料时按约定读取，' +
-  '不要编造用户记录中不存在的内容。回复使用简体中文，段落之间空一行。';
+  '你是 VidaOS 的 Agent，一个住在用户本地生活库里的助手。你能读取用户的馆藏书籍、相册、资料库文档、记忆馆，' +
+  '也能读取空间文章、动态、灵感、日程、待办与收藏夹，帮助整理成结构化文章，也擅长聊生活、学习与身边的事。' +
+  '保持自然、亲切、简洁；需要资料时按约定读取，不要编造用户记录中不存在的内容。回复使用简体中文，段落之间空一行。';
 
 export const GREETING =
-  '你好，我是 **VidaOS Agent**。\n\n我可以帮你整理馆藏与资料库、生成空间文章，也能像朋友一样聊生活、学习和身边的事。' +
-  '需要读你的书时，说一句 `[[读:书名]]` 即可；资料与记忆也都按需读取，一切只保存在本机。';
+  '你好，我是 **VidaOS Agent**。\n\n我可以读取你的空间文章、动态、灵感、便签、馆藏与收藏夹，帮你归纳整理、生成空间文章，也能像朋友一样聊生活、学习和身边的事。' +
+  '需要读哪块内容，说 `[[读:模块名]]` 即可（如 `[[读:文章]]`、`[[读:动态]]`）；一切只保存在本机。';
 
 export interface AgentContext {
   config: AgentConfig;
   docs: AgentDoc[];
   memories: AgentMemory[];
   books: LibraryBook[];
+  articles: Article[];
+  moments: Moment[];
+  inspiration: InspirationNote[];
+  schedule: ScheduleNote[];
+  todo: TodoNote[];
+  favorites: Favorite[];
+  albums: Album[];
+  albumGroups: AlbumGroup[];
 }
 
 export interface ChatMessage {
@@ -73,15 +95,174 @@ export function docsIndexText(ctx: AgentContext): string {
   return lines.join('\n');
 }
 
-/** 构造发给模型的 messages：system = 人格 + 资料库索引 + 使用约定 + 对话历史 */
+/** 生活内容索引：空间文章 / 动态 / 灵感 / 日程 / 待办 / 收藏夹 / 相册（随请求下发） */
+export function lifeIndexText(ctx: AgentContext): string {
+  const lines: string[] = [];
+  const { articles, moments, inspiration, schedule, todo, favorites, albums, albumGroups } = ctx;
+  if (articles.length) {
+    const list = articles
+      .slice(0, 40)
+      .map((a) => `- 《${a.title}》${a.tags?.length ? `（标签：${a.tags.join('、')}）` : ''}`)
+      .join('\n');
+    lines.push(
+      `- 空间文章 ${articles.length} 篇（用 [[读:文章·标题]] 读取某篇正文）：\n${list}${
+        articles.length > 40 ? `\n…另有 ${articles.length - 40} 篇未列出` : ''
+      }`,
+    );
+  }
+  if (moments.length) {
+    const recent = [...moments]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 5)
+      .map((m) => `- [${formatDate(m.createdAt, 'MM-DD HH:mm')}] ${plainHead(m.content, 40)}${m.imageIds?.length ? '（含图）' : ''}`)
+      .join('\n');
+    lines.push(`- 动态 ${moments.length} 条（用 [[读:动态]] 查看完整列表）：\n${recent}`);
+  }
+  if (inspiration.length) {
+    const recent = [...inspiration]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 5)
+      .map((n) => `- [${n.category || '未分类'}] ${plainHead(n.content, 40)}${n.starred ? '（星标）' : ''}`)
+      .join('\n');
+    lines.push(`- 灵感 ${inspiration.length} 条（用 [[读:灵感]] 查看完整列表）：\n${recent}`);
+  }
+  if (schedule.length || todo.length) {
+    lines.push(`- 便签：日程 ${schedule.length} 条 / 待办 ${todo.length} 条（用 [[读:日程]] 或 [[读:待办]] 查看）`);
+  }
+  if (favorites.length) {
+    lines.push(`- 收藏夹 ${favorites.length} 条（用 [[读:收藏夹]] 查看）`);
+  }
+  if (albums.length) {
+    lines.push(
+      `- 相册 ${albums.length} 个图集${albumGroups.length ? `、共 ${albumGroups.length} 组照片` : ''}（用 [[读:相册]] 查看）`,
+    );
+  }
+  return lines.join('\n');
+}
+
+/**
+ * 按模块名读取（文章 / 动态 / 灵感 / 便签 / 日程 / 待办 / 收藏夹 / 相册 / 星标集）。
+ * 返回结构化文本，超长由调用方按相关性截取。
+ */
+function resolveModule(bare: string, ctx: AgentContext): { name: string; content: string } | null {
+  const { articles, moments, inspiration, schedule, todo, favorites, albums, albumGroups } = ctx;
+  const fmt = (ts: number) => formatDate(ts, 'MM-DD HH:mm');
+
+  const head = (s: string, n: number) => s.replace(/\s+/g, ' ').slice(0, n);
+
+  if (bare === '文章' || bare === '空间文章') {
+    if (!articles.length) return { name: '空间文章', content: '空间文章为空。' };
+    const list = [...articles]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map((a) => `- 《${a.title}》｜${a.content?.length ?? 0} 字｜更新于 ${fmt(a.updatedAt)}${a.tags?.length ? `｜标签：${a.tags.join('、')}` : ''}`)
+      .join('\n');
+    return { name: `空间文章（${articles.length} 篇）`, content: list };
+  }
+  if (bare === '动态') {
+    if (!moments.length) return { name: '动态', content: '动态为空。' };
+    const list = [...moments]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 30)
+      .map((m) => `- [${fmt(m.createdAt)}] ${head(m.content, 80)}${m.imageIds?.length ? `（图 ${m.imageIds.length} 张）` : ''}`)
+      .join('\n');
+    return { name: `动态（共 ${moments.length} 条，展示最近 30 条）`, content: list };
+  }
+  if (bare === '灵感') {
+    if (!inspiration.length) return { name: '灵感', content: '灵感为空。' };
+    const list = [...inspiration]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 30)
+      .map((n) => `- [${n.category || '未分类'}] ${head(n.content, 80)}${n.starred ? '（星标）' : ''}${n.convertedArticleId ? '（已转文章）' : ''}｜${fmt(n.updatedAt)}`)
+      .join('\n');
+    return { name: `灵感（共 ${inspiration.length} 条，展示最近 30 条）`, content: list };
+  }
+  if (bare === '便签') {
+    const parts: string[] = [`灵感 ${inspiration.length} 条｜日程 ${schedule.length} 条｜待办 ${todo.length} 条`];
+    if (inspiration.length)
+      parts.push(
+        `\n【灵感】\n${[...inspiration]
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .slice(0, 20)
+          .map((n) => `- [${n.category || '未分类'}] ${head(n.content, 60)}`)
+          .join('\n')}`,
+      );
+    if (schedule.length)
+      parts.push(
+        `\n【日程】\n${[...schedule]
+          .sort((a, b) => (a.date < b.date ? -1 : 1))
+          .slice(0, 20)
+          .map((s) => `- ${s.date}${s.time ? ` ${s.time}` : ''} ${s.title}${s.done ? '（已完成）' : ''}`)
+          .join('\n')}`,
+      );
+    if (todo.length)
+      parts.push(
+        `\n【待办】\n${[...todo]
+          .sort((a, b) => Number(a.done) - Number(b.done))
+          .slice(0, 20)
+          .map((t) => `- ${t.done ? '[x]' : '[ ]'} ${head(t.content, 60)}${t.category ? `（${t.category}）` : ''}`)
+          .join('\n')}`,
+      );
+    return { name: '便签', content: parts.join('\n') };
+  }
+  if (bare === '日程') {
+    const list = [...schedule]
+      .sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map((s) => `- ${s.date}${s.time ? ` ${s.time}` : ''} ${s.title}${s.done ? '（已完成）' : ''}${s.category ? `（${s.category}）` : ''}`)
+      .join('\n');
+    return { name: `日程（${schedule.length} 条）`, content: list || '暂无日程。' };
+  }
+  if (bare === '待办') {
+    const list = [...todo]
+      .sort((a, b) => Number(a.done) - Number(b.done))
+      .map((t) => `- ${t.done ? '[x]' : '[ ]'} ${head(t.content, 80)}${t.category ? `（${t.category}）` : ''}`)
+      .join('\n');
+    return { name: `待办（${todo.length} 条）`, content: list || '暂无待办。' };
+  }
+  if (bare === '收藏夹') {
+    if (!favorites.length) return { name: '收藏夹', content: '收藏夹为空。' };
+    const refText = (f: Favorite): string => {
+      if (f.refType === 'article') {
+        const a = articles.find((x) => x.id === f.refId);
+        return a ? `文章《${a.title}》` : '文章（已删除）';
+      }
+      const m = moments.find((x) => x.id === f.refId);
+      return m ? `动态：${head(m.content, 50)}` : '动态（已删除）';
+    };
+    const list = [...favorites]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((f) => `- [${fmt(f.createdAt)}] ${refText(f)}`)
+      .join('\n');
+    return { name: `收藏夹（${favorites.length} 条）`, content: list };
+  }
+  if (bare === '相册') {
+    if (!albums.length) return { name: '相册', content: '相册为空。' };
+    const list = albums.map((a) => {
+      const n = albumGroups.filter((g) => g.albumId === a.id).length;
+      return `- ${a.starred ? '【星标集】' : '图集'}《${a.name}》：${n} 组照片`;
+    });
+    return { name: `相册（${albums.length} 个图集）`, content: list.join('\n') };
+  }
+  if (bare === '星标集') {
+    const starred = albums.find((a) => a.starred);
+    if (!starred) return { name: '星标集', content: '星标集为空。' };
+    const n = albumGroups.filter((g) => g.albumId === starred.id).length;
+    return { name: '星标集', content: `星标集《${starred.name}》：${n} 组照片。这里收藏了来自文章、动态、灵感与相册的图片，并带有来源双链。` };
+  }
+  return null;
+}
+
+/** 构造发给模型的 messages：system = 人格 + 可读内容索引 + 使用约定 + 对话历史 */
 export function buildMessages(persona: string, history: ChatMessage[], ctx: AgentContext): ChatMessage[] {
   const parts: string[] = [];
   const p = persona.trim() || DEFAULT_PERSONA;
   parts.push(p);
-  const idx = docsIndexText(ctx).trim();
-  if (idx) parts.push(`【资料库索引】\n${idx}`);
+  const docIdx = docsIndexText(ctx).trim();
+  const lifeIdx = lifeIndexText(ctx).trim();
+  const idx = [docIdx, lifeIdx].filter(Boolean).join('\n');
+  if (idx) parts.push(`【可读内容索引】\n${idx}`);
   parts.push(
-    '【使用约定】需要资料/书籍详细内容时，在回复中直接输出 [[读:文档名]]（文档名可以是资料库文档名或《书名》）；' +
+    '【使用约定】需要资料/书籍/内容详细资料时，在回复中直接输出 [[读:名称]]：' +
+      '可以是资料库文档名、《书名》、文章标题（[[读:文章·标题]]）或模块名（文章 / 动态 / 灵感 / 便签 / 日程 / 待办 / 收藏夹 / 相册 / 馆藏）；' +
       '需要读取记忆正文用 [[忆:标题]]；需要长期记住一条信息用 [[记:标题]]正文。' +
       '工具标记单独成行输出即可，不要解释。',
   );
@@ -89,11 +270,27 @@ export function buildMessages(persona: string, history: ChatMessage[], ctx: Agen
   return msgs;
 }
 
-/** 按需读取文档：资料库 → 馆藏书籍（书名）；先精确匹配，再大小写不敏感包含匹配 */
+/** 按需读取：模块 / 文章·标题 → 馆藏书籍 → 资料库文档；先精确匹配，再包含匹配 */
 export function resolveDoc(name: string, ctx: AgentContext): { name: string; content: string } | null {
   const n = name.trim();
   if (!n) return null;
-  // 书名允许写成《书名》或直接写书名；先剥书名号
+  // 1) 文章正文：[[读:文章·标题]]
+  if (n.startsWith('文章·')) {
+    const bare = n.slice(3).trim();
+    const a =
+      ctx.articles.find((x) => x.title === bare) ??
+      ctx.articles.find((x) => x.title.includes(bare)) ??
+      ctx.articles.find((x) => bare.includes(x.title));
+    if (a) {
+      const meta = `标题：${a.title}\n标签：${a.tags?.join('、') || '无'}\n创建：${formatDate(a.createdAt, 'YYYY-MM-DD')}｜更新：${formatDate(a.updatedAt, 'YYYY-MM-DD')}\n\n`;
+      return { name: `文章《${a.title}》`, content: meta + a.content };
+    }
+    return null;
+  }
+  // 2) 模块名读取（文章 / 动态 / 灵感 / 便签 / 日程 / 待办 / 收藏夹 / 相册 / 星标集）
+  const mod = resolveModule(n, ctx);
+  if (mod) return mod;
+  // 3) 书名（允许《书名》或直接书名；「馆藏」= 书架索引）
   const bare = n.replace(/^《|》$/g, '').trim();
   const books = ctx.books ?? [];
   const book =
@@ -344,10 +541,13 @@ export function demoReply(userText: string): string {
     return '你好呀。我是 VidaOS 的 Agent——你的馆藏、资料库和记忆馆都对我开放。想让我帮你整理点什么，或者随便聊聊，都行。';
   }
   if (/整理|总结|归纳/.test(t)) {
-    return '好，我来整理。\n\n我可以先 `[[读:馆藏]]` 看一遍书架，再按主题归纳主线、生成结构化文案，还能一键存成空间文章。\n\n（当前是演示模式，配置 API 后我就能真正读取你的数据了。）';
+    return '好，我来整理。\n\n我读得到你的空间文章、动态、灵感、便签、馆藏与收藏夹——可以按主题归纳主线、生成结构化文案，还能一键存成空间文章。\n\n（当前是演示模式，配置 API 后我就能真正读取你的数据了。）';
   }
   if (/馆藏|书|阅读|划线/.test(t)) {
     return '馆藏是我的重要输入。让我 `[[读:书名]]` 读取某本书的正文，可以按章节归纳、解释难句，也能把读书笔记整理成文章存进空间。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';
+  }
+  if (/文章|动态|灵感|便签|收藏夹|相册/.test(t)) {
+    return '这些内容我都能读到。说一声 `[[读:文章]]`、`[[读:动态]]` 或 `[[读:灵感]]`，我就能按需查看并帮你梳理。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';
   }
   if (/谢谢|感谢|辛苦/.test(t)) {
     return '不客气。随时需要整理、回忆或只是聊聊天，我都在。';

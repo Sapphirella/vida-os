@@ -1,15 +1,17 @@
 // 相册 · 上传 / 编辑一组照片（v4.5）
 // - 新组：选图（≤30 张）→ 压缩入库 → 排顺序 → 写文案 → 发布；支持无图纯文字发布；
 // - 编辑组：预填旧图片顺序与文案，保存只改内容不动发布时间（更新不算发布）；
-// - 拖动排序：桌面用 HTML5 拖拽；触屏用「长按 350ms 进入拖拽」，
-//   容器禁长按选择与系统菜单（-webkit-touch-callout / user-select / onContextMenu），
-//   长按只会进入拖拽，不会呼出「查看图片」菜单。
+// - 拖动排序：桌面用 HTML5 拖拽；触屏用「长按 300ms 进入拖拽」。
+//   ★ 缩略图用 div 背景图渲染而非 <img>：移动端浏览器对 <img> 长按会强制弹出
+//   「查看图片/保存图片」UA 菜单（微信 X5 / Safari / Chrome 各不相同，CSS 拦不住），
+//   div 背景图没有该手势，长按只会进入拖拽；容器另配 user-select / touch-callout none
+//   与 onContextMenu preventDefault 兜底。
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ArrowUpDown, Check, ImagePlus } from 'lucide-react';
-import { MediaImage } from '@/components/common/MediaImage';
 import { useUIStore } from '@/stores/useUIStore';
 import { compressImage, uid, clsx } from '@/lib/utils';
 import { putFile } from '@/lib/db';
+import { fileURL } from '@/lib/fileUrl';
 
 export interface AlbumUploadEditorProps {
   /** 初始图片（编辑时传入旧组；发布时传空） */
@@ -40,8 +42,25 @@ export function AlbumUploadEditor({
   const [caption, setCaption] = useState(initialCaption);
   const [uploading, setUploading] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({});
   const isCoarse =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+  // 缩略图 URL 异步加载（div 背景图，不用 <img>——见文件头注释）
+  useEffect(() => {
+    let alive = true;
+    void Promise.all(
+      images.map(async (id) => {
+        if (urls[id]) return;
+        const u = await fileURL(id);
+        if (alive && u) setUrls((prev) => (prev[id] ? prev : { ...prev, [id]: u }));
+      }),
+    );
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [images]);
 
   // 触屏长按拖拽：ref 存最新拖拽源（高频 touchmove 里不能依赖 state 闭包），
   // state 只负责视觉；未进入拖拽前（350ms 内或已移动）滚动照常。
@@ -108,13 +127,16 @@ export function AlbumUploadEditor({
   useEffect(() => {
     if (!isCoarse) return;
     const onTouchStartTile = (e: TouchEvent) => {
-      const tile = (e.target as HTMLElement).closest('[data-album-tile]') as HTMLElement | null;
+      // 只允许 tile 空白区长按启动拖拽；按钮（移除）不触发
+      const target = e.target as HTMLElement;
+      if (target.closest('button')) return;
+      const tile = target.closest('[data-album-tile]') as HTMLElement | null;
       if (!tile) return;
       const index = Number(tile.dataset.index);
       if (Number.isNaN(index)) return;
       const t = e.touches[0];
       longPress.current = {
-        timer: setTimeout(() => setDrag(index), 350),
+        timer: setTimeout(() => setDrag(index), 300),
         x: t.clientX,
         y: t.clientY,
         index,
@@ -211,13 +233,22 @@ export function AlbumUploadEditor({
                     setDragFrom(null);
                   }}
                   onDragEnd={() => setDragFrom(null)}
+                  onClick={() => setLightbox({ fileId: id, starTag: 'album' })}
                   className={clsx(
-                    'relative aspect-square rounded-card overflow-hidden border transition-all',
+                    'relative aspect-square rounded-card overflow-hidden border transition-all vd-album-tile',
                     dragFrom === i ? 'opacity-50 border-amber scale-95' : 'border-line/50',
                     !isCoarse && 'cursor-grab active:cursor-grabbing',
                   )}
                 >
-                  <MediaImage fileId={id} className="w-full h-full object-cover" onOpen={() => setLightbox({ fileId: id, starTag: 'album' })} />
+                  {/* 背景图渲染（不用 <img>：移动端长按不会触发系统图片菜单） */}
+                  <div
+                    className="absolute inset-0 bg-no-repeat bg-cover bg-center"
+                    style={
+                      urls[id]
+                        ? { backgroundImage: `url("${urls[id]}")` }
+                        : { background: 'var(--charcoal)' }
+                    }
+                  />
                   {/* 序号 */}
                   <span className="absolute top-1 left-1 min-w-[18px] h-[18px] px-0.5 rounded-full flex items-center justify-center font-mono text-[9px] text-moon"
                     style={{ background: 'rgba(106,8,14,0.85)' }}>
@@ -225,7 +256,10 @@ export function AlbumUploadEditor({
                   </span>
                   {/* 移除 */}
                   <button
-                    onClick={() => setImages(images.filter((x) => x !== id))}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImages(images.filter((x) => x !== id));
+                    }}
                     className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-moon"
                     style={{ background: 'var(--wine-deep)' }}
                     aria-label="移除这张照片"

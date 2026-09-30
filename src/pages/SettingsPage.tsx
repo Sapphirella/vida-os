@@ -108,7 +108,8 @@ export function SettingsPage() {
             <h4 className="font-serif text-candle font-semibold mb-1">便签</h4>
             <p className="text-paper">
               灵感：像发消息一样随手记碎片；可加图片、星标（标记值得整理）、分类标签
-              （点标签筛选，双击重命名，悬停 × 删除）；一条灵感可一键转为文章。
+              （点标签筛选，双击重命名，悬停 × 删除）；一条灵感可一键转为文章；
+              按最近修改时间排序，有更新会自动提到最前。
             </p>
             <p className="text-paper mt-1">
               日程：按日期安排事项。待办：随时记下要做的事，完成后勾掉。
@@ -118,7 +119,8 @@ export function SettingsPage() {
           <section>
             <h4 className="font-serif text-candle font-semibold mb-1">动态</h4>
             <p className="text-paper">
-              生活时间线：发动态支持 Markdown 与图片，可评论、收藏；按日期分组展示。
+              生活时间线：发动态支持 Markdown 与图片，可评论、收藏；按日期分组展示，
+              完全按设置的时间排序（以前的在下，最近的在上）。
             </p>
           </section>
 
@@ -143,10 +145,20 @@ export function SettingsPage() {
           <section>
             <h4 className="font-serif text-candle font-semibold mb-1">馆藏</h4>
             <p className="text-paper">
-              导入本地 txt / md 文本当书读：长按 / 选中一段可划线、高亮，都收在书里
-              右上角的「书签」——点书签会精确跳到标注所在的那一行。书架按最近阅读
+              书架：导入本地 txt / md 文本当书读——选中一段可划线、高亮，都收在书里
+              右上角的「书签」，点书签会精确跳到标注所在的那一行。书架按最近阅读
               排序，可置顶多本，进度条按真实阅读进度走；支持给书打标签，
               点标签筛选（双击重命名、悬停 × 删除）。
+            </p>
+            <p className="text-paper mt-1">
+              相册：收藏照片的地方。先建一个图集，可一次性上传一组最多 30 张照片、
+              写一段文案后发布（也可以不选图、只发文字）；编辑一组时照片可长按拖动排序。
+              图集按最近阅读排序，组内照片按发布时间排序。
+            </p>
+            <p className="text-paper mt-1">
+              星标集：置顶在最前面的图集。文章、动态、灵感里的图片点开大图后都可以存入星标集，
+              相册里的照片也能单独星标；星标集按「文章 / 动态 / 灵感 / 相册」四个标签分类，
+              图片带双链，可跳回对应的原文。
             </p>
           </section>
 
@@ -156,12 +168,28 @@ export function SettingsPage() {
               多会话聊天助手：可以帮你整理文章、聊生活与学习。会话列表点进某个会话
               再对话，随时新建会话。
             </p>
+            <p className="text-paper mt-1">
+              Agent 能读取你的空间文章、动态、灵感、便签、馆藏与收藏夹。需要它看哪块内容
+              就说 <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:文章]]</code>、
+              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:动态]]</code>、
+              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:灵感]]</code>、
+              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:便签]]</code>、
+              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:收藏夹]]</code>、
+              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:相册]]</code>，
+              读某篇正文用 <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:文章·标题]]</code>，
+              也可以直接让它归纳整理。
+            </p>
+            <p className="text-paper mt-1">
+              输入框左侧有图片按钮，可以附带图片一起发送；不支持图片识别的模型会自动略过图片。
+            </p>
           </section>
 
           <section>
             <h4 className="font-serif text-candle font-semibold mb-1">数据与全局</h4>
             <p className="text-paper">
-              数据页：JSON 全量导出 / 导入、WebDAV 云备份、本地文件夹备份、重置。
+              数据页：JSON 导出 / 导入（导出范围可选文章、动态、便签、收藏夹、个人资料、
+              馆藏·书架、馆藏·相册、Agent 全数据，支持多选）、WebDAV 云备份、本地文件夹
+              备份、重置。WebDAV 云端保存明文 JSON，每次同步全量覆盖——删除的内容也会同步消失。
               设置页可换主题（跟随系统 / 白昼 / 暗夜 / 猩红书房）。
             </p>
             <p className="text-paper mt-1">

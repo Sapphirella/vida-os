@@ -51,6 +51,14 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<void> {
     docs: st.agentDocs,
     memories: st.agentMemories,
     books: st.books,
+    articles: st.articles,
+    moments: st.moments,
+    inspiration: st.notes.inspiration,
+    schedule: st.notes.schedule,
+    todo: st.notes.todo,
+    favorites: st.favorites,
+    albums: st.albums,
+    albumGroups: st.albumGroups,
   };
   const ctrl = new AbortController();
   if (signal) {

@@ -1,14 +1,19 @@
 // ============================================================
 // WebDAV 云同步（坚果云等）
 //
-// 逻辑：把当前全部数据（含图片/音频，媒体以 base64 内嵌）压缩成
-// 一个 gzip JSON 快照，通过 WebDAV MKCOL + PUT 上传到用户指定的
-// 目录，固定文件名覆盖写入（后写覆盖，天然符合「单设备编辑」语义）。
+// 逻辑：把当前全部数据（含图片/音频，媒体以 base64 内嵌）整理成
+// 一份 JSON，通过 WebDAV MKCOL + PUT 上传到用户指定的目录，
+// 固定文件名覆盖写入。全量覆盖 = 「新增、修改、删除全部同步」：
+// 本地删掉的内容，下一次云备份后云端也不再存在（只保留最新一份）。
 //
+// 云端默认存明文 JSON（v4.5.1 起不再 gzip，方便在坚果云里直接查看/管理）；
 // 可选端到端加密：开启后上传前用「口令 + PBKDF2 派生密钥 + AES-256-GCM」
-// 加密整个 gzip，云端只存密文；取回时用同一口令解密。密文文件头
-// 带 VDOS1 魔数 + salt + iv，解密所需信息全部随文件走，口令只在
-// 本机保存、绝不随备份上传。
+// 加密整份 JSON（加密前仍会 gzip 压缩体积），云端只存密文；
+// 取回时用同一口令解密。密文文件头带 VDOS1 魔数 + salt + iv，
+// 解密所需信息全部随文件走，口令只在本机保存、绝不随备份上传。
+//
+// 兼容旧备份：早期版本云端存的是 vidaos-backup.json.gz，下载时会
+// 先尝试新文件名、404 再回退旧文件名，并自动识别 gzip/明文/密文。
 //
 // 注意：纯浏览器直连 WebDAV 可能被跨域（CORS）策略拦截（坚果云未开放
 // 浏览器跨域头），失败时错误信息会如实归因；桌面版（Tauri 壳）下
@@ -18,8 +23,10 @@ import { db } from './db';
 import { collectFileIds } from './exportImport';
 import type { AppState, WebDavConfig } from '@/types';
 
-/** 云端固定文件名（幂等覆盖，只保留最新一份） */
-export const BACKUP_FILENAME = 'vidaos-backup.json.gz';
+/** 云端固定文件名（幂等覆盖，只保留最新一份；明文 JSON） */
+export const BACKUP_FILENAME = 'vidaos-backup.json';
+/** 旧版文件名（gzip 快照），下载时回退兼容 */
+const BACKUP_FILENAME_LEGACY = 'vidaos-backup.json.gz';
 
 /** 是否需要用户输入口令（下载时发现已加密但未提供口令） */
 export class NeedPassphraseError extends Error {
@@ -157,6 +164,12 @@ async function gzipBlob(text: string): Promise<Blob> {
   return new Response(stream).blob();
 }
 
+/** 探测 Blob 是否为 gzip（魔数 1f 8b），用于兼容旧版 .json.gz 备份 */
+async function isGzipBlob(blob: Blob): Promise<boolean> {
+  const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+  return head[0] === 0x1f && head[1] === 0x8b;
+}
+
 /** 把 HTTP 状态码转成用户能看懂的中文归因 */
 function davError(status: number): string {
   if (status === 401 || status === 403) {
@@ -238,15 +251,16 @@ export async function syncToWebDav(
 
     const gz = await gzipBlob(payload);
 
-    // 开启加密时：上传前用口令加密为密文容器
+    // 开启加密时：先 gzip 再加密为密文容器（压缩防泄露体积）；
+    // 未加密时直接上传明文 JSON（v4.5.1 起云端默认存 JSON，方便查看）
     const encrypted = hasEncryption(cfg);
-    const body = encrypted ? await encryptBlob(gz, cfg.passphrase!) : gz;
+    const body = encrypted ? await encryptBlob(gz, cfg.passphrase!) : new Blob([payload], { type: 'application/json' });
 
     const res = await fetch(target, {
       method: 'PUT',
       headers: {
         Authorization: auth,
-        'Content-Type': encrypted ? 'application/octet-stream' : 'application/gzip',
+        'Content-Type': encrypted ? 'application/octet-stream' : 'application/json',
         'Content-Length': String(body.size),
       },
       body,
@@ -266,13 +280,16 @@ export async function syncToWebDav(
 
 // ── 云端取回 ──────────────────────────────────────────────────
 
-/** 下载、解压并校验云端快照 */
+/** 下载云端备份：先试新文件名（明文 JSON），404 再回退旧文件名（gzip 快照） */
 async function fetchBackupBlob(cfg: WebDavConfig, auth: string): Promise<Blob> {
-  const target = normalizeDavUrl(cfg.url) + BACKUP_FILENAME;
-  const res = await fetch(target, { method: 'GET', headers: { Authorization: auth } });
-  if (res.status === 404) throw new Error('云端还没有备份文件：请先执行一次「云备份」');
-  if (!res.ok) throw new Error(davError(res.status));
-  return res.blob();
+  const base = normalizeDavUrl(cfg.url);
+  for (const name of [BACKUP_FILENAME, BACKUP_FILENAME_LEGACY]) {
+    const res = await fetch(base + name, { method: 'GET', headers: { Authorization: auth } });
+    if (res.status === 404) continue;
+    if (!res.ok) throw new Error(davError(res.status));
+    return res.blob();
+  }
+  throw new Error('云端还没有备份文件：请先执行一次「云备份」');
 }
 
 async function gunzipBlob(blob: Blob): Promise<string> {
@@ -310,7 +327,7 @@ export async function downloadFromWebDav(
     const blob = await fetchBackupBlob(cfg, auth);
     const encrypted = await isEncryptedContainer(blob);
 
-    let gz: Blob;
+    let payload: Blob;
     if (encrypted) {
       const pass = (passphrase ?? cfg.passphrase ?? '').trim();
       if (!pass) throw new NeedPassphraseError();
@@ -318,12 +335,13 @@ export async function downloadFromWebDav(
       if (!plain) {
         throw new Error('解密失败：口令错误或备份数据已损坏。口令无法找回，该备份视为不可用');
       }
-      gz = plain;
+      payload = plain;
     } else {
-      gz = blob;
+      payload = blob;
     }
 
-    const text = await gunzipBlob(gz);
+    // 兼容新旧两种云端格式：gzip 快照（旧版）解压，明文 JSON 直接读
+    const text = (await isGzipBlob(payload)) ? await gunzipBlob(payload) : await payload.text();
     let data: { kind?: string; createdAt?: number; state?: AppState };
     try {
       data = JSON.parse(text);

@@ -15,7 +15,7 @@ const FEATURES: {
   { key: 'space', label: '空间', en: 'Space', icon: BookOpen, path: '/space', desc: '长文与合集' },
   { key: 'moments', label: '动态', en: 'Moments', icon: MessageCircle, path: '/moments', desc: '朋友圈碎片' },
   // v4.4：便签上位到底栏，这一格改成馆藏（书架 + 阅读器）
-  { key: 'library', label: '馆藏', en: 'Library', icon: LibraryBig, path: '/library', desc: '书架 · 划线 · 共读' },
+  { key: 'library', label: '馆藏', en: 'Collections', icon: LibraryBig, path: '/library', desc: '书架 · 相册 · 阅读' },
   { key: 'favorites', label: '收藏夹', en: 'Favorites', icon: Star, path: '/favorites', desc: '收藏的项目' },
 ];
 

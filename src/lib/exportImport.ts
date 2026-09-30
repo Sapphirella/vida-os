@@ -58,7 +58,10 @@ export type ExportScopeKey =
   | 'moments'
   | 'notes'
   | 'favorites'
-  | 'profile';
+  | 'profile'
+  | 'library'
+  | 'album'
+  | 'agent';
 
 /** 'all' 是「全选」的简写；实际参与筛选的是 ExportScopeKey */
 export type ExportScope = ExportScopeKey | 'all';
@@ -70,6 +73,9 @@ export const ALL_SCOPE_KEYS: ExportScopeKey[] = [
   'notes',
   'favorites',
   'profile',
+  'library',
+  'album',
+  'agent',
 ];
 
 /** 把「单选/多选/'all'」统一成实际生效的范围集合 */
@@ -104,6 +110,10 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
   const articles = has.has('articles') ? state.articles : favArticles;
   const moments = has.has('moments') ? state.moments : favMoments;
 
+  // 非全量导出时不把未选范围的实体带出去（v4.5.1：此前 books/albums/agent
+  // 被 ...state 无条件带出，范围语义泄漏 —— 选「文章」导出时 JSON 里仍塞满
+  // 全部书籍/相册/会话）；agentConfig 的 API Key 只在 agent 范围内且剥掉，
+  // 换机导入时配置项随会话走、密钥留在本机。
   return {
     ...state,
     profile: has.has('profile') ? state.profile : { name: '', signature: '' },
@@ -118,6 +128,16 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
     categories: state.categories,
     tracks: [],
     settings: state.settings,
+    books: has.has('library') ? state.books : [],
+    albums: has.has('album') ? state.albums : [],
+    albumGroups: has.has('album') ? state.albumGroups : [],
+    albumStars: has.has('album') ? state.albumStars : [],
+    agentSessions: has.has('agent') ? state.agentSessions : [],
+    agentConfig: has.has('agent')
+      ? { ...state.agentConfig, apiKey: '' }
+      : { baseUrl: '', apiKey: '', model: '', persona: '' },
+    agentDocs: has.has('agent') ? state.agentDocs : [],
+    agentMemories: has.has('agent') ? state.agentMemories : [],
   };
 }
 

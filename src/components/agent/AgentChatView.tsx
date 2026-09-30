@@ -16,11 +16,14 @@ import {
   Loader2,
   ArchiveRestore,
   Pencil,
+  ImagePlus,
 } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MarkdownView } from '@/components/common/MarkdownView';
-import { saveText, formatDate, relativeTime, clsx, errMsg } from '@/lib/utils';
+import { MediaImage } from '@/components/common/MediaImage';
+import { saveText, formatDate, relativeTime, clsx, errMsg, compressImage, uid } from '@/lib/utils';
+import { putFile } from '@/lib/db';
 // 逐轮回复的实现已抽到 lib/agentTurn.ts（与馆藏「共读」抽屉共用），
 // 这里只留这个组件自己还要用的几个（自检连通性 / 导出 / 资料库上传大小限制）
 import { hasApiConfig, sessionToTxt, DOC_MAX_BYTES } from '@/lib/agentEngine';
@@ -48,6 +51,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
+  const imgFileRef = useRef<HTMLInputElement>(null);
+  const [imgBusy, setImgBusy] = useState(false);
 
   const messages = session?.messages ?? [];
   const unreadMemories = memories.filter((m) => !m.read).length;
@@ -90,16 +95,19 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
     [sessionId],
   );
 
-  const send = () => {
-    const text = input.trim();
-    if (!text || streaming) return;
+  const sendContent = (text: string, imgMarkdown?: string) => {
+    const content = [text, imgMarkdown].filter(Boolean).join('\n\n');
+    if (!content || streaming) return;
     setInput('');
     const st = useAppStore.getState();
-    st.appendAgentMessage(sessionId, { role: 'user', content: text });
+    st.appendAgentMessage(sessionId, { role: 'user', content });
     // 自动命名会话
     const sess = st.agentSessions.find((x) => x.id === sessionId);
     if (sess && (sess.title === '' || sess.title === '新会话')) {
-      st.updateAgentSession(sessionId, { title: text.length > 20 ? `${text.slice(0, 20)}…` : text });
+      const titleText = text || (imgMarkdown ? '[图片]' : '');
+      st.updateAgentSession(sessionId, {
+        title: titleText.length > 20 ? `${titleText.slice(0, 20)}…` : titleText,
+      });
     }
     requestAnimationFrame(() => {
       const ta = taRef.current;
@@ -108,7 +116,34 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
         ta.style.height = 'auto';
       }
     });
-    void runTurn(text);
+    void runTurn(content);
+  };
+
+  const send = () => sendContent(input.trim());
+
+  /** 图片按钮：压缩入库后随当前输入一并发送；不支持图片识别的模型会自行略过图片标记 */
+  const pickImages = async (files: FileList | null) => {
+    if (!files?.length || streaming) return;
+    setImgBusy(true);
+    try {
+      const ids: string[] = [];
+      for (const file of Array.from(files).slice(0, 9)) {
+        try {
+          const blob = await compressImage(file);
+          const id = uid('img_');
+          await putFile({ id, blob, mime: 'image/jpeg', name: file.name, size: blob.size });
+          ids.push(id);
+        } catch {
+          showToast(`「${file.name}」处理失败，已跳过`, 'error');
+        }
+      }
+      if (ids.length === 0) return;
+      const imgMarkdown = ids.map((id) => `![图片](fileRef:${id})`).join('\n');
+      sendContent(input.trim(), imgMarkdown);
+      showToast(`已附带 ${ids.length} 张图片`, 'success');
+    } finally {
+      setImgBusy(false);
+    }
   };
 
   const stop = () => {
@@ -308,9 +343,7 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
                   className="max-w-[86%] sm:max-w-[75%] rounded-2xl rounded-br-md px-3.5 py-2.5"
                   style={{ background: 'var(--wine)', boxShadow: '0 2px 10px rgba(0,0,0,0.14)' }}
                 >
-                  <p className="font-serif text-reading text-moon whitespace-pre-wrap break-words" style={{ lineHeight: 1.65 }}>
-                    {m.content}
-                  </p>
+                  <UserBubbleContent text={m.content} />
                   <div className="mt-1.5 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <span className="font-mono text-[10px] tracking-wider text-moon/70">
                       {formatDate(m.createdAt, 'HH:mm')}
@@ -381,6 +414,27 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
           style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px) saturate(140%)' }}
         >
           <div className="flex items-end gap-2">
+            {/* 图片按钮：压缩后随文字一并发送；不支持图片识别的模型自动略过 */}
+            <input
+              ref={imgFileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                void pickImages(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <button
+              onClick={() => imgFileRef.current?.click()}
+              disabled={streaming || imgBusy}
+              className="w-9 h-9 flex-none flex items-center justify-center rounded-full text-bronze hover:text-candle transition-colors disabled:opacity-30"
+              aria-label="附带图片"
+              title="附带图片（不支持图片识别的模型会自动略过）"
+            >
+              {imgBusy ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={17} strokeWidth={1.6} />}
+            </button>
             <textarea
               ref={taRef}
               value={input}
@@ -450,6 +504,41 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+const IMG_MARK_RE = /^!\[([^\]]*)\]\((fileRef:[^)]+)\)$/;
+
+/** 用户消息内容：文字段落 + 图片标记渲染为缩略图（点击放大） */
+function UserBubbleContent({ text }: { text: string }) {
+  const setLightbox = useUIStore((s) => s.setLightbox);
+  const parts = text.split(/(!\[[^\]]*\]\(fileRef:[^)]+\))/g).filter(Boolean);
+  return (
+    <div className="space-y-0.5">
+      {parts.map((part, i) => {
+        const m = IMG_MARK_RE.exec(part);
+        if (m) {
+          const fileId = m[2].slice('fileRef:'.length);
+          return (
+            <MediaImage
+              key={i}
+              fileId={fileId}
+              className="mt-1.5 w-full max-w-[220px] aspect-square object-cover rounded-card border border-moon/20"
+              onOpen={() => setLightbox({ fileId, starTag: 'album' })}
+            />
+          );
+        }
+        return (
+          <p
+            key={i}
+            className="font-serif text-reading text-moon whitespace-pre-wrap break-words"
+            style={{ lineHeight: 1.65 }}
+          >
+            {part}
+          </p>
+        );
+      })}
     </div>
   );
 }
