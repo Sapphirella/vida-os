@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, Archive, ArchiveRestore, Download, Trash2, ChevronDown, Bot, Sparkles } from 'lucide-react';
+import { Plus, Archive, ArchiveRestore, Download, Trash2, ChevronDown, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { AgentChatView } from '@/components/agent/AgentChatView';
+import { AgentConfigPage } from '@/components/agent/AgentConfigPage';
 import { GREETING } from '@/lib/agentEngine';
 import { plainText, excerpt, relativeTime, saveText, clsx } from '@/lib/utils';
 import { sessionToTxt } from '@/lib/agentEngine';
@@ -18,8 +19,11 @@ export function AgentPage() {
   const setAgentSessionId = useUIStore((s) => s.setAgentSessionId);
   const showToast = useUIStore((s) => s.showToast);
   const [showArchived, setShowArchived] = useState(false);
+  /** v4.5.3：配置页作为 Agent 页的独立视图，不再藏在单条会话里 */
+  const [configOpen, setConfigOpen] = useState(false);
 
   const current = sessions.find((s) => s.id === agentSessionId);
+  if (configOpen) return <AgentConfigPage onBack={() => setConfigOpen(false)} />;
   if (current) return <AgentChatView sessionId={current.id} />;
 
   const active = sessions
@@ -45,18 +49,22 @@ export function AgentPage() {
     <div className="px-4 sm:px-6 view-enter">
       <div className="max-w-2xl mx-auto pb-10">
         <div className="flex items-center gap-3 mb-4">
-          <div
-            className="w-11 h-11 rounded-full flex items-center justify-center border border-bronze/20 flex-none"
-            style={{ background: 'rgba(106, 8, 14, 0.15)' }}
-          >
-            <Bot size={20} strokeWidth={1.4} className="text-wine-light" />
-          </div>
           <div className="flex-1 min-w-0">
             <h2 className="font-serif text-headline text-lg leading-tight">会话</h2>
             <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-              多会话 · 可整理可聊天 · 全本地
+              多会话 · 共享同一套配置
             </p>
           </div>
+          {/* 配置入口：API / 人设 / 资料库 / 记忆馆 全部在这里，不用点进会话 */}
+          <button
+            onClick={() => setConfigOpen(true)}
+            className="btn-ghost flex items-center gap-1.5"
+            style={{ padding: '8px 13px', fontSize: '0.8125rem' }}
+            aria-label="Agent 配置"
+          >
+            <SlidersHorizontal size={14} strokeWidth={1.6} />
+            <span className="hidden sm:inline">配置</span>
+          </button>
           <button
             onClick={newSession}
             className="btn-primary flex items-center gap-1.5"
@@ -70,7 +78,7 @@ export function AgentPage() {
           <div className="py-20 flex flex-col items-center text-center gap-4">
             <div
               className="w-14 h-14 rounded-full flex items-center justify-center border border-bronze/20"
-              style={{ background: 'rgba(106, 8, 14, 0.15)' }}
+              style={{ background: 'rgb(var(--wine-rgb) / 0.15)' }}
             >
               <Sparkles size={22} strokeWidth={1.4} className="text-wine-light" />
             </div>
@@ -78,9 +86,18 @@ export function AgentPage() {
             <p className="text-bronze text-sm leading-relaxed max-w-xs">
               它可以帮你整理馆藏与资料、生成文章，也能聊生活、学习和身边的事。数据只存在本机。
             </p>
-            <button onClick={newSession} className="btn-primary">
-              <Plus size={14} strokeWidth={1.6} /> 开启第一个会话
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button onClick={newSession} className="btn-primary">
+                <Plus size={14} strokeWidth={1.6} /> 开启第一个会话
+              </button>
+              <button
+                onClick={() => setConfigOpen(true)}
+                className="btn-ghost"
+                style={{ padding: '9px 18px', fontSize: '0.875rem' }}
+              >
+                <SlidersHorizontal size={14} strokeWidth={1.6} /> 先配置连接
+              </button>
+            </div>
           </div>
         ) : (
           <ul className="space-y-2.5">
