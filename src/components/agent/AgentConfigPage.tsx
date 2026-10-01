@@ -54,10 +54,12 @@ function Section({
       className="rounded-card overflow-hidden"
       style={{ border: '1px solid var(--card-border)', background: 'var(--card-bg)' }}
     >
-      {/* 卡片头：实色底条 + 强对比标题 */}
+      {/* 卡片头：实色底条 + 强对比标题。
+          底色用 --agent-accent-soft 而不是 --charcoal —— 后者在日间皮肤是柔粉色，
+          会让 Agent 页在日间下残留一片粉，与该皮肤的绿色强调不统一。 */}
       <div
         className="flex items-center gap-2.5 px-4 py-3"
-        style={{ borderBottom: '1px solid var(--card-border)', background: 'var(--charcoal)' }}
+        style={{ borderBottom: '1px solid var(--card-border)', background: 'var(--agent-accent-soft)' }}
       >
         <span
           className="w-7 h-7 flex items-center justify-center rounded-lg flex-none"
@@ -114,11 +116,15 @@ function Field({
 }
 
 const inputCls =
-  'w-full px-3 py-2.5 rounded-card font-serif text-sm outline-none transition-colors';
+  'w-full px-3 py-2.5 rounded-card font-serif text-sm outline-none transition-colors ' +
+  'focus:border-[color:var(--agent-accent)]';
+// 输入框底色走 --field-bg：暗夜深炭半透 / 日间近白半透。
+// 早前直接写 rgb(var(--ink-rgb) / 0.28)，而日间 --ink-rgb 是深橄榄色，
+// 压在奶油卡面上会发灰发脏（用户反馈）。
 const inputStyle: React.CSSProperties = {
   color: 'var(--paper)',
-  background: 'rgb(var(--ink-rgb) / 0.28)',
-  border: '1px solid var(--card-border)',
+  background: 'var(--field-bg)',
+  border: '1px solid var(--field-border)',
 };
 
 /** 空状态：独立容器 + 边框，不再是一行灰字 */
