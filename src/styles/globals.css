@@ -127,6 +127,14 @@
   --focus-ring: rgb(var(--candle-rgb) / 0.4);
   --caret: var(--candle);
 
+  /* Agent 模块强调色（v4.5.4）
+     语义独立于 --wine：Agent 界面有自己的气质，不该和全局强调色绑死。
+     暗夜 / 猩红 = 玫瑰木系；白昼 = 橄榄绿系（用户要求日间不要粉色）。 */
+  --agent-accent: #A8767D;
+  --agent-accent-rgb: 168 118 125;
+  --agent-accent-soft: rgb(var(--agent-accent-rgb) / 0.18);
+  --agent-accent-line: rgb(var(--agent-accent-rgb) / 0.42);
+
   /* 全屏编辑器语义色（夜间默认值；日间在 data-theme='day' 覆盖） */
   --editor-bg: var(--ink);                 /* 编辑区纸背景：与页面同色，沉浸 */
   --editor-bar-bg: rgba(23, 26, 27, 0.7);  /* 顶栏/工具栏/底栏 背景 */
@@ -232,6 +240,10 @@
   /* 查找替换面板：日间覆盖为可读的深橄榄（浅底上淡粉会看不清） */
   --find-fg: var(--bronze-deep);
   --find-fg-dim: var(--bronze-deep);
+
+  /* Agent 模块强调色：日间用橄榄绿系，不用玫瑰粉（用户要求） */
+  --agent-accent: #575527;
+  --agent-accent-rgb: 87 85 39;
 
   /* 阴影：深橄榄阴影色（柔和暖褐，呼应色板） */
   --shadow-rgb: 87 85 39;

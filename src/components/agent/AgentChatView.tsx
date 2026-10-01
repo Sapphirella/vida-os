@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
-  Brain,
-  MoreHorizontal,
-  Bot,
   Download,
   Send,
   Square,
@@ -30,9 +27,7 @@ import type { AgentMessage } from '@/types';
 export function AgentChatView({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.agentSessions.find((x) => x.id === sessionId));
   const config = useAppStore((s) => s.agentConfig);
-  const memories = useAppStore((s) => s.agentMemories);
   const updateAgentSession = useAppStore((s) => s.updateAgentSession);
-  const markAgentMemoriesRead = useAppStore((s) => s.markAgentMemoriesRead);
   const setAgentSessionId = useUIStore((s) => s.setAgentSessionId);
   const showModal = useUIStore((s) => s.showModal);
   const showToast = useUIStore((s) => s.showToast);
@@ -40,8 +35,6 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [streamMsgId, setStreamMsgId] = useState<string | null>(null);
-  // v4.5.3：顶栏溢出菜单（配置已上提到 Agent 页，这里只留记忆馆 / 回会话列表）
-  const [menuOpen, setMenuOpen] = useState(false);
   const stopRef = useRef<AbortController | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -51,7 +44,6 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const [picked, setPicked] = useState<{ id: string; url: string | null }[]>([]);
 
   const messages = session?.messages ?? [];
-  const unreadMemories = memories.filter((m) => !m.read).length;
   const isStreamingThis = (m: AgentMessage) => m.id === streamMsgId && streaming;
 
   // 新消息滚到底部
@@ -59,13 +51,6 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, streamMsgId, streaming]);
-
-  // 从顶栏溢出菜单进入记忆馆时，把新记忆标为已读
-  const openMemories = () => {
-    setMenuOpen(false);
-    if (unreadMemories > 0) markAgentMemoriesRead();
-    setAgentSessionId(null);
-  };
 
   /** 执行一轮回复（流式 + 记忆写入 + 工具标记循环）
    *  具体流程抽在 lib/agentTurn.ts —— 与馆藏阅读器的「共读」抽屉共用同一份实现，
@@ -254,83 +239,18 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
           >
             {apiMode ? 'API' : '演示'}
           </span>
-          {/* v4.5.3：顶栏从 6 控件减到 3 —— 配置已上提到 Agent 页，
-              这里只留「导出会话」和「溢出菜单」。原「记忆馆」按钮与「配置」按钮
-              打开的是同一个面板，属于重复控件，一并收进溢出菜单。 */}
+          {/* v4.5.3：顶栏减法。
+              v4.5.4 用户反馈：溢出菜单里的「记忆馆」和「全部会话与配置」都要先退回
+              会话页才能生效，交互绕且功能重复 —— 整个菜单下线，顶栏只留返回 / 标题 / 导出。
+              记忆馆与配置统一在 Agent 页的「配置」入口里管理。 */}
           <button
             onClick={exportTxt}
-            className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
+            className="w-9 h-9 flex-none flex items-center justify-center text-bronze hover:text-candle transition-colors"
             aria-label="导出会话"
             title="导出为 txt"
           >
             <Download size={16} strokeWidth={1.5} />
           </button>
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              className="w-9 h-9 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-              aria-label="更多操作"
-              aria-expanded={menuOpen}
-              title="更多"
-            >
-              <MoreHorizontal size={17} strokeWidth={1.5} />
-            </button>
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div
-                  className="absolute right-0 top-11 z-50 w-44 rounded-card overflow-hidden py-1"
-                  style={{
-                    background: 'var(--card-bg-elevated)',
-                    border: '1px solid var(--card-border)',
-                    boxShadow: 'var(--shadow-card-elevated)',
-                    backdropFilter: 'blur(20px) saturate(140%)',
-                    WebkitBackdropFilter: 'blur(20px) saturate(140%)',
-                  }}
-                >
-                  <button
-                    onClick={openMemories}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors"
-                    style={{ color: 'var(--text-paper)' }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgb(var(--bronze-rgb) / 0.12)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <Brain size={15} strokeWidth={1.5} style={{ color: 'var(--candle)' }} />
-                    <span className="font-serif text-sm flex-1">记忆馆</span>
-                    {unreadMemories > 0 && (
-                      <span
-                        className="font-mono text-[9px] px-1.5 py-0.5 rounded-pill"
-                        style={{ background: 'var(--wine-bright)', color: 'var(--moon)' }}
-                      >
-                        {unreadMemories}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setAgentSessionId(null);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors"
-                    style={{ color: 'var(--text-paper)' }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgb(var(--bronze-rgb) / 0.12)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <Bot size={15} strokeWidth={1.5} style={{ color: 'var(--candle)' }} />
-                    <span className="font-serif text-sm flex-1">全部会话与配置</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
         </div>
       </div>
 

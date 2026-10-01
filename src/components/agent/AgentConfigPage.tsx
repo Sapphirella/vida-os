@@ -61,7 +61,7 @@ function Section({
       >
         <span
           className="w-7 h-7 flex items-center justify-center rounded-lg flex-none"
-          style={{ background: 'rgb(var(--wine-rgb) / 0.18)', color: 'var(--wine-light)' }}
+          style={{ background: 'var(--agent-accent-soft)', color: 'var(--agent-accent)' }}
         >
           {icon}
         </span>
@@ -307,20 +307,25 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
         <div className="max-w-2xl mx-auto h-12 px-3 flex items-center gap-2">
           <button
             onClick={onBack}
-            className="w-9 h-9 -ml-1 flex items-center justify-center rounded-lg transition-colors"
+            className="w-9 h-9 -ml-1 flex items-center justify-center rounded-lg transition-colors flex-none"
             style={{ color: 'var(--text-bronze)' }}
             aria-label="返回会话列表"
           >
             <ChevronLeft size={20} strokeWidth={1.6} />
           </button>
+          {/* 标题用 text-base 而非 text-title：text-title(1.5rem) 在 48px 顶栏里
+              行高会把「Agent 配置」顶到被上一层的全局 TopBar 压住 */}
           <div className="flex-1 min-w-0">
             <h2
-              className="font-serif text-title leading-none truncate"
+              className="font-serif text-base leading-none truncate"
               style={{ color: 'var(--headline)' }}
             >
               Agent 配置
             </h2>
-            <p className="font-mono text-[10px] tracking-widest uppercase mt-1" style={{ color: 'var(--text-ash)' }}>
+            <p
+              className="font-mono text-[10px] tracking-widest uppercase leading-none mt-1.5"
+              style={{ color: 'var(--text-ash)' }}
+            >
               所有会话共享
             </p>
           </div>
@@ -338,15 +343,15 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
           <div
             className="rounded-card px-3.5 py-3 flex items-center gap-2.5"
             style={{
-              border: `1px solid ${apiMode ? 'rgb(var(--wine-rgb) / 0.5)' : 'var(--card-border)'}`,
-              background: apiMode ? 'rgb(var(--wine-rgb) / 0.16)' : 'rgb(var(--bronze-rgb) / 0.08)',
+              border: `1px solid ${apiMode ? 'var(--agent-accent-line)' : 'var(--card-border)'}`,
+              background: apiMode ? 'var(--agent-accent-soft)' : 'rgb(var(--bronze-rgb) / 0.08)',
             }}
           >
             <span
               className="w-2 h-2 rounded-full flex-none"
               style={{
-                background: apiMode ? 'var(--candle)' : 'var(--bronze)',
-                boxShadow: apiMode ? '0 0 8px var(--candle)' : 'none',
+                background: apiMode ? 'var(--agent-accent)' : 'var(--bronze)',
+                boxShadow: apiMode ? '0 0 8px var(--agent-accent)' : 'none',
               }}
             />
             <div className="min-w-0 flex-1">
