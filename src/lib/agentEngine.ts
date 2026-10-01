@@ -30,11 +30,42 @@ export const DOC_MAX_BYTES = 400 * 1024;
 export const DEFAULT_PERSONA =
   '你是 VidaOS 的 Agent，一个住在用户本地生活库里的助手。你能读取用户的馆藏书籍、相册、资料库文档、记忆馆，' +
   '也能读取空间文章、动态、灵感、日程、待办与收藏夹，帮助整理成结构化文章，也擅长聊生活、学习与身边的事。' +
-  '保持自然、亲切、简洁；需要资料时按约定读取，不要编造用户记录中不存在的内容。回复使用简体中文，段落之间空一行。';
+  '保持自然、亲切、简洁；需要资料时按约定自行读取，不要编造用户记录中不存在的内容。回复使用简体中文，段落之间空一行。';
+
+/**
+ * 工具约定（v4.5.4 重写）
+ *
+ * 用户明确要求：不要让他记 [[读:]] / [[忆:]] / [[记:]] 这类命令。
+ * 所以这里的措辞是**面向模型**的 —— 模型自己判断该调什么，用户完全无感。
+ * 标记只在模型输出里出现并被立即消费掉，永远不会显示在气泡里。
+ */
+export const TOOL_CONTRACT = `【工具约定】你有一组可以直接操作用户数据的工具。用户不会写这些标记，只有你会用。
+需要时就在回复里单独成行输出标记，不要向用户解释标记的存在：
+
+[[读:名称]]        读取内容。名称可以是资料库文档名、《书名》、文章标题（文章·标题）
+                    或模块名（文章 / 动态 / 灵感 / 便签 / 日程 / 待办 / 收藏夹 / 相册 / 馆藏）
+[[搜:关键词]]      需要你自己不了解的外部信息时使用（天气、时事、某个概念等）。
+[[写:模块|内容]]   把内容写进用户的数据。模块只能是：灵感 / 待办 / 日程 / 动态 / 文章
+                    例：[[写:待办|周五前把体检报告取回来]]
+                    想同时指定分类或日期，用【】补充：[[写:日程【2026-10-08】|晚上八点看牙医]]
+[[替:模块|原文→新文]]  在模块（文章/灵感/待办/日程/动态/馆藏）里查找替换。
+                    替换需要用户确认后才会真正生效，所以你只要把替换意图说出来即可。
+
+判断原则：
+- 需要看细节才能回答 → 先 [[读:]]，拿到内容再回答，不要凭空猜测用户记录里有什么
+- 用户说"记一下""提醒我""加到待办" → 直接 [[写:]]，不要反问
+- 用户说"帮我把 X 改成 Y" → 用 [[替:]]；如果用户没说清范围，用 [[读:]] 先看看有哪些内容再问用户
+- 你自己不确定的外部事实 → [[搜:]]，不要编造
+
+绝对禁止：
+- 你没有任何删除用户内容的能力，也不要假装自己能删。用户说要删东西时，
+  你只能指出在哪里、告诉他怎么自己操作，由用户本人执行。`;
 
 export const GREETING =
-  '你好，我是 **VidaOS Agent**。\n\n我可以读取你的空间文章、动态、灵感、便签、馆藏与收藏夹，帮你归纳整理、生成空间文章，也能像朋友一样聊生活、学习和身边的事。' +
-  '需要读哪块内容，说 `[[读:模块名]]` 即可（如 `[[读:文章]]`、`[[读:动态]]`）；一切只保存在本机。';
+  '你好，我是 **VidaOS Agent**。\n\n我可以读取你的空间文章、动态、灵感、便签、馆藏与收藏夹，帮你归纳整理、生成文章，' +
+  '也能帮你把想到的东西直接写进灵感 / 待办 / 日程，或在已有内容里查找替换。' +
+  '像朋友一样聊生活、学习也可以 —— 你只要像平时说话那样讲，剩下的我自己判断该做什么，你不用记任何命令。' +
+  '一切只保存在本机。';
 
 export interface AgentContext {
   config: AgentConfig;
@@ -260,12 +291,7 @@ export function buildMessages(persona: string, history: ChatMessage[], ctx: Agen
   const lifeIdx = lifeIndexText(ctx).trim();
   const idx = [docIdx, lifeIdx].filter(Boolean).join('\n');
   if (idx) parts.push(`【可读内容索引】\n${idx}`);
-  parts.push(
-    '【使用约定】需要资料/书籍/内容详细资料时，在回复中直接输出 [[读:名称]]：' +
-      '可以是资料库文档名、《书名》、文章标题（[[读:文章·标题]]）或模块名（文章 / 动态 / 灵感 / 便签 / 日程 / 待办 / 收藏夹 / 相册 / 馆藏）；' +
-      '需要读取记忆正文用 [[忆:标题]]；需要长期记住一条信息用 [[记:标题]]正文。' +
-      '工具标记单独成行输出即可，不要解释。',
-  );
+  parts.push(TOOL_CONTRACT);
   const msgs: ChatMessage[] = [{ role: 'system', content: parts.join('\n\n') }, ...history];
   return msgs;
 }
@@ -368,33 +394,59 @@ export function snippetFor(content: string, query: string, maxLen = DOC_SNIPPET_
   return head + content.slice(bestStart, bestStart + maxLen);
 }
 
-/** 提取 [[记:标题]]正文 → 记忆；返回记忆与剩余显示文本 */
-export function extractWriteMemory(text: string): { title: string; body: string; rest: string } | null {
-  const m = /\[\[记:([^\]]+)\]\]([\s\S]*?)(?:\n*$)/.exec(text);
-  if (!m) return null;
-  const title = m[1].trim();
-  const body = m[2].trim();
-  if (!title || !body) return null;
-  return { title, body, rest: text.replace(m[0], '').trim() };
+
+/** 一次扫描解析出全部工具标记，返回「清洗后的显示文本」+「待执行的工具」 */
+export interface ParsedTool {
+  kind: 'read' | 'search' | 'write' | 'replace';
+  /** read: 名称；search: 关键词；write: 模块；replace: 模块 */
+  arg: string;
+  /** write 的正文；replace 的新文 */
+  payload?: string;
+  /** write 的可选限定（分类 / 日期） */
+  extra?: string;
+  /** replace 的原文 */
+  from?: string;
 }
 
-/** 消费工具标记，返回 { 显示文本, 待处理工具 } */
-export function scanMarkers(
-  text: string,
-): { display: string; reads: string[]; memReads: string[] } {
-  const reads: string[] = [];
-  const memReads: string[] = [];
+export function scanTools(text: string): { display: string; tools: ParsedTool[] } {
+  const tools: ParsedTool[] = [];
   let display = text;
+
+  // [[读:名称]]
   display = display.replace(/\[\[读:([^\]]+)\]\]/g, (_m, name) => {
-    reads.push(name);
+    tools.push({ kind: 'read', arg: name.trim() });
     return '';
   });
-  display = display.replace(/\[\[忆:([^\]]+)\]\]/g, (_m, title) => {
-    memReads.push(title);
+
+  // [[搜:关键词]]
+  display = display.replace(/\[\[搜:([^\]]+)\]\]/g, (_m, kw) => {
+    tools.push({ kind: 'search', arg: kw.trim() });
     return '';
   });
+
+  // [[写:模块|内容]] / [[写:模块【限定】|内容]]
+  display = display.replace(/\[\[写:([^\]|【】]+)(?:【([^】]*)】)?\|([\s\S]*?)\]\]/g, (_m, mod, extra, body) => {
+    tools.push({
+      kind: 'write',
+      arg: mod.trim(),
+      payload: body.trim(),
+      extra: extra?.trim(),
+    });
+    return '';
+  });
+
+  // [[替:模块|原文→新文]]
+  display = display.replace(/\[\[替:([^\]|]+)\|([\s\S]*?)\]\]/g, (_m, mod, pair) => {
+    const idx = pair.indexOf('→');
+    if (idx < 0) return '';
+    const from = pair.slice(0, idx).trim();
+    const to = pair.slice(idx + 1).trim();
+    if (from && to) tools.push({ kind: 'replace', arg: mod.trim(), from, payload: to });
+    return '';
+  });
+
   display = display.replace(/\n{3,}/g, '\n\n').trim();
-  return { display, reads, memReads };
+  return { display, tools };
 }
 
 // ============================================================

@@ -11,9 +11,12 @@ import {
   Loader2,
   Pencil,
   ImagePlus,
+  AlertTriangle,
+  Check,
 } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { applyReplace, cancelReplace, type PendingReplace } from '@/lib/agentTools';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { MediaImage } from '@/components/common/MediaImage';
 import { saveText, formatDate, clsx, compressImage, uid } from '@/lib/utils';
@@ -35,6 +38,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [streamMsgId, setStreamMsgId] = useState<string | null>(null);
+  /** Agent 提出的查找替换，等用户确认后才落盘 */
+  const [pendingReplace, setPendingReplace] = useState<PendingReplace | null>(null);
   const stopRef = useRef<AbortController | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -67,6 +72,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
           replaceMsgId,
           signal: ctrl.signal,
           onAssistantCreated: setStreamMsgId,
+          // 查找替换要用户点头才生效，这里接住 Agent 的替换提案弹确认卡
+          onPendingReplace: (p) => setPendingReplace(p),
         });
       } finally {
         setStreaming(false);
@@ -330,6 +337,66 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
           )}
         </div>
       </div>
+
+      {/* 查找替换确认卡：Agent 改了用户内容之前必须先过这一关。
+          这是「写入能力」和「用户控制权」之间的闸门 —— 不点确认就不落盘。 */}
+      {pendingReplace && (
+        <div className="flex-none z-30 px-3 sm:px-6 pb-2 safe-left safe-right">
+          <div
+            className="mx-auto max-w-2xl rounded-card overflow-hidden"
+            style={{ border: '1px solid var(--agent-accent-line)', background: 'var(--card-bg-elevated)' }}
+          >
+            <div
+              className="px-3.5 py-2.5 flex items-center gap-2"
+              style={{ background: 'var(--agent-accent-soft)' }}
+            >
+              <AlertTriangle size={15} strokeWidth={1.6} style={{ color: 'var(--agent-accent)' }} />
+              <span className="font-serif text-sm font-semibold" style={{ color: 'var(--headline)' }}>
+                Agent 想改一处内容
+              </span>
+            </div>
+            <div className="px-3.5 py-3 space-y-2.5">
+              <p className="font-sans text-xs leading-relaxed" style={{ color: 'var(--text-bronze)' }}>
+                在「{pendingReplace.targetTitle}」里把
+                <span className="font-mono px-1 mx-0.5 rounded" style={{ color: 'var(--wine-bright)' }}>
+                  {pendingReplace.from.slice(0, 18)}
+                  {pendingReplace.from.length > 18 ? '…' : ''}
+                </span>
+                替换成
+                <span className="font-mono px-1 mx-0.5 rounded" style={{ color: 'var(--agent-accent)' }}>
+                  {pendingReplace.to.slice(0, 18)}
+                  {pendingReplace.to.length > 18 ? '…' : ''}
+                </span>
+                ，共 {pendingReplace.count} 处。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const r = applyReplace(pendingReplace.id);
+                    showToast(r.message, r.ok ? 'success' : 'error');
+                    setPendingReplace(null);
+                  }}
+                  className="btn-primary flex-1 justify-center"
+                  style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
+                >
+                  <Check size={14} strokeWidth={1.8} /> 确认替换
+                </button>
+                <button
+                  onClick={() => {
+                    cancelReplace(pendingReplace.id);
+                    showToast('已取消，没有改动任何内容', 'info');
+                    setPendingReplace(null);
+                  }}
+                  className="btn-ghost"
+                  style={{ padding: '8px 14px', fontSize: '0.8125rem' }}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 底部输入区 —— flex-none 贴底，随容器流定位。
           safe-left/right：横屏刘海在侧面时，输入框与发送键不会被切掉。

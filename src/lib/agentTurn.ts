@@ -14,14 +14,13 @@ import {
   buildMessages,
   demoReply,
   demoStream,
-  extractWriteMemory,
   hasApiConfig,
   resolveDoc,
-  resolveMemory,
-  scanMarkers,
+  scanTools,
   snippetFor,
   streamChatCompletion,
 } from './agentEngine';
+import { proposeReplace, writeContent, type PendingReplace } from './agentTools';
 import { useAppStore } from '@/stores/useAppStore';
 
 export interface RunAgentTurnOptions {
@@ -34,14 +33,22 @@ export interface RunAgentTurnOptions {
   signal?: AbortSignal;
   /** 助手气泡创建后回调 —— 调用方据此显示流式光标 */
   onAssistantCreated?: (msgId: string) => void;
+  /**
+   * Agent 发起查找替换时回调，调用方弹确认卡片。
+   * 替换**不会**自动执行，必须用户在卡片上点确认才落盘。
+   */
+  onPendingReplace?: (p: PendingReplace) => void;
 }
+
+/** 查找替换确认卡片的出口：模块内无 React 状态，由调用方接管 */
+let pendingReplaceSink: ((p: PendingReplace) => void) | null = null;
 
 /**
  * 跑完一轮回复。异常在内部处理（写入 sys 消息 + 清掉空气泡），不往外抛，
  * 这样两个调用点的行为完全一致。
  */
 export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<void> {
-  const { sessionId, userText, replaceMsgId, signal, onAssistantCreated } = opts;
+  const { sessionId, userText, replaceMsgId, signal, onAssistantCreated, onPendingReplace } = opts;
   const st = useAppStore.getState();
   const sess = st.agentSessions.find((x) => x.id === sessionId);
   if (!sess) return;
@@ -74,6 +81,7 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<void> {
     useAppStore.getState().replaceAgentMessage(sessionId, msgId, { content: '' });
   }
 
+  pendingReplaceSink = onPendingReplace ?? null;
   try {
     let history: ChatMessage[] = (
       useAppStore.getState().agentSessions.find((x) => x.id === sessionId)?.messages ?? []
@@ -106,40 +114,54 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<void> {
         out = await demoStream(reply, ctrl.signal, onAcc);
       }
 
-      // 记忆写入：[[记:标题]]正文 → 存入记忆馆并从对话中剥离
-      const wm = extractWriteMemory(out);
-      if (wm) {
-        st.addAgentMemory(wm.title, wm.body);
-        st.appendAgentMessage(sessionId, { role: 'sys', content: `已记入记忆馆「${wm.title}」` });
-        out = wm.rest;
+      // v4.5.4：一次解析全部工具标记。读 / 搜 / 写 / 替统一走这里。
+      // 「写」与「替」直接落盘或产出待确认清单；「读」「搜」把结果作为下一轮上下文回灌。
+      const { display, tools } = scanTools(out);
+      const pendingTool: ChatMessage[] = [];
+      const sysNotes: string[] = [];
+
+      for (const t of tools) {
+        if (t.kind === 'read') {
+          const doc = resolveDoc(t.arg, ctx);
+          if (doc) {
+            sysNotes.push(`读取「${doc.name}」…`);
+            pendingTool.push({
+              role: 'user',
+              content: `【资料·${doc.name}】\n${snippetFor(doc.content, userText)}`,
+            });
+          } else {
+            sysNotes.push(`未找到「${t.arg}」`);
+          }
+        } else if (t.kind === 'search') {
+          // 联网搜索：需要用户自备搜索 API 才能真正联网（见 settings 里的搜索配置）。
+          // 未配置时如实告知模型「搜不了」，让模型改用自己的知识回答，而不是伪造搜索结果。
+          sysNotes.push(`需要联网搜索「${t.arg}」，但未配置搜索服务`);
+          pendingTool.push({
+            role: 'user',
+            content:
+              `【搜索不可用】用户想查「${t.arg}」。当前应用没有配置联网搜索服务，` +
+              `你无法获取实时信息。请基于已有知识回答，并明确告诉用户这条信息可能不是最新的。`,
+          });
+        } else if (t.kind === 'write') {
+          const r = writeContent(t.arg as never, t.payload ?? '', t.extra);
+          sysNotes.push(r.message);
+        } else if (t.kind === 'replace') {
+          const { result, pending } = proposeReplace(t.arg as never, t.from ?? '', t.payload ?? '');
+          sysNotes.push(result.message);
+          if (pending) {
+            // 交给 UI 弹确认卡片；这里不落盘
+            pendingReplaceSink?.(pending);
+          }
+        }
       }
 
-      const { display, reads, memReads } = scanMarkers(out);
-      let pendingTool: ChatMessage | null = null;
-      if (reads.length > 0) {
-        const doc = resolveDoc(reads[0], ctx);
-        if (doc) {
-          st.appendAgentMessage(sessionId, { role: 'sys', content: `读取「${doc.name}」…` });
-          pendingTool = {
-            role: 'user',
-            content: `【资料·${doc.name}】\n${snippetFor(doc.content, userText)}`,
-          };
-        } else {
-          st.appendAgentMessage(sessionId, { role: 'sys', content: `未找到「${reads[0]}」` });
-        }
-      } else if (memReads.length > 0) {
-        const mem = resolveMemory(memReads[0], ctx);
-        if (mem) {
-          st.appendAgentMessage(sessionId, { role: 'sys', content: `读取记忆「${mem.title}」…` });
-          pendingTool = { role: 'user', content: `【记忆馆·${mem.title}】\n${mem.content}` };
-        } else {
-          st.appendAgentMessage(sessionId, { role: 'sys', content: `未找到记忆「${memReads[0]}」` });
-        }
+      for (const n of sysNotes) {
+        useAppStore.getState().appendAgentMessage(sessionId, { role: 'sys', content: n });
       }
 
       finalText += display;
-      if (pendingTool) {
-        history = [...history, { role: 'assistant', content: out }, pendingTool];
+      if (pendingTool.length > 0) {
+        history = [...history, { role: 'assistant', content: out }, ...pendingTool];
         rounds++;
         if (rounds >= MAX_TOOL_ROUNDS) break;
         continue;
@@ -167,5 +189,7 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<void> {
     if (acc && !acc.content) {
       useAppStore.getState().removeAgentMessage(sessionId, msgId);
     }
+  } finally {
+    pendingReplaceSink = null;
   }
 }
