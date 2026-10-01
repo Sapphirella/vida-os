@@ -1,8 +1,9 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-09-29（v4.4.1 代码状态 + **交接文档整理**：重写第 11 节验证方法（无头 Chrome 实操套路
-> 与三个环境坑）、新增第 15 节「让外部 AI 读写 VidaOS 的候选方案与推进顺序」、校正已下线功能的残留描述）
+> 最后更新：2026-10-01（v4.5.1 代码状态 + **交接文档更新**：新增 v4.5 相册 / v4.5.1 系列
+> （Agent 图片与读应用数据、导出范围 8 项、WebDAV 明文 JSON + 删除同步、清除缓存按钮）的版本演进、
+> 第 4 节决策 22) 相册、第 7 节功能清单与第 13 节变更日志）
 
 ---
 
@@ -10,18 +11,19 @@
 
 | 项目 | 说明 |
 |---|---|
-| **是什么** | 纯前端、纯本地的个人生活记录 PWA（主页/便签/文章/动态/收藏/音乐/云备份/**馆藏**/Agent） |
+| **是什么** | 纯前端、纯本地的个人生活记录 PWA（主页/便签/文章/动态/收藏/音乐/云备份/**馆藏（书架+相册）**/Agent） |
 | **在哪里** | `/Users/amarisgo/Documents/DeepSeek Harness/VidaOS`（**父目录含空格，命令里要带引号**） |
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.4.1**（2026-09-29） |
+ | **当前版本** | package.json / 设置页 / README 均已对齐 **v4.5.1**（2026-10-01） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
 | **底栏** | 主页 / **便签** / Agent / 数据 / 设置（v4.4：便签顶替了原「碎片」那格） |
 | **主页宫格** | 空间 / 动态 / **馆藏** / 收藏夹（v4.4：便签那格改成馆藏） |
-| **云同步** | WebDAV（坚果云等）可选端到端加密；**注意纯浏览器直连坚果云被 CORS 拦截**（见第 8 节） |
+| **云同步** | WebDAV（坚果云等）：云端存**明文 JSON**（vidaos-backup.json），全量覆盖 = 删除同步，
+可选端到端加密（加密时云端只存密文，兼容旧 .json.gz 备份）；**注意纯浏览器直连坚果云被 CORS 拦截**（见第 8 节） |
 
 ### ⚠️ 改动前必读的四条
 
@@ -120,6 +122,29 @@
   ④ **馆藏**：导入本地 txt / md 成书（正文存主数据、md 按 Markdown 渲染、连续滚动 + 记住读到哪）；
   阅读器里长按选中 → 划线 / 高亮 / 复制；划线高亮收进右上角**书签**面板。
   （v4.4 曾配「选中→问 AI」的共读抽屉，**v4.4.1 已按用户要求移除**。）详见第 4 节之 21) 与第 13 节。
+- **v4.5（2026-09-30）** —— **馆藏·相册上线**（详见第 4 节之 22) 与第 13 节）：
+  ① 数据模型三件套 `Album`（图集）/ `AlbumGroup`（图片组）/ `AlbumStar`（星标），
+  `normalizeState` 兜底保证**星标集**永远存在（预置、置顶、不可改名删除）；
+  ② 相册页：图集列表按**最近阅读**（updatedAt）排序、星标集置顶；图集详情时间轴参考【动态】页；
+  上传 / 编辑一组照片（≤30 张、可**无图纯文字发布**、**更新不改发布时间**）；
+  ③ **星标集**：按「文章 / 动态 / 灵感 / 相册」四个固定标签分类，图片带**双链**可跳回原文；
+  文章 / 动态 / 灵感里的图片点开大图后都可存入星标集（相册的图也可单独星标）；
+  ④ 7 项交互修复（输入框打字即时显现 / 上传分批并行提速 / 移动端长按拖拽用 div 背景图
+  避开 `<img>` 系统长按菜单 / 精简说明文案 / 馆藏顶栏统一 + 英文改 Collections / 切换按钮加大）。
+- **v4.5.1（2026-09-30 ~ 10-01）** —— **相册交互完善 + Agent 数据读取 + 备份导出升级**：
+  ① 相册编辑器：删除键移入 tile 内（原被 overflow-hidden 裁掉）、**桌面拖拽弃用 HTML5 DnD**
+  改 mousedown 按下即拖（窗口级监听、拖拽结束抑制 click 防误开预览）、触屏长按 300ms；
+  ② **Agent 输入框图片按钮**：选图压缩入库 → 停在**待发队列**（可逐张移除 / 点击预览）→
+  随文字一同发送（≤9 张，`![图片](fileRef:id)` 标记，不支持视觉的模型自动略过）；
+  ③ **Agent 能读应用数据**：`lifeIndexText()` 把文章/动态/灵感/便签/日程/待办/收藏夹/相册
+  索引随 system 下发，`resolveModule()` + `resolveDoc()` 支持 `[[读:模块]]` 与 `[[读:文章·标题]]`；
+  ④ **导出范围新增** 馆藏·书架 / 馆藏·相册 / Agent 全数据（共 8 项），`scopedState` 真正按范围
+  过滤（未选范围实体不再带出、Agent 范围剥 apiKey）；**修复合并导入丢标签**：categories 四桶
+  union 合并、albums/albumGroups/albumStars 补 mergeById；
+  ⑤ **WebDAV 存明文 JSON**（vidaos-backup.json，未加密不 gzip），全量覆盖 = **删除同步**，
+  下载兼容旧 .json.gz（gzip 魔数 / VDOS1 密文 / 明文三态自动识别）；
+  ⑥ 设置页使用说明补齐相册 / 星标集 / Agent 读模块 / 导出范围 / WebDAV JSON；
+  ⑦ 设置-关于新增**「清除缓存」**（孤儿文件回收，见第 8.1 更新）；关于三按钮统一一行三等宽。
 - **v4.3.3（2026-09-29）** —— **备份与恢复的数据安全修复**：灵感的 `imageIds` 与碎片的
   `imageIds` 此前不在 `collectFileIds` 里（导出 JSON / WebDAV / 快照三条备份路径都共用它），
   **备份只有条目没有图、原图不可恢复**；导入 JSON / WebDAV 取回 / 快照恢复三条路又都绕过
@@ -333,12 +358,16 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
 **不要再引入皮肤/主题切换**扩展机制 —— 主题统一走 `theme.ts` 的三主题体系
 （暗夜/白昼/猩红），新增主题必须保证三套 token 齐全（见第 3 节）。
 
-### 15) WebDAV 云同步与端到端加密（v4.0，详见 `src/lib/webdav.ts`）
-- 备份文件固定名 `BACKUP_FILENAME = 'vidaos-backup.json.gz'`（每次同步**覆盖同一份**，
-  只保留最新）；
-- 上传链路：`snapshot()` 纯数据 → gzip（CompressionStream）→ `PUT`（先 `MKCOL` 建目录）；
-  下载链路：`GET` → 自动识别加密 → 解密 → 解析快照 → 确认后覆盖恢复；
-  恢复前**需要 passphrase 时抛 `NeedPassphraseError`**，DataPage 弹输入框；
+### 15) WebDAV 云同步与端到端加密（v4.0 起，v4.5.1 改存 JSON，详见 `src/lib/webdav.ts`）
+- 备份文件固定名 `BACKUP_FILENAME = 'vidaos-backup.json'`（v4.5.1 起**云端默认存明文 JSON**，
+  未加密不再 gzip，方便在坚果云里直接查看/管理；每次同步**覆盖同一份**，只保留最新 =
+  **删除的内容下次云备份后云端同样消失**，全量覆盖即删除同步）；
+- **兼容旧备份**：`BACKUP_FILENAME_LEGACY = 'vidaos-backup.json.gz'` 旧文件名保留，
+  下载时先试新名、404 回退旧名，并对内容三态自动识别（gzip 魔数 1f 8b → 解压；
+  VDOS1 密文容器 → 解密；否则按明文 JSON 直接读）；
+- 上传链路：纯数据 → **未加密直接 PUT 明文 JSON**；加密时先 gzip（压缩防泄露体积）再
+  `encryptBlob` → `PUT`（先 `MKCOL` 建目录）；下载链路：`GET` → 自动识别加密 → 解密 →
+  解析快照 → 确认后覆盖恢复；恢复前**需要 passphrase 时抛 `NeedPassphraseError`**，DataPage 弹输入框；
 - **端到端加密**：`PBKDF2（150000 迭代，SHA-256）` 派生 AES-256-GCM 密钥；
   密文容器 = `VDOS1` 魔数(5B) + salt(16B) + iv(12B) + 密文，**自包含、可独立解密**；
   口令只存本机 `Settings.webdav.passphrase`，**绝不随备份上传**
@@ -384,9 +413,12 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
 - **端点规范化** `chatEndpoint()`：已含 `/chat/completions` 原样用；以 `/v数字` 结尾补
   `/chat/completions`；否则补 `/v1/chat/completions`（兼容 OpenAI 兼容服务）；
 - **消息组装** `buildMessages()`：system = 人格（`DEFAULT_PERSONA`，可被资料库「人格」文档
-  覆盖）+ 资料库索引（`docsIndexText`，含内置「碎片」虚拟文档：最近 40 条碎片摘要）+
-  使用约定（`[[读:文档]]`/`[[忆:]]`/`[[记:]]` 三标记）+ 最近 N 条会话历史；
-- **按需读取**：`resolveDoc`/`resolveMemory`（精确标题 → 模糊包含）；长文档用 `snippetFor`
+  覆盖）+ 资料库索引 + **生活数据索引 `lifeIndexText()`（v4.5.1）**（文章/动态/灵感/便签/
+  日程/待办/收藏夹/相册的标题与条数，随请求下发，不发正文）+ 使用约定（`[[读:模块]]` /
+  `[[读:文档]]` / `[[忆:]]` / `[[记:]]` 标记）+ 最近 N 条会话历史；
+- **按需读取**：`resolveModule()`（v4.5.1：按模块名返回结构化文本 —— 文章/动态/灵感/便签/
+  日程/待办/收藏夹/相册/星标集）+ `resolveDoc`/`resolveMemory`（精确标题 → 模糊包含）；
+  `resolveDoc` 优先解析 `[[读:文章·标题]]`（v4.5.1）；长文档用 `snippetFor`
   （>6000 字按滑动窗口计分截取，`extractTerms` 对中文按 2~4 字连续片段切分提升命中率）；
 - **工具标记**：`scanMarkers()` 从 AI 回复剥出 `[[读:x]]` / `[[忆:x]]`（喂回上下文的
   系统消息由 `buildMessages` 注入），`extractWriteMemory()` 把 `[[记:标题]]正文` 转为
@@ -457,6 +489,29 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
   `setBookProgress` **故意不动 `updatedAt`**（否则翻两页就把书架排序刷成最新）；
   进页面时 `scrollIntoView` 回到上次那块。
 
+### 22) 相册（v4.5，`pages/album/*` + `components/album/*`）
+- **数据模型**：`Album { id, name, starred?, createdAt, updatedAt }`（图集，星标集
+  `album-starred` 由 `normalizeState` 兜底永远存在、置顶、不可改名/删除）、
+  `AlbumGroup { id, albumId, imageIds[], caption, createdAt, updatedAt }`（图片组）、
+  `AlbumStar { id, fileId, kind:'album'|'article'|'moment'|'inspiration', refId?, createdAt }`
+  （星标集条目，`refId` 关联原文用于双链跳转）；
+- **排序**：图集列表按 `updatedAt`（最近阅读）降序、星标集永远第一；组内图片按组内顺序
+  （编辑时拖动排序），组与组之间按 `createdAt`（发布时间）降序时间轴；**更新组不算发布**，
+  不刷新 `createdAt` 只刷 `updatedAt`；
+- **上传/编辑** `AlbumUploadEditor`：≤30 张，压缩入库；支持**无图纯文字发布**；**缩略图用
+  div 背景图渲染而非 `<img>`**（移动端对 `<img>` 长按会弹系统「查看图片」UA 菜单，CSS 拦不住）；
+- **拖拽排序**（v4.5.1 重写）：桌面 `mousedown` 按下即拖 + 窗口级 `mousemove/mouseup`
+  （**弃用 HTML5 DnD**，行为不稳定）；触屏 `touchstart` 长按 300ms 进拖拽（未进入前移动
+  >10px 视为滚动取消计时），拖拽中 window `touchmove(passive:false) preventDefault` 接管，
+  用 `document.elementFromPoint + closest('[data-album-tile]')` 找目标；**拖拽结束 350ms 内
+  抑制 click**（防松手误开预览）；按钮（移除）不触发拖拽；删除键放在 tile 内
+  （tile 有 overflow-hidden，负偏移会被裁掉）；
+- **星标集**：文章/动态/灵感大图 lightbox 里可「存入星标集」（`setLightbox({ starTag })`），
+  相册图也可单独星标；星标集按「文章 / 动态 / 灵感 / 相册」四固定标签分类，图片带双链跳原文；
+- **收藏夹分流**：非相册来源的星标不进主页收藏夹，统一进星标集；
+- **备份接入**：`collectFileIds` 已收 `albumGroups[].imageIds` 与 `albumStars[].fileId`
+  （三条备份路径共用），`pickState` 带 albums/albumGroups/albumStars。
+
 ---
 
 ## 5. 文件结构与职责
@@ -489,15 +544,17 @@ VidaOS/
 │   │   ├── layout/              # Background / TopBar / BottomTabBar（5 Tab）
 │   │   ├── home/                # ClockHeader / FeatureGrid(4 宫格) / CalendarCard / DayScheduleCard / MusicPlayerCard / TodoSummaryCard
 │   │   ├── notes/               # SegmentedControl / CategoryChips / Inspiration / Schedule / Todo / ScheduleEditor
-│   │   ├── agent/               # ★ AgentChatView（气泡流 + 输入区 + 配置/资料库/记忆馆抽屉）
+│   │   ├── agent/               # ★ AgentChatView（气泡流 + 输入区含图片待发队列 + 配置/资料库/记忆馆抽屉）
+│   ├── album/               # ★ AlbumUploadEditor（v4.5 相册上传/编辑：div 背景图 + 双端拖拽）
 │   │   ├── editor/              # MarkdownEditor / EditorOverlay
 │   │   ├── search/              # GlobalFindReplaceCard / PageFindBar / usePageFind
 │   │   └── common/              # Card / Button / Tag / Toast / Modal / EmptyState / MediaImage
 │   │                            #   + ErrorBoundary / MarkdownView
-│   └── pages/                   # 12 个路由页面
-│       DeskPage / NotesPage / LibraryPage(书架) / ReaderPage(阅读器·划线·书签·共读) /
+│   └── pages/                   # 14 个路由页面
+│       DeskPage / NotesPage / LibraryPage(书架) / ReaderPage(阅读器·划线·书签) /
 │       AgentPage(会话列表+聊天) / DataPage / SettingsPage / SpacePage / CollectionPage /
-│       ArticleReaderPage / MomentsPage / FavoritesPage
+│       ArticleReaderPage / MomentsPage / FavoritesPage / album/AlbumPage(图集列表) /
+│       album/AlbumDetailPage(图集详情·时间轴·上传编辑)
 ├── public/                      # favicon.svg + icons/（PWA 图标，manifest 引用）
 ├── scripts/make-icons.mjs       # ⚠️ 生成 PWA 图标（依赖 sharp 但**未在 package.json 声明**，当前跑不了）
 ├── docs/
@@ -547,29 +604,37 @@ VidaOS/
 - **便签**：灵感/日程/待办分区滑块 + 分类管理（增删改）+ 日程与首页日历联动
   + 待办**自动置底 / textarea 多行 / 长按拖拽排序**
 - **收藏夹**：跨类型聚合（文章 / 动态）；副标题「收藏的项目」
-- **馆藏**（v4.4）：**书架**（导入本地 txt / md、卡片显示字数/标注数/进度、重命名、移出书架）+
-  **阅读器**（连续滚动、记住读到哪、md 按 Markdown 渲染）；选中一段 → **划线 / 高亮 / 复制**，
-  划线高亮收进**右上角书签**（按序排列、点击定位闪烁、可删）；滑到底部进度即 100%
+- **馆藏**（v4.4 书架 + v4.5 相册）：**书架**（导入本地 txt / md、卡片显示字数/标注数/进度、
+  重命名、移出书架、**按最近阅读排序 + 置顶多本**、**书籍标签分类**（双击重命名、悬停 × 删除、
+  点击筛选））+ **阅读器**（连续滚动、记住读到哪、md 按 Markdown 渲染；选中一段 →
+  **划线 / 高亮 / 复制**，收进**右上角书签**按序排列、点击定位闪烁、可删；滑到底进度 100%）+
+  **相册**（图集列表按最近阅读排序、星标集置顶；图集详情发布时间轴；一组 ≤30 张、
+  可无图纯文字发布、编辑可拖动排序且**更新不改发布时间**）+
+  **星标集**（置顶图集，文章/动态/灵感/相册四标签分类，图片带双链跳原文）
 - **Agent**：**多会话聊天**（会话列表 → 点进 → 聊天，新建自动开场白）；气泡流界面
   （借鉴 Ventana React 化，适配三版书房皮肤）；**演示模式**兜底（未配置 API 可全交互体验）；
-  资料库 `[[读:文档]]` 按需读取 + 记忆馆 `[[记:]]`/`[[忆:]]`；会话重命名/归档/导出 txt/删除；
-  连接配置（Base URL / API Key / 模型）存本机
+  资料库 `[[读:文档]]` 按需读取 + **生活数据 `[[读:模块]]` / `[[读:文章·标题]]`**（v4.5.1：
+  可读空间文章/动态/灵感/便签/日程/待办/收藏夹/相册）+ 记忆馆 `[[记:]]`/`[[忆:]]`；
+  **输入框图片按钮**（v4.5.1：选图入待发队列，随文字一同发送 ≤9 张，不支持视觉的模型自动略过）；
+  会话重命名/归档/导出 txt/删除；连接配置（Base URL / API Key / 模型）存本机
 - **编辑器**：全屏 Markdown（工具栏 / 预览 / 图片 / **插入正文** / 字数 / 收藏星标 /
   移动端大按钮 + 浮动格式条）
 - **全局查找替换**：桌面/移动通用覆盖层（⌘K），**范围：空间 / 动态 / 碎片 / 灵感** +
   页内查找（focusRequest 定位闪烁）
-- **数据**：导出 JSON（含图片 Base64）/ TXT / MD / PDF，**范围可多选**
-  （文章 / 动态 / 便签 / 收藏夹 / 个人资料）；PDF 内嵌图片 + 居中页码 + **不切行**；
-  **本地文件夹快照备份**（≤10 份，自动清理最早）；**WebDAV 全量备份**（可选端到端加密 +
+- **数据**：导出 JSON（含图片 Base64）/ TXT / MD / PDF，**范围可多选 8 项**（v4.5.1：
+  文章 / 动态 / 便签 / 收藏夹 / 个人资料 / 馆藏·书架 / 馆藏·相册 / Agent 全数据）；
+  PDF 内嵌图片 + 居中页码 + **不切行**；**本地文件夹快照备份**（≤10 份，自动清理最早）；
+  **WebDAV 全量备份**（云端明文 JSON、全量覆盖=删除同步、可选端到端加密、兼容旧 .json.gz、
   云端恢复 + 配置说明书弹窗）；导入 JSON / MD / TXT
 - **设置**：头像（压缩）/ 昵称/签名 / **外观（三主题卡 + 猩红书房方案卡）** / 关于
+  （使用说明 / 更新日志 / **清除缓存**（v4.5.1：孤儿文件回收））
 - **主题**：暗夜 / 白昼 / 猩红（液态玻璃，光效锚点固定）；**自托管字体**（含中文）
 - **兼容与全局**：两层错误边界、PWA 离线、响应式、键盘焦点环、`prefers-reduced-motion`、
   安全区适配、夸克旧内核兼容（legacy + 挂载兜底）
 
 ---
 
-## 8. 已知问题与待处理（真实未修项，截至 2026-09-29 / v4.4.1）
+## 8. 已知问题与待处理（真实未修项，截至 2026-10-01 / v4.5.1）
 
 ### 8.1 功能/代码缺陷
 - **`DataPage` 用 `useAppStore()` 订阅了整个 store**（`DataPage.tsx:127`）：任一字段
@@ -602,13 +667,19 @@ VidaOS/
   （各自「第 N 段 + 预览」）。数据模型没有 groupId，改起来要动 `BookMark` 结构与面板分组。
 - **馆藏 · 长文会卡**：单本硬上限 20 万字，但**建议 ≤1 万字**。超过之后 `applyMarksToDom` 每次
   标注变化都要重扫所有块、IntersectionObserver 也要 observe 上千个块；真正的解法是虚拟滚动 + 分页。
-- **馆藏 · 碎片遗留图片没有回收**：碎片功能删掉后，它引用过的图片 blob 仍留在 `files` 表里
-  无人引用（**没自动删，怕误删**）。要清需要一次「孤儿文件回收」（用 `collectFileIds` 的反集）。
+- **馆藏 · 碎片遗留图片没有回收 —— 已解决（v4.5.1）**：设置-关于新增**「清除缓存」**按钮，
+  用 `collectFileIds` 的反集回收 `files` 表里无引用的孤儿 blob（确认对话框 + 释放空间提示）。
 - **馆藏 · 阅读器内已屏蔽原生菜单，但真机未复测**：Chromium 里实测 `contextmenu` 已取消默认行为，
   触摸端工具条也改到了选区下方（避开安卓原生浮层）；但 **iOS / 安卓真机的长按选择行为没有实测过**，
   系统自带的「拷贝 / 查询」浮层仍可能与我们的工具条同时出现。
 - **Agent 接口兼容性**：v4.4.1 起能识别 OpenAI SSE、非流式 JSON、Ollama 形状，并在空返回时给出原因；
   但**只支持 OpenAI 兼容协议**，其它协议（Anthropic / Gemini 原生）仍会报错。
+- **Agent 图片以 `![图片](fileRef:id)` 纯文本标记发送**：不支持视觉的模型自动略过（用户要求的行为）；
+  若日后要「模型真正看懂图」，需扩 AgentMessage 附件 schema + OpenAI 多模态 content part（未做）。
+- **相册拖拽真机未复测**：桌面 mousedown 拖拽与触屏长按拖拽均在本机浏览器验证过，
+  **iOS / 安卓真机长按拖拽与系统图片菜单冲突与否未复测**（div 背景图方案理论上已避开）。
+- **WebDAV 旧备份兼容**：v4.5.1 起云端存明文 JSON；此前用加密 + 旧文件名备份的仍可下载解密，
+  但新备份会覆盖旧文件（文件名从 .json.gz 变为 .json 时会同时存在两份，属预期）。
 - 低优先级设想：文章加密、静态站点导出、自定义主题色、馆藏目录（章节目录跳转）。
 
 ### 8.2 平台 / 外部限制（如实告知用户）
@@ -933,6 +1004,45 @@ npm run build        # 出 dist/（gitignore，按惯例验完可删）
 ---
 
 ## 13. 变更日志
+
+### [v4.5.1] - 2026-09-30 ~ 10-01 —— 相册交互完善 + Agent 数据读取 + 备份导出升级
+- **相册编辑器两处体验修复**：删除键移入 tile 内（原 `-top-1 -right-1` 被 `overflow-hidden`
+  裁掉半边）；**桌面拖拽弃用 HTML5 DnD** 改自实现（mousedown 按下即拖、窗口级
+  mousemove/mouseup、elementFromPoint 找目标、拖拽结束 350ms 抑制 click 防误开预览），
+  触屏仍为长按 300ms；相册编辑组保存提示去掉「更新不改排序」歧义后缀，简化为「已保存」。
+- **Agent 输入框图片按钮 → 待发队列**：选图压缩入库后**不再直接发出**，先停在输入区上方
+  （可逐张移除 / 点击预览 / 显示 n/9），文字输完按发送随消息一并发出；移除时同步
+  `deleteFile` 清理库文件。
+- **Agent 能读应用数据**（`agentEngine.ts` + `agentTurn.ts`）：`lifeIndexText()` 把
+  文章/动态/灵感/便签/日程/待办/收藏夹/相册索引随 system 下发；`resolveModule()` 按模块名
+  返回结构化文本，`resolveDoc()` 优先解析 `[[读:文章·标题]]` 与模块名；AgentContext /
+  ctx 组装补全全数据字段。
+- **导出范围 8 项**（`exportImport.ts` + `DataPage.tsx`）：新增 馆藏·书架 / 馆藏·相册 /
+  Agent 全数据；`scopedState` 非全量时真正按范围过滤（books/albums/albumGroups/albumStars/
+  agentSessions/agentDocs/agentMemories 不再被无条件带出，agent 范围剥 apiKey）。
+- **修复合并导入丢标签**（`useAppStore.importState`）：categories 四桶（灵感/日程/待办/书籍）
+  改为 union 合并（此前整体丢弃 incoming 标签桶 → 换机导入后书有、标签筛选全空）；
+  相册三件（albums/albumGroups/albumStars）此前未合入，补 `mergeById`。
+- **WebDAV 云端存明文 JSON**（`webdav.ts`）：`BACKUP_FILENAME = 'vidaos-backup.json'`，
+  未加密不 gzip；加密时仍先 gzip 再 encryptBlob（密文容器不变）；全量覆盖 = **删除同步**；
+  下载兼容旧 `.json.gz`（先试新名 404 回退旧名，gzip 魔数 / VDOS1 / 明文三态识别）；
+  备份完成 toast 显示加密状态；DataPage 说明文案更新。
+- **设置页使用说明更新**：补相册 / 星标集 / Agent `[[读:模块]]` 语法 / 导出范围 8 项 /
+  WebDAV 明文 JSON 与删除同步；按用户偏好只留重点。
+- **设置-关于新增「清除缓存」**：孤儿文件回收（collectFileIds 反集，确认对话框 + 释放体积提示），
+  三个按钮统一一行三等宽排布。
+
+### [v4.5] - 2026-09-30 —— 馆藏·相册上线（数据模型 59aed48 + UI 2765714 + 7 项修复 864ce8f）
+- **数据模型**：`Album` / `AlbumGroup` / `AlbumStar` 三类型 + `normalizeState` 兜底星标集；
+  `collectFileIds` 收 `albumGroups[].imageIds` 与 `albumStars[].fileId`（三条备份路径共用）。
+- **相册 UI**：`pages/album/AlbumPage`（图集列表，星标集置顶、按最近阅读排序）、
+  `AlbumDetailPage`（时间轴参考动态页、组内图、编辑）、`components/album/AlbumUploadEditor`
+  （≤30 张、无图纯文字发布、压缩入库）。
+- **星标集**：四固定标签（文章/动态/灵感/相册）、双链跳原文；文章/动态/灵感大图可存星标集。
+- **7 项交互修复**（864ce8f）：图集输入框打字不显现（受控回显）、无图直接发布、
+  上传提速（压缩参数 + 分批并行 4 张）、移动端长按拖拽（div 背景图替代 `<img>`
+  避开 UA 长按菜单 + 300ms 计时）、说明文案精简、馆藏顶栏统一（书架/相册共用「馆藏」顶栏 +
+  Collections 英文 + 切换按钮加大）。
 
 ### [v4.4.1] - 2026-09-29 —— 馆藏阅读器 6 项实测缺陷修复（含移除阅读器内 AI 入口）
 - **高亮在浅色主题下不可见**：`.vd-mk-highlight` 原来写死 `rgba(201,160,99,.26)`，日间主题上几乎看不出；
