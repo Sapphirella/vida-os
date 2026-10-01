@@ -10,7 +10,7 @@
 //   3. 每个输入框都有常驻 label，不再只靠 placeholder 提示
 //   4. 运行模式（API / 演示）用实色状态条，一眼看出当前状态
 //   5. 空状态有独立容器，不再是一行灰色斜体
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Plug,
   Unplug,
@@ -24,10 +24,12 @@ import {
   Pencil,
   Copy,
   ChevronLeft,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { hasApiConfig, DOC_MAX_BYTES, sessionToTxt } from '@/lib/agentEngine';
+import { hasApiConfig, fetchModels, DOC_MAX_BYTES, sessionToTxt } from '@/lib/agentEngine';
 import { saveText, errMsg, relativeTime, clsx } from '@/lib/utils';
 import type { AgentDoc, AgentMemory } from '@/types';
 
@@ -52,14 +54,14 @@ function Section({
   return (
     <section
       className="rounded-card overflow-hidden"
-      style={{ border: '1px solid var(--card-border)', background: 'var(--card-bg)' }}
+      style={{ border: '1px solid var(--agent-panel-border)', background: 'var(--agent-panel-bg)' }}
     >
       {/* 卡片头：实色底条 + 强对比标题。
-          底色用 --agent-accent-soft 而不是 --charcoal —— 后者在日间皮肤是柔粉色，
-          会让 Agent 页在日间下残留一片粉，与该皮肤的绿色强调不统一。 */}
+          底色走 --agent-panel-head（Agent 自己的浅橄榄）——
+          早前用 --charcoal，日间下它是柔粉，整片卡片会泛粉。 */}
       <div
         className="flex items-center gap-2.5 px-4 py-3"
-        style={{ borderBottom: '1px solid var(--card-border)', background: 'var(--agent-accent-soft)' }}
+        style={{ borderBottom: '1px solid var(--agent-panel-border)', background: 'var(--agent-panel-head)' }}
       >
         <span
           className="w-7 h-7 flex items-center justify-center rounded-lg flex-none"
@@ -107,7 +109,7 @@ function Field({
       </span>
       {children}
       {hint && (
-        <span className="block font-sans text-[11px] leading-snug mt-1" style={{ color: 'var(--text-ash)' }}>
+        <span className="block font-sans text-[11px] leading-snug mt-1" style={{ color: 'var(--agent-muted)' }}>
           {hint}
         </span>
       )}
@@ -132,7 +134,7 @@ function Empty({ text, action }: { text: string; action?: React.ReactNode }) {
   return (
     <div
       className="rounded-card px-4 py-5 text-center"
-      style={{ border: '1px dashed var(--card-border)', background: 'rgb(var(--bronze-rgb) / 0.05)' }}
+      style={{ border: '1px dashed var(--agent-panel-border)', background: 'rgb(var(--bronze-rgb) / 0.05)' }}
     >
       <p className="font-sans text-xs leading-relaxed" style={{ color: 'var(--text-bronze)' }}>
         {text}
@@ -155,14 +157,14 @@ function Row({
   return (
     <li
       className="flex items-center gap-2 px-3 py-2.5 rounded-card"
-      style={{ background: 'rgb(var(--bronze-rgb) / 0.1)', border: '1px solid var(--card-border)' }}
+      style={{ background: 'rgb(var(--bronze-rgb) / 0.1)', border: '1px solid var(--agent-panel-border)' }}
     >
       <div className="flex-1 min-w-0">
         <div className="font-serif text-sm truncate" style={{ color: 'var(--paper)' }}>
           {title}
         </div>
         {meta && (
-          <div className="font-mono text-[10px] mt-0.5" style={{ color: 'var(--text-ash)' }}>
+          <div className="font-mono text-[10px] mt-0.5" style={{ color: 'var(--agent-muted)' }}>
             {meta}
           </div>
         )}
@@ -231,11 +233,53 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
   const [expandedMem, setExpandedMem] = useState<string | null>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
 
+  // 拉取模型列表（v4.5.5）
+  const [pulling, setPulling] = useState(false);
+  const [modelOptions, setModelOptions] = useState<string[] | null>(null);
+  const [pullErr, setPullErr] = useState('');
+  const pullAbortRef = useRef<AbortController | null>(null);
+
+  // 离开配置页时中断在飞的拉取：否则会对已卸载的组件 setState
+  useEffect(() => () => pullAbortRef.current?.abort(), []);
+
   const apiMode = hasApiConfig(config);
   const archived = sessions.filter((s) => s.archived).sort((a, b) => b.updatedAt - a.updatedAt);
 
   // 进入配置页即把记忆标记为已读（原来是在聊天页点开面板时才标记）
   if (memories.some((m) => !m.read)) markAgentMemoriesRead();
+
+  /**
+   * 从 Base URL 拉取可用模型列表。
+   * 不用 fetchModels 的动态 import —— 它和本页同属 agent 模块，
+   * 静态导入即可（自检连接那条动态 import 是历史遗留）。
+   */
+  const pullModels = async () => {
+    if (!config.baseUrl.trim()) {
+      showToast('请先填写 Base URL', 'error');
+      return;
+    }
+    if (!config.apiKey.trim()) {
+      showToast('请先填写 API Key', 'error');
+      return;
+    }
+    pullAbortRef.current?.abort();
+    const ac = new AbortController();
+    pullAbortRef.current = ac;
+    setPulling(true);
+    setPullErr('');
+    try {
+      const list = await fetchModels(config.baseUrl, config.apiKey, ac.signal);
+      if (ac.signal.aborted) return;
+      setModelOptions(list);
+      showToast(`拉到 ${list.length} 个模型`, 'success');
+    } catch (e) {
+      if (ac.signal.aborted) return;
+      setModelOptions(null);
+      setPullErr(errMsg(e));
+    } finally {
+      if (!ac.signal.aborted) setPulling(false);
+    }
+  };
 
   const testConnection = async () => {
     setTesting(true);
@@ -308,7 +352,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
           这里再加一次会变成双重内边距。左右方向加 safe-* 兜底横屏刘海。 */}
       <div
         className="flex-none z-30 safe-left safe-right"
-        style={{ background: 'var(--bar-bg)', borderBottom: '1px solid var(--card-border)' }}
+        style={{ background: 'var(--bar-bg)', borderBottom: '1px solid var(--agent-panel-border)' }}
       >
         <div className="max-w-2xl mx-auto h-12 px-3 flex items-center gap-2">
           <button
@@ -330,7 +374,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
             </h2>
             <p
               className="font-mono text-[10px] tracking-widest uppercase leading-none mt-1.5"
-              style={{ color: 'var(--text-ash)' }}
+              style={{ color: 'var(--agent-muted)' }}
             >
               所有会话共享
             </p>
@@ -349,7 +393,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
           <div
             className="rounded-card px-3.5 py-3 flex items-center gap-2.5"
             style={{
-              border: `1px solid ${apiMode ? 'var(--agent-accent-line)' : 'var(--card-border)'}`,
+              border: `1px solid ${apiMode ? 'var(--agent-accent-line)' : 'var(--agent-panel-border)'}`,
               background: apiMode ? 'var(--agent-accent-soft)' : 'rgb(var(--bronze-rgb) / 0.08)',
             }}
           >
@@ -398,21 +442,122 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
                   style={inputStyle}
                 />
               </Field>
-              <Field label="模型名" hint="填写服务商提供的模型标识">
-                <input
-                  value={config.model}
-                  onChange={(e) => updateAgentConfig({ model: e.target.value })}
-                  placeholder="gpt-4o-mini"
-                  className={inputCls}
-                  style={inputStyle}
-                />
+              <Field
+                label="模型名"
+                hint="填写服务商提供的模型标识；填好 Base URL + API Key 后可直接拉取"
+              >
+                <div className="flex gap-2">
+                  <input
+                    value={config.model}
+                    onChange={(e) => updateAgentConfig({ model: e.target.value })}
+                    placeholder="gpt-4o-mini"
+                    className={clsx(inputCls, 'flex-1 min-w-0')}
+                    style={inputStyle}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void pullModels()}
+                    disabled={pulling}
+                    title="从 Base URL 拉取可用模型"
+                    className="btn-ghost flex-none"
+                    /* 描边覆盖：.btn-ghost 默认用全局 --card-border，日间那是玫瑰粉，
+                       Agent 页统一换橄榄灰 */
+                    style={{ padding: '9px 12px', fontSize: '0.8125rem', borderColor: 'var(--agent-panel-border)' }}
+                  >
+                    {pulling ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={13} />
+                    )}
+                    拉取
+                  </button>
+                </div>
               </Field>
+
+              {/* 拉取结果：芯片列表，点一个即填入。
+                  失败不吞错，把原因原样摊开 —— 服务商不支持 /v1/models 很常见，
+                  静默失败会让人以为是"这个服务商没有模型"。 */}
+              {pullErr && (
+                <div
+                  className="rounded-card px-3 py-2.5 flex items-start gap-2"
+                  style={{
+                    border: '1px solid rgb(var(--wine-bright-rgb) / 0.45)',
+                    background: 'rgb(var(--wine-bright-rgb) / 0.1)',
+                  }}
+                >
+                  <AlertTriangle
+                    size={13}
+                    strokeWidth={1.7}
+                    className="flex-none mt-0.5"
+                    style={{ color: 'var(--wine-bright)' }}
+                  />
+                  <span
+                    className="font-sans text-[11px] leading-snug"
+                    style={{ color: 'var(--text-bronze)' }}
+                  >
+                    {pullErr} —— 可以直接手动填写模型名。
+                  </span>
+                </div>
+              )}
+
+              {modelOptions && modelOptions.length > 0 && (
+                <div
+                  className="rounded-card p-3"
+                  style={{
+                    border: '1px solid var(--agent-panel-border)',
+                    background: 'rgb(var(--bronze-rgb) / 0.06)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2.5 px-0.5">
+                    <span
+                      className="font-mono text-[10px] tracking-widest uppercase"
+                      style={{ color: 'var(--text-bronze)' }}
+                    >
+                      {modelOptions.length} 个可用
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setModelOptions(null)}
+                      className="btn-text"
+                      style={{ fontSize: '0.6875rem' }}
+                    >
+                      收起
+                    </button>
+                  </div>
+                  <div
+                    className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto"
+                    style={{ scrollbarWidth: 'thin' }}
+                  >
+                    {modelOptions.map((m) => {
+                      const on = m === config.model;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            updateAgentConfig({ model: m });
+                            showToast(`已选用 ${m}`, 'success');
+                          }}
+                          className="font-mono text-[11px] px-2.5 py-1 rounded-lg transition-colors"
+                          style={{
+                            border: `1px solid ${on ? 'var(--agent-accent-line)' : 'var(--agent-panel-border)'}`,
+                            background: on ? 'var(--agent-accent-soft)' : 'transparent',
+                            color: on ? 'var(--agent-accent)' : 'var(--text-bronze)',
+                          }}
+                        >
+                          {m}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={testConnection}
                   disabled={testing}
                   className="btn-primary flex-1 justify-center"
-                  style={{ padding: '9px 12px', fontSize: '0.8125rem' }}
+                  style={{ padding: '9px 12px', fontSize: '0.8125rem', borderColor: 'var(--agent-panel-border)' }}
                 >
                   {testing ? <Loader2 size={13} className="animate-spin" /> : <Plug size={13} />}
                   自检连接
@@ -424,7 +569,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
                       showToast('已清除连接，回到演示模式', 'info');
                     }}
                     className="btn-ghost"
-                    style={{ padding: '9px 12px', fontSize: '0.8125rem' }}
+                    style={{ padding: '9px 12px', fontSize: '0.8125rem', borderColor: 'var(--agent-panel-border)' }}
                   >
                     <Unplug size={13} /> 清除
                   </button>
@@ -448,7 +593,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
               style={{ ...inputStyle, lineHeight: 1.75 }}
             />
             <div className="flex gap-2 mt-3">
-              <label className="btn-ghost cursor-pointer" style={{ padding: '7px 12px', fontSize: '0.8125rem' }}>
+              <label className="btn-ghost cursor-pointer" style={{ padding: '7px 12px', fontSize: '0.8125rem', borderColor: 'var(--agent-panel-border)' }}>
                 <FileUp size={13} /> 上传覆盖
                 <input
                   type="file"
@@ -490,7 +635,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
               onClick={() => docFileRef.current?.click()}
               disabled={docsBusy}
               className="btn-ghost w-full justify-center mb-3"
-              style={{ padding: '9px 12px', fontSize: '0.8125rem' }}
+              style={{ padding: '9px 12px', fontSize: '0.8125rem', borderColor: 'var(--agent-panel-border)' }}
             >
               {docsBusy ? <Loader2 size={13} className="animate-spin" /> : <FileUp size={13} />}
               上传文档（.md / .txt / .json / .yaml，≤400KB）
@@ -524,7 +669,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
                   <li key={m.id}>
                     <div
                       className="rounded-card overflow-hidden"
-                      style={{ background: 'rgb(var(--bronze-rgb) / 0.1)', border: '1px solid var(--card-border)' }}
+                      style={{ background: 'rgb(var(--bronze-rgb) / 0.1)', border: '1px solid var(--agent-panel-border)' }}
                     >
                       <button
                         onClick={() => setExpandedMem(expandedMem === m.id ? null : m.id)}
@@ -533,7 +678,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
                         <span className="flex-1 min-w-0 font-serif text-sm truncate" style={{ color: 'var(--paper)' }}>
                           {m.title}
                         </span>
-                        <span className="font-mono text-[10px] flex-none" style={{ color: 'var(--text-ash)' }}>
+                        <span className="font-mono text-[10px] flex-none" style={{ color: 'var(--agent-muted)' }}>
                           {relativeTime(m.createdAt)}
                         </span>
                         <span
@@ -551,7 +696,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
                       {expandedMem === m.id && (
                         <div
                           className="px-3 pb-3 pt-1"
-                          style={{ borderTop: '1px solid var(--card-border)' }}
+                          style={{ borderTop: '1px solid var(--agent-panel-border)' }}
                         >
                           <p
                             className="font-serif text-xs whitespace-pre-wrap"
@@ -636,7 +781,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
             )}
           </Section>
 
-          <p className="font-sans text-[11px] text-center leading-relaxed px-4 pt-1" style={{ color: 'var(--text-ash)' }}>
+          <p className="font-sans text-[11px] text-center leading-relaxed px-4 pt-1" style={{ color: 'var(--agent-muted)' }}>
             以上设置由所有会话共享，修改后立即对新对话生效。
           </p>
         </div>

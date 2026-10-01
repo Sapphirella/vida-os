@@ -449,6 +449,73 @@ export function scanTools(text: string): { display: string; tools: ParsedTool[] 
   return { display, tools };
 }
 
+/**
+ * 拉取可用模型列表（v4.5.5）
+ *
+ * OpenAI 兼容的 /v1/models。多数服务商都实现了这个端点，
+ * 填完 Base URL + API Key 后可以直接列出模型名，省得手打。
+ *
+ * 兼容性处理：各家返回结构大同小异但字段名不完全一致
+ * （id / name / model），这里逐个回退取值；解析不到就抛明确错误，
+ * 而不是静默返回空列表让用户以为是"这个服务商没有模型"。
+ */
+export async function fetchModels(
+  baseUrl: string,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const root = baseUrl.trim().replace(/\/+$/, '');
+  if (!root) throw new Error('请先填写 Base URL');
+  if (!apiKey.trim()) throw new Error('请先填写 API Key');
+
+  // 拼址规则与 chatEndpoint() 对称：
+  //   …/v1              → …/v1/models
+  //   …（裸根）          → …/v1/models
+  //   …/chat/completions → 先退回根再拼，否则会拼出 /chat/completions/v1/models 的废地址
+  const base = root.replace(/\/chat\/completions$/i, '') || root;
+  const url = /\/v\d+$/i.test(base) ? `${base}/models` : `${base}/v1/models`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+      signal,
+    });
+  } catch (e) {
+    const err = e as { name?: string };
+    if (err?.name === 'AbortError') throw e;
+    throw new Error('连不上这个地址，检查 Base URL 是否正确');
+  }
+
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) throw new Error('API Key 不对或没有权限');
+    if (res.status === 404) throw new Error('这个地址没有提供模型列表接口，请手动填写模型名');
+    throw new Error(`拉取失败（HTTP ${res.status}）`);
+  }
+
+  const data = (await res.json()) as { data?: unknown; models?: unknown };
+  const raw = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : null;
+  if (!raw) throw new Error('返回格式不认得，请手动填写模型名');
+
+  const names = raw
+    .map((m) => {
+      if (typeof m === 'string') return m;
+      if (m && typeof m === 'object') {
+        const o = m as Record<string, unknown>;
+        const v = o.id ?? o.name ?? o.model;
+        return typeof v === 'string' ? v : '';
+      }
+      return '';
+    })
+    .filter(Boolean);
+
+  // 去重 + 排序：去掉同一模型的多个版本后缀噪音按字母序更好找
+  const uniq = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  if (uniq.length === 0) throw new Error('这个地址返回了空的模型列表');
+  return uniq;
+}
+
 // ============================================================
 // 流式请求（OpenAI 兼容 SSE）
 // ============================================================

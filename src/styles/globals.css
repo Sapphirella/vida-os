@@ -132,13 +132,17 @@
   --focus-ring: rgb(var(--candle-rgb) / 0.4);
   --caret: var(--candle);
 
-  /* Agent 模块强调色（v4.5.4）
-     语义独立于 --wine：Agent 界面有自己的气质，不该和全局强调色绑死。
-     暗夜 / 猩红 = 玫瑰木系；白昼 = 橄榄绿系（用户要求日间不要粉色）。 */
+  /* Agent 模块强调色：暗夜 = 玫瑰木系（与全局 wine 同源） */
   --agent-accent: #A8767D;
   --agent-accent-rgb: 168 118 125;
+  --agent-panel-bg: rgba(50, 48, 43, 0.85);
+  --agent-panel-head: rgb(var(--agent-accent-rgb) / 0.18);
+  --agent-panel-border: rgba(125, 72, 76, 0.4);
   --agent-accent-soft: rgb(var(--agent-accent-rgb) / 0.18);
   --agent-accent-line: rgb(var(--agent-accent-rgb) / 0.42);
+  /* Agent 模块弱化文字（hint / 时间戳 / 页脚）。
+     暗夜直接沿用全局 --text-ash，不改变夜间观感。 */
+  --agent-muted: var(--text-ash);
 
   /* 全屏编辑器语义色（夜间默认值；日间在 data-theme='day' 覆盖） */
   --editor-bg: var(--ink);                 /* 编辑区纸背景：与页面同色，沉浸 */
@@ -249,9 +253,20 @@
   --find-fg: var(--bronze-deep);
   --find-fg-dim: var(--bronze-deep);
 
-  /* Agent 模块强调色：日间用橄榄绿系，不用玫瑰粉（用户要求） */
+  /* Agent 模块强调色：日间用橄榄绿系，不用玫瑰粉（用户要求）。
+     注：这里取的是 --paper/#575527 那个深橄榄。它作为小面积强调（状态点、
+     细边框、图标）观感很好 —— 用户明确喜欢【真实 API 模式】那条的绿。
+     大面积底色不能用它，会发闷；卡片底另走 --agent-panel-bg。 */
   --agent-accent: #575527;
   --agent-accent-rgb: 87 85 39;
+  /* Agent 卡片底：日间改成偏冷的米白，把全局 --card-bg 的粉橙挡在外面 */
+  --agent-panel-bg: rgba(250, 247, 238, 0.94);
+  --agent-panel-head: rgba(94, 105, 63, 0.13);
+  /* 描边：日间的 --card-border 是玫瑰粉，Agent 页面统一换橄榄灰 */
+  --agent-panel-border: rgba(110, 118, 82, 0.34);
+  /* 弱化文字：全局 --text-ash 是暗砖红 #8F5B57，压在米白卡面上仍读得出粉。
+     Agent 页换成中性橄榄（#FAF7EE 上约 4.9:1）。 */
+  --agent-muted: #6F6A3C;
 
   /* 阴影：深橄榄阴影色（柔和暖褐，呼应色板） */
   --shadow-rgb: 87 85 39;
