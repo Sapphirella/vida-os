@@ -296,9 +296,12 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col view-enter">
-      {/* 顶部：返回 + 标题。safe-top 兜底刘海屏 */}
+      {/* 顶部：返回 + 标题。
+          注意不要加 safe-top —— 本页渲染在全局 TopBar 之下，
+          main 已经用 pt-[calc(56px+env(safe-area-inset-top))] 把刘海区让掉了，
+          这里再加一次会变成双重内边距。左右方向加 safe-* 兜底横屏刘海。 */}
       <div
-        className="flex-none z-30 safe-top"
+        className="flex-none z-30 safe-left safe-right"
         style={{ background: 'var(--bar-bg)', borderBottom: '1px solid var(--card-border)' }}
       >
         <div className="max-w-2xl mx-auto h-12 px-3 flex items-center gap-2">
@@ -325,7 +328,10 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* 内容 */}
-      <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+      <div
+        className="flex-1 min-h-0 overflow-y-auto safe-left safe-right"
+        style={{ scrollbarWidth: 'thin' }}
+      >
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 space-y-4 pb-10">
 
           {/* 运行模式状态条：实色，一眼看出当前状态 */}

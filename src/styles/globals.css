@@ -731,6 +731,10 @@ textarea, input, [contenteditable] {
 /* 移动端安全区 */
 .safe-top { padding-top: env(safe-area-inset-top, 0); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+/* 左右安全区：iPhone 横屏时刘海/灵动岛在屏幕侧面，会切掉贴边的控件。
+   viewport-fit=cover 下页面铺满整屏，必须靠这两个内边距把内容推回安全区内。 */
+.safe-left { padding-left: env(safe-area-inset-left, 0); }
+.safe-right { padding-right: env(safe-area-inset-right, 0); }
 
 /* Markdown 渲染样式 */
 .prose-vidaos {
