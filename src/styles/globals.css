@@ -137,6 +137,10 @@
   --agent-accent-rgb: 168 118 125;
   --agent-panel-bg: rgba(50, 48, 43, 0.85);
   --agent-panel-head: rgb(var(--agent-accent-rgb) / 0.18);
+  /* 卡头文字/图标底色：夜间沿用原色，日间由 data-theme='day' 覆盖成反色 */
+  --agent-head-fg: var(--headline);
+  --agent-head-dim: var(--text-bronze);
+  --agent-head-chip-bg: rgb(var(--agent-accent-rgb) / 0.18);
   --agent-panel-border: rgba(125, 72, 76, 0.4);
   --agent-accent-soft: rgb(var(--agent-accent-rgb) / 0.18);
   --agent-accent-line: rgb(var(--agent-accent-rgb) / 0.42);
@@ -259,11 +263,17 @@
      大面积底色不能用它，会发闷；卡片底另走 --agent-panel-bg。 */
   --agent-accent: #575527;
   --agent-accent-rgb: 87 85 39;
-  /* Agent 卡片底：日间改成偏冷的米白，把全局 --card-bg 的粉橙挡在外面 */
-  --agent-panel-bg: rgba(250, 247, 238, 0.94);
-  --agent-panel-head: rgba(94, 105, 63, 0.13);
-  /* 描边：日间的 --card-border 是玫瑰粉，Agent 页面统一换橄榄灰 */
-  --agent-panel-border: rgba(110, 118, 82, 0.34);
+  /* Agent 卡片：卡头实色深橄榄，卡体同色相浅橄榄 —— 同一色相的两级明度。
+     早前是「浅灰头 rgba(94,105,63,.13) + 暖奶油体 rgba(250,247,238,.94)」，
+     两个不相干的颜色拼在一起显得割裂（用户反馈）。 */
+  --agent-panel-bg: rgba(240, 243, 223, 0.92);   /* #F0F3DF 浅橄榄 */
+  --agent-panel-head: #4e5630;                   /* 深橄榄，卡头实色 */
+  /* 卡头上的文字要反过来用亮色，否则深底 + --headline 深橄榄直接糊掉 */
+  --agent-head-fg: #ddd3c9;                      /* 5.3:1 */
+  --agent-head-dim: #c6cca6;                     /* 4.7:1 */
+  --agent-head-chip-bg: rgb(221 211 201 / 0.2);
+  /* 描边：跟着卡头一起转深橄榄，日间的 --card-border 是玫瑰粉不能用 */
+  --agent-panel-border: rgba(78, 86, 48, 0.32);
   /* 弱化文字：全局 --text-ash 是暗砖红 #8F5B57，压在米白卡面上仍读得出粉。
      Agent 页换成中性橄榄（#FAF7EE 上约 4.9:1）。 */
   --agent-muted: #6F6A3C;

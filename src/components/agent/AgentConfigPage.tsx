@@ -56,28 +56,28 @@ function Section({
       className="rounded-card overflow-hidden"
       style={{ border: '1px solid var(--agent-panel-border)', background: 'var(--agent-panel-bg)' }}
     >
-      {/* 卡片头：实色底条 + 强对比标题。
-          底色走 --agent-panel-head（Agent 自己的浅橄榄）——
-          早前用 --charcoal，日间下它是柔粉，整片卡片会泛粉。 */}
+      {/* 卡片头：实色底条 + 反色标题。
+          底色走 --agent-panel-head，文字走 --agent-head-fg / --agent-head-dim ——
+          日间卡头是深橄榄实色，文字必须反过来用亮色，否则深底深字会糊成一片。 */}
       <div
         className="flex items-center gap-2.5 px-4 py-3"
         style={{ borderBottom: '1px solid var(--agent-panel-border)', background: 'var(--agent-panel-head)' }}
       >
         <span
           className="w-7 h-7 flex items-center justify-center rounded-lg flex-none"
-          style={{ background: 'var(--agent-accent-soft)', color: 'var(--agent-accent)' }}
+          style={{ background: 'var(--agent-head-chip-bg)', color: 'var(--agent-head-fg)' }}
         >
           {icon}
         </span>
         <div className="flex-1 min-w-0">
           <h3
             className="font-serif font-semibold leading-tight"
-            style={{ color: 'var(--headline)' }}
+            style={{ color: 'var(--agent-head-fg)' }}
           >
             {title}
           </h3>
           {desc && (
-            <p className="font-sans text-xs leading-snug mt-0.5" style={{ color: 'var(--text-bronze)' }}>
+            <p className="font-sans text-xs leading-snug mt-0.5" style={{ color: 'var(--agent-head-dim)' }}>
               {desc}
             </p>
           )}
@@ -389,12 +389,15 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
       >
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 space-y-4 pb-10">
 
-          {/* 运行模式状态条：实色，一眼看出当前状态 */}
+          {/* 运行模式状态条：实色，一眼看出当前状态。
+              底色跟卡片体（--agent-panel-bg）一致，让它读起来是「又一张卡」，
+              而不是浮在页面底色上的另一种颜色 —— 早前走 --agent-accent-soft，
+              与卡片体差一档，看着发灰。绿色调由状态点和边框的 --agent-accent 承担。 */}
           <div
             className="rounded-card px-3.5 py-3 flex items-center gap-2.5"
             style={{
               border: `1px solid ${apiMode ? 'var(--agent-accent-line)' : 'var(--agent-panel-border)'}`,
-              background: apiMode ? 'var(--agent-accent-soft)' : 'rgb(var(--bronze-rgb) / 0.08)',
+              background: 'var(--agent-panel-bg)',
             }}
           >
             <span
@@ -618,7 +621,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
           <Section
             icon={<FileUp size={14} strokeWidth={1.7} />}
             title="资料库"
-            desc={`${docs.length} 份 · 对话里用 [[读:文档名]] 按需读取`}
+            desc={`${docs.length} 份 · 聊到相关内容时它会自己翻，不用你指定`}
           >
             <input
               ref={docFileRef}
@@ -659,7 +662,7 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
           <Section
             icon={<Brain size={14} strokeWidth={1.7} />}
             title="记忆馆"
-            desc={`${memories.length} 条 · Agent 自动写入，对话里用 [[忆:标题]] 读取`}
+            desc={`${memories.length} 条 · 它自己记下的，你也可以在这里删`}
           >
             {memories.length === 0 ? (
               <Empty text="还没有记忆。Agent 遇到值得长期记住的信息会自动写入。" />
