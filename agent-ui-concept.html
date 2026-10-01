@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VidaOS · Agent 界面重设计</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* 页面外壳 */
+    --paper:#f7f5f0; --ink:#14171e; --ink-2:#3a4256; --ink-3:#7c7a72;
+    --line:#e2ddd2; --card:#fff;
+    /* VidaOS 暗夜 */
+    --n-bg:#171A1B; --n-card:#32302B; --n-wine:#7D484C; --n-rose:#A8767D;
+    --n-paper:#BAA6AD; --n-line:rgba(125,72,76,.4); --n-elev:#3a3730;
+    /* 标注 */
+    --flag:#c25a3c; --good:#2f6f5e;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Noto Serif SC",-apple-system,sans-serif;
+    font-size:14.5px; line-height:1.62; -webkit-font-smoothing:antialiased;
+  }
+  .serif{font-family:"EB Garamond","Noto Serif SC",serif}
+  .mono{font-family:"JetBrains Mono",monospace}
+  .wrap{max-width:1120px; margin:0 auto; padding:52px 28px 96px}
+  h1{font-family:"EB Garamond","Noto Serif SC",serif; font-weight:400;
+     font-size:40px; line-height:1.12; letter-spacing:-.01em; margin:0 0 14px}
+  .lede{color:var(--ink-2); font-size:15.5px; max-width:64ch; margin:0 0 8px}
+  .eyebrow{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.16em;
+           text-transform:uppercase; color:var(--ink-3); margin:0 0 12px}
+  h2{font-family:"EB Garamond","Noto Serif SC",serif; font-weight:500;
+     font-size:25px; letter-spacing:-.005em; margin:0 0 6px}
+  h3{font-size:15px; font-weight:600; margin:0 0 4px; color:var(--ink)}
+  section{margin-top:56px}
+  .sec-sub{color:var(--ink-3); font-size:14px; margin:0 0 26px; max-width:70ch}
+  .hr{height:1px; background:var(--line); margin:0}
+  svg{display:block}
+  .i{width:16px;height:16px;stroke:currentColor;stroke-width:1.7;fill:none;
+     stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+  /* 标注卡 */
+  .flag-list{display:grid; gap:12px; margin:26px 0 0}
+  .flag-item{display:grid; grid-template-columns:26px 1fr; gap:14px; align-items:start;
+             background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 18px}
+  .flag-n{width:24px;height:24px;border-radius:50%;background:var(--flag);color:#fff;
+          font-family:"JetBrains Mono",monospace;font-size:12px;display:flex;align-items:center;
+          justify-content:center;margin-top:2px;flex:none}
+  .flag-item p{margin:0; color:var(--ink-2); font-size:14px}
+  .flag-item strong{color:var(--ink);font-weight:600}
+  code{font-family:"JetBrains Mono",monospace;font-size:12.5px;background:#efece5;
+       padding:1.5px 5px;border-radius:5px;color:#8a4436}
+
+  /* 设备框 */
+  .device-stage{display:flex; gap:34px; align-items:flex-start; flex-wrap:wrap}
+  .phone{
+    width:340px; flex:none; border-radius:34px; background:var(--n-bg);
+    border:9px solid #232322; box-shadow:0 18px 44px -12px rgba(20,23,30,.42);
+    overflow:hidden; position:relative;
+  }
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:112px;height:20px;
+         background:#232322;border-radius:0 0 13px 13px;z-index:5}
+  .desk{
+    flex:1; min-width:460px; border-radius:16px; background:var(--n-bg);
+    border:1px solid #2a2a28; box-shadow:0 18px 44px -14px rgba(20,23,30,.38); overflow:hidden;
+  }
+  .cap{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.1em;
+       text-transform:uppercase;color:var(--ink-3);margin:0 0 12px;display:flex;
+       align-items:center;gap:7px}
+  .cap b{color:var(--ink);font-weight:500}
+
+  /* ===== 模拟 UI 内部样式（VidaOS 暗夜） ===== */
+  .ui{font-family:"Noto Serif SC",sans-serif;color:var(--n-paper);display:flex;flex-direction:column}
+  .ui-sans{font-family:-apple-system,"Noto Serif SC",sans-serif}
+  .topbar{height:46px;display:flex;align-items:center;gap:8px;padding:0 12px;flex:none;
+          background:rgba(23,26,27,.9);border-bottom:1px solid rgba(125,72,76,.28)}
+  .iconbtn{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+           color:var(--n-rose);opacity:.85}
+  .scroll{flex:1;overflow:hidden;padding:14px 14px 8px}
+  .msg{display:flex;gap:9px;margin-bottom:18px}
+  .av{width:26px;height:26px;border-radius:50%;flex:none;display:flex;align-items:center;
+      justify-content:center;font-size:11px;color:var(--n-bg)}
+  .av-user{background:var(--n-rose)}
+  .av-bot{background:linear-gradient(135deg,var(--n-rose),var(--n-wine))}
+  .mbody{flex:1;min-width:0}
+  .mhead{display:flex;align-items:baseline;gap:7px;margin-bottom:4px}
+  .mname{font-size:12px;font-weight:500;color:var(--n-paper)}
+  .mtime{font-family:"JetBrains Mono",monospace;font-size:9.5px;color:rgba(186,166,173,.42)}
+  .mtext{font-size:14px;line-height:1.68;color:var(--n-paper);opacity:.94}
+  .mact{display:flex;align-items:center;gap:10px;margin-top:7px;opacity:.4;transition:opacity .18s}
+  .msg:hover .mact{opacity:.85}
+  .mact button{color:var(--n-rose);opacity:.8;background:none;border:none;padding:0;cursor:pointer;
+               font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.04em}
+  .bubble{background:var(--n-wine);border-radius:13px 13px 4px 13px;padding:10px 12px}
+  .bubble .mtext{color:#EFD9D9;opacity:1}
+  .sysline{text-align:center;font-family:"JetBrains Mono",monospace;font-size:9.5px;
+           color:rgba(186,166,173,.4);padding:2px 9px;border-radius:99px;
+           background:rgba(125,72,76,.16);display:inline-block;margin:0 auto 16px}
+  .composer{flex:none;padding:8px 12px 12px;background:rgba(23,26,27,.92);
+            border-top:1px solid rgba(125,72,76,.22)}
+  .cbox{border:1px solid rgba(125,72,76,.42);border-radius:14px;padding:9px 10px;
+        display:flex;align-items:flex-end;gap:7px;background:rgba(50,48,43,.62)}
+  .cin{flex:1;font-size:14px;color:rgba(186,166,173,.4);line-height:1.6;min-height:22px}
+  .send{width:31px;height:31px;border-radius:50%;background:var(--n-wine);flex:none;
+        display:flex;align-items:center;justify-content:center;color:#EFD9D9}
+  .send.off{background:rgba(125,72,76,.3);color:rgba(186,166,173,.4)}
+  .chint{font-family:"JetBrains Mono",monospace;font-size:9px;color:rgba(186,166,173,.3);
+         margin-top:5px;padding-left:2px}
+
+  /* 会话列表 */
+  .list{padding:14px}
+  .lrow{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:12px;
+        border:1px solid rgba(125,72,76,.3);background:rgba(50,48,43,.5);margin-bottom:7px}
+  .lt{font-size:13.5px;color:var(--n-paper);margin-bottom:2px}
+  .lp{font-size:11.5px;color:rgba(186,166,173,.55);line-height:1.45}
+  .lm{font-family:"JetBrains Mono",monospace;font-size:9.5px;color:rgba(186,166,173,.42);flex:none}
+  .pill{font-family:"JetBrains Mono",monospace;font-size:8.5px;letter-spacing:.08em;
+        padding:1.5px 6px;border-radius:99px;background:rgba(168,118,125,.2);
+        color:var(--n-rose);flex:none}
+
+  /* 规格表 */
+  .spec{width:100%;border-collapse:collapse;margin-top:20px;background:var(--card);
+        border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:14px}
+  .spec th{text-align:left;padding:11px 16px;background:#faf8f3;border-bottom:1px solid var(--line);
+           font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.09em;
+           text-transform:uppercase;color:var(--ink-3);font-weight:500}
+  .spec td{padding:12px 16px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+  .spec tr:last-child td{border-bottom:none}
+  .spec td:first-child{color:var(--ink);font-weight:500;white-space:nowrap;font-size:13.5px}
+  .sw{display:inline-block;width:13px;height:13px;border-radius:4px;vertical-align:-2px;
+      margin-right:7px;border:1px solid rgba(0,0,0,.14)}
+  .mono-sm{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-3)}
+  .note{background:#fff;border:1px solid var(--line);border-left:3px solid var(--good);
+        border-radius:0 12px 12px 0;padding:14px 18px;margin-top:18px;font-size:14px;color:var(--ink-2)}
+  @media(max-width:900px){ .desk{min-width:100%} .wrap{padding:36px 20px 72px} h1{font-size:30px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">VidaOS · 界面重设计提案</p>
+  <h1>Agent 界面重设计</h1>
+  <p class="lede">
+    现有 Agent 界面在桌面端能用，但信息密度、状态可见性和移动端可达性都有明显问题。
+    下面是逐条问题诊断，以及一版完整重设计方案 —— 会话列表与聊天主界面两屏都在。
+  </p>
+  <p class="lede" style="font-size:14px;color:var(--ink-3);margin-top:14px">
+    方案只改 Agent 模块的视觉与交互，不动全局主题系统、不动其他页面。
+  </p>
+
+  <div class="hr" style="margin-top:44px"></div>
+
+  <!-- ============ 问题诊断 ============ -->
+  <section>
+    <h2>一、当前界面的六个问题</h2>
+    <p class="sec-sub">按严重程度排序。前两条是功能性缺陷，不是审美偏好问题。</p>
+
+    <div class="flag-list">
+      <div class="flag-item">
+        <div class="flag-n">1</div>
+        <p><strong>移动端操作按钮永远点不到（功能缺陷）</strong><br>
+        消息的复制 / 重新生成 / 删除都写成 <code>opacity-0 group-hover:opacity-100</code>。
+        桌面端鼠标悬停才浮现，但手机没有 hover —— 这三个功能在移动端等于不存在。</p>
+      </div>
+      <div class="flag-item">
+        <div class="flag-n">2</div>
+        <p><strong>用户消息的操作区在气泡内部且默认透明</strong><br>
+        时间戳和按钮塞在酒红气泡里、默认 <code>opacity-0</code>。低对比 + 位置别扭，两头不讨好。</p>
+      </div>
+      <div class="flag-item">
+        <div class="flag-n">3</div>
+        <p><strong>顶栏 6 个控件挤在 44px 内，密度过高</strong><br>
+        返回、标题、API 徽章、记忆馆、导出、配置。记忆馆和配置还都打开同一个面板，功能重复。</p>
+      </div>
+      <div class="flag-item">
+        <div class="flag-n">4</div>
+        <p><strong>Agent 在聊天页没有身份标识</strong><br>
+        会话列表页有机器人头像，进了聊天页就消失。用户对话时不知道"谁在说话"。</p>
+      </div>
+      <div class="flag-item">
+        <div class="flag-n">5</div>
+        <p><strong>消息缺少扫描锚点，长会话难定位</strong><br>
+        左侧回复是裸文字、右侧气泡是酒红块，两种形态宽度上限还不一样（92% / 86%），节奏被打散。</p>
+      </div>
+      <div class="flag-item">
+        <div class="flag-n">6</div>
+        <p><strong>流式状态信息量为零</strong><br>
+        正在生成时只有三个弹跳点，用户不知道它在读资料、在写文章、还是在等网络。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 新设计：聊天页 ============ -->
+  <section>
+    <h2>二、聊天主界面 · 新设计</h2>
+    <p class="sec-sub">
+      核心思路：把"谁在说"和"什么时候说的"变成常驻信息，而不是 hover 才出现；
+      顶栏做减法，把低频操作收进一个溢出菜单。
+    </p>
+
+    <div class="device-stage">
+
+      <!-- 移动端 -->
+      <div>
+        <p class="cap"><b>移动端</b> · 340pt</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="ui" style="height:600px">
+
+            <div class="topbar">
+              <div class="iconbtn" style="opacity:1">
+                <svg class="i" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div class="serif" style="font-size:14.5px;color:#C9B4BA;line-height:1.25;
+                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis">关于旧书与记忆馆</div>
+                <div class="mono" style="font-size:8.5px;color:rgba(186,166,173,.4);letter-spacing:.06em;margin-top:1px">
+                  12 条 · API
+                </div>
+              </div>
+              <div class="iconbtn">
+                <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.4" fill="currentColor"/>
+                  <circle cx="19" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/></svg>
+              </div>
+            </div>
+
+            <div class="scroll">
+              <div style="text-align:center;margin-bottom:16px">
+                <span class="sysline ui-sans">已加载 3 篇资料</span>
+              </div>
+
+              <div class="msg">
+                <div class="av av-user ui-sans" style="font-size:10px">你</div>
+                <div class="mbody">
+                  <div class="mhead">
+                    <span class="mname">你</span>
+                    <span class="mtime">21:04</span>
+                  </div>
+                  <div class="bubble">
+                    <div class="mtext">帮我把记忆馆里那几篇关于旧书的资料整理成一篇随笔。</div>
+                  </div>
+                  <div class="mact">
+                    <button>复制</button><button>删除</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="msg">
+                <div class="av av-bot">
+                  <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:#EFD9D9">
+                    <rect x="3" y="8" width="18" height="12" rx="3"/><circle cx="8" cy="14" r="1.1" fill="currentColor"/>
+                    <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/></svg>
+                </div>
+                <div class="mbody">
+                  <div class="mhead">
+                    <span class="mname">Agent</span>
+                    <span class="mtime">21:04</span>
+                  </div>
+                  <div class="mtext">我读了资料馆里的三篇旧书随笔，脉络大致是：<br><br>
+                    一是从版本与装帧谈"物"的命运，二是从批注谈"读写关系"。<br><br>
+                    两者都指向一个共同点 —— 书的价值一半在内容，一半在与读者的相遇。要我按这条线起草吗？</div>
+                  <div class="mact">
+                    <button>复制</button><button>重生成</button><button>删除</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="msg" style="margin-bottom:0">
+                <div class="av av-bot">
+                  <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:#EFD9D9">
+                    <rect x="3" y="8" width="18" height="12" rx="3"/><circle cx="8" cy="14" r="1.1" fill="currentColor"/>
+                    <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/></svg>
+                </div>
+                <div class="mbody">
+                  <div class="mhead">
+                    <span class="mname">Agent</span><span class="mtime">21:05</span>
+                  </div>
+                  <div class="ui-sans" style="font-size:11.5px;color:rgba(168,118,125,.85);
+                       display:flex;align-items:center;gap:7px;padding:3px 0">
+                    <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;animation:spin 1.4s linear infinite">
+                      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
+                    </svg>
+                    正在检索资料馆…
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="composer">
+              <div class="cbox">
+                <div class="iconbtn" style="width:28px;height:28px">
+                  <svg class="i" viewBox="0 0 24 24" style="width:17px;height:17px">
+                    <rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="1.6"/>
+                    <path d="M21 15l-5-5L5 21"/></svg>
+                </div>
+                <div class="cin">和 Agent 说点什么…</div>
+                <div class="send off">
+                  <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                </div>
+              </div>
+              <div class="chint">Enter 发送 · Shift+Enter 换行</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- 桌面端 -->
+      <div>
+        <p class="cap"><b>桌面端</b> · 会话宽度收窄，行长可控</p>
+        <div class="desk">
+          <div class="ui" style="height:600px">
+            <div class="topbar">
+              <div class="iconbtn" style="opacity:1">
+                <svg class="i" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+              </div>
+              <div class="serif" style="font-size:15px;color:#C9B4BA">关于旧书与记忆馆</div>
+              <span class="pill">API</span>
+              <div style="flex:1"></div>
+              <div class="iconbtn" title="记忆馆">
+                <svg class="i" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44"/>
+                  <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44"/></svg>
+              </div>
+              <div class="iconbtn">
+                <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.4" fill="currentColor"/>
+                  <circle cx="19" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/></svg>
+              </div>
+            </div>
+
+            <div class="scroll" style="max-width:none">
+              <div style="max-width:660px;margin:0 auto">
+                <div style="text-align:center;margin-bottom:18px">
+                  <span class="sysline ui-sans">已加载 3 篇资料</span>
+                </div>
+                <div class="msg">
+                  <div class="av av-user ui-sans" style="font-size:10px">你</div>
+                  <div class="mbody">
+                    <div class="mhead"><span class="mname">你</span><span class="mtime">21:04</span></div>
+                    <div class="bubble"><div class="mtext">帮我把记忆馆里那几篇关于旧书的资料整理成一篇随笔。</div></div>
+                    <div class="mact"><button>复制</button><button>删除</button></div>
+                  </div>
+                </div>
+                <div class="msg">
+                  <div class="av av-bot">
+                    <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:#EFD9D9">
+                      <rect x="3" y="8" width="18" height="12" rx="3"/><circle cx="8" cy="14" r="1.1" fill="currentColor"/>
+                      <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/></svg>
+                  </div>
+                  <div class="mbody">
+                    <div class="mhead"><span class="mname">Agent</span><span class="mtime">21:04</span></div>
+                    <div class="mtext">我读了资料馆里的三篇旧书随笔，脉络大致是：<br><br>
+                      一是从版本与装帧谈"物"的命运，二是从批注谈"读写关系"。<br><br>
+                      两者都指向一个共同点 —— 书的价值一半在内容，一半在与读者的相遇。要我按这条线起草吗？</div>
+                    <div class="mact"><button>复制</button><button>重生成</button><button>删除</button></div>
+                  </div>
+                </div>
+                <div class="msg" style="margin-bottom:0">
+                  <div class="av av-bot">
+                    <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:#EFD9D9">
+                      <rect x="3" y="8" width="18" height="12" rx="3"/><circle cx="8" cy="14" r="1.1" fill="currentColor"/>
+                      <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/></svg>
+                  </div>
+                  <div class="mbody">
+                    <div class="mhead"><span class="mname">Agent</span><span class="mtime">21:05</span></div>
+                    <div class="ui-sans" style="font-size:11.5px;color:rgba(168,118,125,.85);
+                         display:flex;align-items:center;gap:7px;padding:3px 0">
+                      <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;animation:spin 1.4s linear infinite">
+                        <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+                      正在检索资料馆…
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="composer">
+              <div style="max-width:660px;margin:0 auto">
+                <div class="cbox">
+                  <div class="iconbtn" style="width:28px;height:28px">
+                    <svg class="i" viewBox="0 0 24 24" style="width:17px;height:17px">
+                      <rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="1.6"/>
+                      <path d="M21 15l-5-5L5 21"/></svg>
+                  </div>
+                  <div class="cin">和 Agent 说点什么…</div>
+                  <div class="send off">
+                    <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px">
+                      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ 会话列表 ============ -->
+  <section>
+    <h2>三、会话列表 · 新设计</h2>
+    <p class="sec-sub">
+      从"一行标题加一行摘要"改成带身份图标的会话卡，
+      归档区从折叠列表升级为可切换的完整列表。
+    </p>
+
+    <div class="device-stage">
+      <div>
+        <p class="cap"><b>移动端</b></p>
+        <div class="phone">
+          <div class="ui" style="height:520px">
+            <div class="topbar">
+              <div style="flex:1;min-width:0">
+                <div class="serif" style="font-size:15px;color:#C9B4BA">会话</div>
+                <div class="mono" style="font-size:8.5px;color:rgba(186,166,173,.4);letter-spacing:.08em;margin-top:1px">4 个活跃 · 2 已归档</div>
+              </div>
+              <div class="send" style="width:30px;height:30px;padding:0 10px;border-radius:99px;width:auto">
+                <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12 5v14M5 12h14"/></svg>
+                <span class="ui-sans" style="font-size:12px;margin-left:2px">新建</span>
+              </div>
+            </div>
+            <div class="list" style="flex:1;overflow:hidden">
+              <div class="lrow">
+                <div class="av av-bot" style="width:28px;height:28px">
+                  <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:#EFD9D9">
+                    <rect x="3" y="8" width="18" height="12" rx="3"/><circle cx="8" cy="14" r="1.1" fill="currentColor"/>
+                    <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/></svg>
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span class="lt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">关于旧书与记忆馆</span>
+                    <span class="pill">新</span>
+                  </div>
+                  <div class="lp" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">两者都指向一个共同点 —— 书的价值一半在内容…</div>
+                </div>
+                <div class="lm">2分前</div>
+              </div>
+
+              <div class="lrow">
+                <div class="av av-bot" style="width:28px;height:28px">
+                  <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:#EFD9D9">
+                    <rect x="3" y="8" width="18" height="12" rx="3"/><circle cx="8" cy="14" r="1.1" fill="currentColor"/>
+                    <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/></svg>
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div class="lt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">三月读书笔记整理</div>
+                  <div class="lp" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">已经帮你把三条笔记合并成一篇了，要看看吗</div>
+                </div>
+                <div class="lm">昨天</div>
+              </div>
+
+              <div class="lrow" style="opacity:.62">
+                <div class="av av-bot" style="width:28px;height:28px">
+                  <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:#EFD9D9">
+                    <rect x="3" y="8" width="18" height="12" rx="3"/><circle cx="8" cy="14" r="1.1" fill="currentColor"/>
+                    <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4" fill="currentColor"/></svg>
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div class="lt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">旧版本地名的考据</div>
+                  <div class="lp" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">第三条线索需要你确认一下…</div>
+                </div>
+                <div class="lm">3天前</div>
+              </div>
+
+              <div style="margin-top:14px;padding:0 2px;display:flex;align-items:center;gap:7px">
+                <svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px;color:rgba(186,166,173,.4)">
+                  <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+                <span class="mono" style="font-size:9.5px;letter-spacing:.1em;color:rgba(186,166,173,.45)">已归档（2）</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:300px">
+        <h3>相比现状的改动</h3>
+        <table class="spec" style="margin-top:12px">
+          <tr><th>维度</th><th>现状</th><th>新方案</th></tr>
+          <tr><td>身份标识</td><td>列表页有头像，聊天页无</td><td>两屏都有 Agent 头像</td></tr>
+          <tr><td>新建会话</td><td>纯文字按钮</td><td>胶囊按钮，带 + 图标</td></tr>
+          <tr><td>归档入口</td><td>点击展开，行内图标多</td><td>独立分区，视觉降级</td></tr>
+          <tr><td>会话摘要</td><td>无图标，纯文字两行</td><td>头像 + 标题 + 摘要 + 时间</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 设计规格 ============ -->
+  <section>
+    <h2>四、设计规格</h2>
+    <p class="sec-sub">全部沿用暗夜书房色板，与全局主题联动，日间/猩红自动适配。</p>
+
+    <table class="spec">
+      <tr><th>元素</th><th>规格</th><th>说明</th></tr>
+      <tr>
+        <td>消息头像</td>
+        <td><span class="sw" style="background:#A8767D"></span><span class="sw" style="background:linear-gradient(135deg,#A8767D,#7D484C)"></span>26pt 圆形</td>
+        <td>用户=玫瑰木实底；Agent=玫瑰木→暗酒红渐变，唯一的渐变元素，用于区分身份</td>
+      </tr>
+      <tr>
+        <td>姓名标签</td>
+        <td><span class="sw" style="background:#BAA6AD"></span>12pt / 500</td>
+        <td>常驻显示，不做 hover 显隐</td>
+      </tr>
+      <tr>
+        <td>时间戳</td>
+        <td><span class="sw" style="background:rgba(186,166,173,.42)"></span>9.5pt mono</td>
+        <td>紧跟姓名，40% 透明度后退为背景信息</td>
+      </tr>
+      <tr>
+        <td>用户气泡</td>
+        <td><span class="sw" style="background:#7D484C"></span>圆角 13/13/4/13</td>
+        <td>右下角收窄形成指向感，文字用 #EFD9D9 保证对比</td>
+      </tr>
+      <tr>
+        <td>Agent 正文</td>
+        <td><span class="sw" style="background:#BAA6AD"></span>14pt / 1.68</td>
+        <td>不用气泡，用留白和头像分隔 —— 长回复读起来更轻</td>
+      </tr>
+      <tr>
+        <td>操作区</td>
+        <td>40% 常态，85% 悬停</td>
+        <td><strong>关键改动</strong>：不再用 opacity-0，移动端始终可见</td>
+      </tr>
+      <tr>
+        <td>系统提示</td>
+        <td><span class="sw" style="background:rgba(125,72,76,.16)"></span>居中胶囊</td>
+        <td>9.5pt mono，用于"已加载 N 篇资料"这类上下文</td>
+      </tr>
+      <tr>
+        <td>流式状态</td>
+        <td><span class="sw" style="background:#A8767D"></span>旋转图标 + 文字</td>
+        <td>替代三弹跳点，说明在做什么（检索 / 撰写 / 等待）</td>
+      </tr>
+      <tr>
+        <td>输入区</td>
+        <td><span class="sw" style="background:rgba(50,48,43,.62)"></span>圆角 14pt</td>
+        <td>下方一行快捷键提示，降低功能发现成本</td>
+      </tr>
+      <tr>
+        <td>顶栏</td>
+        <td>46pt 高 · 3 控件</td>
+        <td>返回 / 标题+元信息 / 溢出菜单。导出与配置收进菜单</td>
+      </tr>
+    </table>
+
+    <div class="note">
+      <strong>一个功能修复</strong>：操作区从 <code class="mono-sm">opacity-0 group-hover:opacity-100</code>
+      改为常态 40% 透明度。这不只是审美调整 —— 它修复了移动端完全无法删除或复制消息的实际缺陷。
+    </div>
+  </section>
+
+  <div class="hr" style="margin-top:52px"></div>
+  <p class="lede" style="font-size:14px;color:var(--ink-3);margin-top:24px">
+    这版方案可以直接落到 <code class="mono-sm">AgentPage.tsx</code> 和 <code class="mono-sm">AgentChatView.tsx</code>。
+    你确认方向后我再动代码 —— 布局以外的部分（滚动逻辑、流式、附件、面板）都会原样保留。
+  </p>
+
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+</body>
+</html>

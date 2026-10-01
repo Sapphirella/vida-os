@@ -253,6 +253,8 @@ export interface WebDavConfig {
 export interface Settings {
   lastTab: TabKey;
   webdav?: WebDavConfig;
+  /** Agent 入口开关（v4.5.3 新增）。缺省视为开启，保持旧用户行为不变 */
+  agentEnabled?: boolean;
 }
 
 export interface AppState {

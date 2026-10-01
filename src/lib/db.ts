@@ -193,6 +193,9 @@ export function defaultState(): AppState {
     agentMemories: [],
     settings: {
       lastTab: 'desk',
+      // v4.5.3：Agent 入口开关，默认开启（不用 AI 的用户可在设置页关掉，
+      // 底栏会从 5 格变 4 格自动重排）。旧数据没有该字段时按开启处理。
+      agentEnabled: true,
     },
   };
 }

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { User, Image as ImageIcon, BookOpen, History, Trash2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
+import { Switch } from '@/components/common/Switch';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { MediaImage } from '@/components/common/MediaImage';
@@ -70,10 +71,19 @@ export function SettingsPage() {
   const updateProfile = useAppStore((s) => s.updateProfile);
   const showToast = useUIStore((s) => s.showToast);
   const showModal = useUIStore((s) => s.showModal);
+  // v4.5.3：Agent 入口开关（缺省 true = 开启，兼容旧数据）
+  const agentEnabled = useAppStore((s) => s.settings.agentEnabled !== false);
+  const updateSettings = useAppStore((s) => s.updateSettings);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(profile.name);
   const [signature, setSignature] = useState(profile.signature);
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => readThemeMode());
+
+  /** Agent 开关：只改入口可见性，不动任何已有数据（会话 / 记忆 / 资料库全部保留） */
+  const handleToggleAgent = (next: boolean) => {
+    updateSettings({ agentEnabled: next });
+    showToast(next ? '已开启 Agent' : '已关闭 Agent · 底栏入口已隐藏', 'success');
+  };
 
   // ── 关于 · 使用说明（初稿，后续会大改） ──
   const openGuide = () => {
@@ -373,6 +383,28 @@ export function SettingsPage() {
               <button onClick={saveSignature} className="btn-primary mt-2" style={{ padding: '6px 14px', fontSize: '0.8125rem' }}>
                 保存
               </button>
+            </div>
+
+            {/* v4.5.3：Agent 入口开关（放在个人信息卡片末尾） */}
+            <div
+              className="pt-4 mt-1"
+              style={{ borderTop: '1px solid var(--card-border)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-serif text-headline text-[15px] leading-tight">Agent</h4>
+                  <p className="font-sans text-bronze text-xs leading-relaxed mt-1">
+                    {agentEnabled
+                      ? '已开启。底栏保留 Agent 入口，会话、人设、资料库与记忆馆都可用。'
+                      : '已关闭。底栏的 Agent 入口会隐藏，底栏自动重排为四个图标。已有的会话与记忆不会被删除，随时可以重新打开。'}
+                  </p>
+                </div>
+                <Switch
+                  checked={agentEnabled}
+                  onChange={handleToggleAgent}
+                  label="Agent 入口"
+                />
+              </div>
             </div>
           </div>
         </Card>
