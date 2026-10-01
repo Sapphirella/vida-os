@@ -1149,3 +1149,87 @@ input, textarea, [contenteditable] {
   -webkit-touch-callout: default !important;
   touch-action: manipulation !important;
 }
+
+/* ============================================================
+ *  暗夜星星粉（仅 night 主题渲染，由 Background.tsx 挂载）
+ *  性能策略：
+ *  - 远景小星：单 SVG + <pattern> 一次绘制 → GPU 合成层
+ *  - 近景大星：6 颗，仅 opacity 动画（GPU 友好，不会引起 layout/paint）
+ *  - 视差：整体 translate3d + scale 微动，触发独立合成层
+ *  - 触屏设备（hover: none）下停用动画，避免低端机掉帧
+ * ============================================================ */
+
+/* 容器：占满 fixed 背景层，自身不透明度变化做极轻"呼吸" */
+.vd-stars-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  animation: vd-stars-breathe 12s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* 远景小星 SVG：整体非常缓慢向下漂（30s 一周），给人"夜空"感 */
+.vd-stars-far {
+  animation: vd-stars-drift 60s linear infinite;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+/* 近景大星：固定位置 + 圆点 + 光晕；动画色相由 Duration/Delay 内联传入 */
+.vd-star-big {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  background: #BAA6AD;
+  box-shadow:
+    0 0 4px rgba(186, 166, 173, 0.7),
+    0 0 10px rgba(168, 118, 125, 0.35);
+  animation-name: vd-star-twinkle;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  /* will-change 提示 GPU 提升为合成层 */
+  will-change: opacity;
+}
+
+/* 关键帧：呼吸（远星整体位移 + 容器呼吸） */
+@keyframes vd-stars-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-20px, -30px, 0); }
+}
+@keyframes vd-stars-breathe {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1; }
+}
+/* 关键帧：单颗大星 twinkle（opacity 慢起伏） */
+@keyframes vd-star-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+
+/* 触屏设备：停用所有动画以保性能
+   动画停用后 .vd-star-big 的 opacity 会固定在 1.0（twinkle 峰值），
+   比桌面端动画平均值（约 0.675）明显偏亮 —— 这里手动降到中间值，
+   让手机端与电脑端亮度观感一致。 */
+@media (hover: none) {
+  .vd-stars-layer,
+  .vd-stars-far,
+  .vd-star-big {
+    animation: none !important;
+  }
+  .vd-star-big {
+    opacity: 0.62;
+  }
+}
+
+/* 减少动效偏好：尊重系统设置（同上，静态大星也要降亮度） */
+@media (prefers-reduced-motion: reduce) {
+  .vd-stars-layer,
+  .vd-stars-far,
+  .vd-star-big {
+    animation: none !important;
+  }
+  .vd-star-big {
+    opacity: 0.62;
+  }
+}
