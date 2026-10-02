@@ -10,6 +10,7 @@ import type {
   InspirationNote,
   ScheduleNote,
   TodoNote,
+  FragmentEntry,
   Categories,
   Track,
   Settings,
@@ -25,7 +26,7 @@ import type {
   AgentConfig,
 } from '@/types';
 import { defaultState, loadState, saveState, normalizeState } from '@/lib/db';
-import { debounce, uid, now } from '@/lib/utils';
+import { debounce, uid, now, todayKey } from '@/lib/utils';
 import { bookCharCount, buildChapters, parseBook, retargetChapters, AGENT_BOOK_ID } from '@/lib/library';
 
 // ============================================================
@@ -104,6 +105,13 @@ interface Actions {
   deleteTodo: (id: string) => void;
   toggleTodo: (id: string) => void;
   reorderTodo: (ids: string[]) => void;
+
+  /** 碎片（v4.7 重新启用）：
+   *   - 自动写入 createdAt = now()、date = todayKey()（本地日历日）
+   *   - 补录时调用方传 date（选了历史日期），createdAt 仍然是补录的当下时间 */
+  addFragment: (content: string, tag?: string, date?: string) => string;
+  updateFragment: (id: string, patch: Partial<FragmentEntry>) => void;
+  deleteFragment: (id: string) => void;
 
   // 分类
   addCategory: (which: keyof Categories, name: string) => void;
@@ -575,6 +583,51 @@ export const useAppStore = create<Store>((set, get) => ({
       const rest = s.notes.todo.filter((n) => !seen.has(n.id));
       return { notes: { ...s.notes, todo: [...ordered, ...rest] } };
     });
+    persist(get());
+  },
+
+  // 碎片（v4.7 重新启用）
+  addFragment: (content, tag, date) => {
+    const id = uid('frag_');
+    const t = now();
+    set((s) => ({
+      notes: {
+        ...s.notes,
+        fragments: [
+          ...s.notes.fragments,
+          {
+            id,
+            content: content.trim(),
+            createdAt: t,
+            // 不传 date 就默认今天（本地日历日）；传了则用调用方给的日期（补录）
+            date: date || todayKey(),
+            ...(tag ? { tag } : {}),
+          },
+        ],
+      },
+    }));
+    persist(get());
+    return id;
+  },
+  updateFragment: (id, patch) => {
+    set((s) => ({
+      notes: {
+        ...s.notes,
+        fragments: s.notes.fragments.map((f) =>
+          // id / createdAt 不动（碎片的时间戳是事实，不是用户可改的字段）；
+          // date 只能通过「补录到某天」接口改，不开放给 patch，避免误改
+          f.id === id
+            ? { ...f, ...patch, id: f.id, createdAt: f.createdAt, date: f.date }
+            : f,
+        ),
+      },
+    }));
+    persist(get());
+  },
+  deleteFragment: (id) => {
+    set((s) => ({
+      notes: { ...s.notes, fragments: s.notes.fragments.filter((f) => f.id !== id) },
+    }));
     persist(get());
   },
 
@@ -1065,6 +1118,9 @@ export const useAppStore = create<Store>((set, get) => ({
           inspiration: mergeById(cur.notes.inspiration, incoming.notes?.inspiration),
           schedule: mergeById(cur.notes.schedule, incoming.notes?.schedule),
           todo: mergeById(cur.notes.todo, incoming.notes?.todo),
+          // v4.7：碎片也走 mergeById（旧备份没有这个字段会 fallback 到 []，
+          // 不会破坏老数据；新备份 + 老机器合并时两边碎片会并入）
+          fragments: mergeById(cur.notes.fragments, incoming.notes?.fragments),
         },
         // v4.5.1：合并导入时标签桶必须一起合 —— 此前直接丢 incoming 的 categories，
         // 换机导入后书/灵感条目在（tags 字段随对象保留）但标签桶（categories.book /

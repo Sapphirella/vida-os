@@ -190,7 +190,10 @@ export async function saveSnapshotTo(
     articles: state.articles.length,
     moments: state.moments.length,
     notes:
-      state.notes.inspiration.length + state.notes.schedule.length + state.notes.todo.length,
+      state.notes.inspiration.length +
+      state.notes.schedule.length +
+      state.notes.todo.length +
+      (state.notes.fragments?.length ?? 0),
   };
   const info: SnapshotInfo = { name, createdAt: Date.now(), bytes, fileCount, counts };
   // manifest 最后写：作为「这份快照已写完」的标记

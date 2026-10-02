@@ -62,7 +62,7 @@ import {
 const SCOPES: { key: ExportScopeKey; label: string; en: string; desc: string }[] = [
   { key: 'articles', label: '空间文章', en: 'Articles', desc: '长文 + 合集' },
   { key: 'moments', label: '动态', en: 'Moments', desc: '朋友圈碎片' },
-  { key: 'notes', label: '便签', en: 'Notes', desc: '灵感 + 日程 + 待办' },
+  { key: 'notes', label: '便签', en: 'Notes', desc: '灵感 + 日程 + 待办 + 碎片' },
   { key: 'favorites', label: '收藏夹', en: 'Favorites', desc: '收藏记录 + 被收藏的内容' },
   { key: 'profile', label: '个人资料', en: 'Profile', desc: '头像 / 昵称 / 签名 / 背景' },
   { key: 'library', label: '馆藏·书架', en: 'Library', desc: '书籍 + 划线 + 书籍标签' },

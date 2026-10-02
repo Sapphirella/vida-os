@@ -9,7 +9,8 @@ import { errMsg } from '@/lib/utils';
 
 const ROUTE_TITLES: Record<string, { title: string; sub?: string }> = {
   '/desk': { title: 'VidaOS', sub: 'A quiet place for your days' },
-  '/notes': { title: '便签', sub: '灵感 · 日程 · 待办' },
+  // v4.7：碎片重新启用，便签的四个分页按导航顺序写在这里（与 SegmentedControl 的 TABS 一致）
+  '/notes': { title: '便签', sub: '碎片 · 灵感 · 日程 · 待办' },
   '/data': { title: '数据', sub: '导入 · 导出 · 备份' },
   '/settings': { title: '设置', sub: '个人主页 · 主题' },
   '/space': { title: '空间', sub: '长文与合集' },

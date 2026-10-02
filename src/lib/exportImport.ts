@@ -124,7 +124,7 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
     articles,
     moments,
     favorites: has.has('favorites') ? state.favorites : [],
-    notes: has.has('notes') ? state.notes : { inspiration: [], schedule: [], todo: [] },
+    notes: has.has('notes') ? state.notes : { inspiration: [], schedule: [], todo: [], fragments: [] },
     categories: state.categories,
     tracks: [],
     settings: state.settings,
@@ -267,6 +267,28 @@ export function exportMarkdown(state: AppState, scope: ExportScopes = ['articles
   }
 
   if (has.has('notes')) {
+    // 碎片：按天分组、组内按时间升序 —— 导出后读起来就是「这一天是怎么过的」
+    if (s.notes.fragments.length > 0) {
+      lines.push(`## 碎片`);
+      const byDate = new Map<string, typeof s.notes.fragments>();
+      for (const f of s.notes.fragments) {
+        const list = byDate.get(f.date);
+        if (list) list.push(f);
+        else byDate.set(f.date, [f]);
+      }
+      for (const d of [...byDate.keys()].sort()) {
+        lines.push(`### ${d}`);
+        byDate
+          .get(d)!
+          .sort((a, b) => a.createdAt - b.createdAt)
+          .forEach((f) => {
+            lines.push(
+              `- [${formatDate(f.createdAt, 'HH:mm')}]${f.tag ? ` [${f.tag}]` : ''} ${f.content}`,
+            );
+          });
+      }
+      lines.push('');
+    }
     if (s.notes.inspiration.length > 0) {
       lines.push(`## 灵感`);
       s.notes.inspiration.forEach((n) => {
@@ -566,6 +588,25 @@ export async function exportPDF(
         </div>
       `;
     });
+  }
+
+  if (s.notes.fragments.length > 0 && has.has('notes')) {
+    html += h2('碎片');
+    const byDate = new Map<string, typeof s.notes.fragments>();
+    for (const f of s.notes.fragments) {
+      const list = byDate.get(f.date);
+      if (list) list.push(f);
+      else byDate.set(f.date, [f]);
+    }
+    for (const d of [...byDate.keys()].sort()) {
+      html += `<div style="margin:14px 0 4px;color:#947D75;font-size:11px;letter-spacing:0.08em;">${escapeHTML(d)}</div>`;
+      byDate
+        .get(d)!
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .forEach((f) => {
+          html += `<div style="margin:6px 0;padding-left:14px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:11px;">${formatDate(f.createdAt, 'HH:mm')}${f.tag ? ` · ${escapeHTML(f.tag)}` : ''}</span><div style="font-size:16px;margin-top:1px;">${escapeHTML(f.content).replace(/\n/g, '<br />')}</div></div>`;
+        });
+    }
   }
 
   if (s.notes.inspiration.length > 0 && has.has('notes')) {

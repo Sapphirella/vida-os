@@ -30,8 +30,8 @@ interface UIStore {
   setTab: (tab: TabKey) => void;
 
   // 笔记内 tab
-  notesTab: 'inspiration' | 'schedule' | 'todo';
-  setNotesTab: (tab: 'inspiration' | 'schedule' | 'todo') => void;
+  notesTab: 'fragment' | 'inspiration' | 'schedule' | 'todo';
+  setNotesTab: (tab: 'fragment' | 'inspiration' | 'schedule' | 'todo') => void;
 
   // Agent 当前打开的会话（临时 UI 状态，不持久化）
   agentSessionId: string | null;

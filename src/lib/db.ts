@@ -4,6 +4,7 @@ import type { AppState, LibraryBook, MediaFile, TabKey, Album } from '@/types';
 import { isTabKey } from '@/types';
 import { DEFAULT_BACKGROUND_PRESET } from './backgrounds';
 import { AGENT_BOOK_ID, bookCharCount, buildChapters } from './library';
+import { todayKey } from './utils';
 
 class VidaDB extends Dexie {
   state!: Table<{ id: string; data: AppState }, string>;
@@ -82,9 +83,19 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
       })),
       schedule: r.notes?.schedule ?? [],
       todo: r.notes?.todo ?? [],
+      // v4.7：碎片重新启用。与 v4.2 不同的是：没有图片 / 评论 / 收藏 / 星标，
+      // 也没有分类桶；只是「当下记一句」。v4.4 之前的旧碎片数据**仍然不迁移**
+      // （用户确认彻底删了 v2 时代的形态，新形态是另一种东西）。
+      fragments: (r.notes?.fragments ?? []).map((f) => ({
+        ...f,
+        // date 字段补兜底：万一旧备份里缺字段，按 createdAt 推一个本地日历日。
+        // 用 todayKey()（内部走 formatDate）而不是 toLocaleDateString('en-CA')：
+        // 后者依赖运行环境的 locale 数据，而这里要的是「和写入时同一套本地日历算法」。
+        date: f.date || (typeof f.createdAt === 'number' ? todayKey(new Date(f.createdAt)) : ''),
+      })),
     },
-    // 馆藏（v4.4）：碎片流已移除，旧数据里的 fragments 字段**故意不迁移**
-    // （用户确认彻底删除）；逐本兜底 marks / charCount，防止历史数据缺字段炸渲染
+    // 馆藏（v4.4）：v2/v3 时代的碎片流已整体移除，旧数据里的 fragments 字段
+    // **故意不迁移**（用户确认彻底删除）；逐本兜底 marks / charCount，防止历史数据缺字段炸渲染
     books: (() => {
       const raw = (r.books ?? []).map((b) => ({
         ...b,
@@ -228,6 +239,7 @@ export function defaultState(): AppState {
       inspiration: [],
       schedule: [],
       todo: [],
+      fragments: [],
     },
     categories: {
       inspiration: ['随想', '句子', '梦'],

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAppStore } from '@/stores/useAppStore';
-import { clsx } from '@/lib/utils';
+import { clsx, todayKey } from '@/lib/utils';
 import type { NoteTabKey } from '@/types';
 
 const TABS: { key: NoteTabKey; label: string; en: string }[] = [
+  // v4.7：碎片重新启用，放最左 —— 它是「当下此刻记一句」的最快入口。
+  // 用户原话「碎片 灵感 日程 待办」就是这个顺序。
+  { key: 'fragment', label: '碎片', en: 'Fragments' },
   { key: 'inspiration', label: '灵感', en: 'Inspiration' },
   { key: 'schedule', label: '日程', en: 'Schedule' },
   { key: 'todo', label: '待办', en: 'To-do' },
@@ -17,10 +20,14 @@ export function SegmentedControl() {
   const inspiration = useAppStore((s) => s.notes.inspiration);
   const schedule = useAppStore((s) => s.notes.schedule);
   const todo = useAppStore((s) => s.notes.todo);
+  const fragments = useAppStore((s) => s.notes.fragments);
   const containerRef = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
 
   const counts = {
+    // 碎片的计数用「今日条数」而非总数：导航栏挂在所有日期的累加值上没意义，
+    // 用户每天看自己的当下；今天写了 0 条 = 一个温和的提醒「今天还没记一笔」。
+    fragment: fragments.filter((f) => f.date === todayKey()).length,
     inspiration: inspiration.length,
     schedule: schedule.length,
     todo: todo.filter((t) => !t.done).length,

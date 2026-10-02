@@ -92,6 +92,33 @@ export interface TodoNote {
   completedAt?: number;
 }
 
+/**
+ * 便签 · 一条碎片（v4.7 重新启用）
+ *
+ * 与 v4.2 时代的 FragmentEntry 完全不同：
+ *   - **没有图片 / 评论 / 收藏 / 星标**（碎片是「当下此刻的一句话」，不是社交流）
+ *   - **没有分类桶**（用户原话只说「按天储存」，不引入 InspirationNote 那种 category 系统）
+ *   - **自动记录当下时间**：加号按下就是 `createdAt = now`、`date = todayKey()`
+ *   - **可选 tag**：单字符串（不是桶），用户可以打「待办 / 日记 / 打卡」之类的轻量标签
+ *
+ * 拆成 `date` 字段单独存本地日历日（而不是只用 createdAt 推断）有两个理由：
+ *   1. 时区：createdAt 在 UTC 零点附近换日时，截 `YYYY-MM-DD` 可能跨日；`date` 直接
+ *      在写入时用本地日历定下；
+ *   2. 「补录」：允许用户点日历按钮选历史日期，往过去的某天追加碎片（按那张日历
+ *      来定 date，createdAt 是「补录时的当下时间」—— 这两个不一致是预期的）。
+ */
+export interface FragmentEntry {
+  id: string;
+  /** 用户输入的正文（一段） */
+  content: string;
+  /** 创建时间戳（加号按下的当下时间，可用于时间轴的 HH:MM 显示） */
+  createdAt: number;
+  /** 关联日期 YYYY-MM-DD（写入时由 todayKey() 给出；补录时由用户选） */
+  date: string;
+  /** 可选标签（单字符串；不要塞进 categories.* 系统，碎片不长生命周期） */
+  tag?: string;
+}
+
 export interface Track {
   id: string;
   title: string;
@@ -304,6 +331,8 @@ export interface AppState {
     inspiration: InspirationNote[];
     schedule: ScheduleNote[];
     todo: TodoNote[];
+    /** 便签 · 碎片（v4.7 重新启用；详见 FragmentEntry 注释） */
+    fragments: FragmentEntry[];
   };
   categories: Categories;
   tracks: Track[];
@@ -331,7 +360,7 @@ export type TabKey = (typeof TAB_KEYS)[number];
 export const isTabKey = (v: unknown): v is TabKey =>
   typeof v === 'string' && (TAB_KEYS as readonly string[]).includes(v);
 
-export type NoteTabKey = 'inspiration' | 'schedule' | 'todo';
+export type NoteTabKey = 'fragment' | 'inspiration' | 'schedule' | 'todo';
 
 /** 主页宫格入口（v4.4：便签上位到底栏，宫格位置改为馆藏） */
 export type FeatureKey = 'space' | 'moments' | 'library' | 'favorites';
