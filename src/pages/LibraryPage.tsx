@@ -126,8 +126,8 @@ export function LibraryPage() {
       content: (
         <div className="space-y-3">
           <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-            {book.format} · {book.charCount} 字 · {chapterN} 章 · {book.marks.length} 处标注 · 上架于{' '}
-            {formatDate(book.createdAt, 'YYYY-MM-DD')}
+            {book.format} · {book.charCount} 字 · {chapterN} 章 · {book.marks.length} 处标注
+            {book.agentBook ? '' : ` · 上架于 ${formatDate(book.createdAt, 'YYYY-MM-DD')}`}
           </p>
           {book.agentBook && (
             <p className="text-bronze text-xs leading-relaxed">
@@ -410,7 +410,12 @@ function BookCard({ book, onMenu }: { book: LibraryBook; onMenu: (book: LibraryB
             <ArrowRight size={11} strokeWidth={1.6} />
             <span className="flex-1" />
             <span className="text-bronze-deep">
-              {book.lastReadAt ? `最近阅读 ${relativeTime(book.lastReadAt)}` : `上架 ${relativeTime(book.createdAt)}`}
+              {/* Agent 书 createdAt 是 0（它不是「上架」来的），显示相对时间会变成「56 年前」 */}
+              {book.agentBook
+                ? 'Agent 专属书'
+                : book.lastReadAt
+                  ? `最近阅读 ${relativeTime(book.lastReadAt)}`
+                  : `上架 ${relativeTime(book.createdAt)}`}
             </span>
           </button>
         </div>

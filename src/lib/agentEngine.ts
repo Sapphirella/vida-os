@@ -56,10 +56,14 @@ export const TOOL_CONTRACT = `【工具约定】你有一组可以直接操作�
                     替换需要用户确认后才会真正生效，所以你只要把替换意图说出来即可。
                     注意：改书籍正文会重排分段，该书原有的划线会一并清空，确认卡片上会写明。
 
+⚠️ 写标记的格式铁律：[[写:模块【限定】|内容]] 中，【】必须**成对出现**并写在 | 的左边。
+漏掉收尾的 】、或把 | 写在 】前面，都会导致整条标记不执行（我会收到提示并重新输出）。
+正文里如果出现 ]( 这样的链接，结尾请用全角 ］］ 代替 ]]。
+
 判断原则：
 - 需要看细节才能回答 → 先 [[读:]]，拿到内容再回答，不要凭空猜测用户记录里有什么
 - 用户说"记一下""提醒我""加到待办" → 直接 [[写:]]，不要反问
-- 用户说"这段写得很好，存下来" → [[写:书【起个标题|…]]，章节标题你自己起，取这段内容的要点
+- 用户说"这段写得很好，存下来" → [[写:书【你自己起的标题】|要存的内容]]，标题取这段内容的要点
 - 用户说"帮我把 X 改成 Y" → 用 [[替:]]；如果用户没说清范围，用 [[读:]] 先看看有哪些内容再问用户
 - 你自己不确定的外部事实 → [[搜:]]，不要编造
 
@@ -425,13 +429,15 @@ export interface ParsedTool {
   arg: string;
   /** write 的正文；replace 的新文 */
   payload?: string;
-  /** write 的可选限定（分类 / 日期） */
+  /** write 的可选限定（分类 / 日期 / 章节标题） */
   extra?: string;
   /** replace 的原文 */
   from?: string;
 }
 
-export function scanTools(text: string): { display: string; tools: ParsedTool[] } {
+export function scanTools(
+  text: string,
+): { display: string; tools: ParsedTool[]; brokenKinds: string[] } {
   const tools: ParsedTool[] = [];
   let display = text;
 
@@ -474,7 +480,22 @@ export function scanTools(text: string): { display: string; tools: ParsedTool[] 
   });
 
   display = display.replace(/\n{3,}/g, '\n\n').trim();
-  return { display, tools };
+
+  /**
+   * 残留标记检测
+   *
+   * 写 / 替的标记语法比较挑（【】要闭合、正文里不能出现半角 ]]），
+   * 模型偶尔会写错。**错就错在「静默不执行」**：用户会以为存进去了，
+   * 其实什么都没发生，然后一脸莫名其妙。所以这里把没被吃掉的标记捞出来，
+   * 由调用方回一条 sys 消息如实告诉用户「这段没执行」。
+   * （实测踩过：[[写:书【标题|正文]] 少了收尾的 】，整条标记原样留在正文里。）
+   */
+  const broken: string[] = [];
+  const leftover = /\[\[(读|搜|写|替):/g;
+  let hit: RegExpExecArray | null;
+  while ((hit = leftover.exec(display)) !== null) broken.push(hit[1]);
+
+  return { display, tools, brokenKinds: [...new Set(broken)] };
 }
 
 /**
@@ -691,9 +712,9 @@ export function demoReply(userText: string): string {
     return '好，我来整理。\n\n我读得到你的空间文章、动态、灵感、便签、馆藏与收藏夹——可以按主题归纳主线、生成结构化文案，还能一键存成空间文章。\n\n（当前是演示模式，配置 API 后我就能真正读取你的数据了。）';
   }
   if (/存进|存到|记下来|记下|收进|书里|存档|收藏这段/.test(t)) {
-    return '好，我把它写进书架上那本《Agent》里，作为一个新的章节。\n\n[[写:书【' +
-      trunc(t, 12) +
-      '|把你要存的内容写在这里]]\n\n（演示模式：配置 API 后我就会真的在书末新建这一章。）';
+    return '好，我把它写进书架上那本《Agent》里，作为一个新章节。\n\n' +
+      '[[写:书【存下来的想法】|把你要存的内容写在这里]]\n\n' +
+      '（演示模式：配置 API 后我就会真的在书末新建这一章。）';
   }
   if (/馆藏|书|阅读|划线/.test(t)) {
     return '馆藏是我的重要输入。让我 `[[读:书名]]` 读取某本书的正文，可以按章节归纳、解释难句，也能把读书笔记整理成文章存进空间。\n\n书架上有一本《Agent》是专门留给我写的 —— 你遇到喜欢的回答，说一声「把这段存进书里」，我就在那里新起一章。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';

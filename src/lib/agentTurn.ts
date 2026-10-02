@@ -116,9 +116,28 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<void> {
 
       // v4.5.4：一次解析全部工具标记。读 / 搜 / 写 / 替统一走这里。
       // 「写」与「替」直接落盘或产出待确认清单；「读」「搜」把结果作为下一轮上下文回灌。
-      const { display, tools } = scanTools(out);
+      const { display, tools, brokenKinds } = scanTools(out);
       const pendingTool: ChatMessage[] = [];
       const sysNotes: string[] = [];
+
+      // 格式写坏的标记不会执行，但**必须让用户知道** —— 静默丢弃会让人
+      // 以为已经存进去了。告诉模型哪几条没跑，让它下一轮自己重发。
+      if (brokenKinds?.length) {
+        sysNotes.push(
+          `有 ${brokenKinds.length} 处标记格式不对，没有执行：${brokenKinds
+            .map((k) => `[[${k}:…]]`)
+            .join(' ')}。` +
+            '（写标记要写成 [[写:模块【限定】|内容]]，【】要闭合；正文里若出现 ]( 链接，请把结尾的 ]] 换成全角 ］］）',
+        );
+        pendingTool.push({
+          role: 'user',
+          content:
+            `【标记未执行】你上一轮输出的 ${brokenKinds
+              .map((k) => `[[${k}:…]]`)
+              .join('、')} 格式无法解析，所以**没有执行**。` +
+            '请检查格式后重新输出；写标记必须是 [[写:模块【限定】|内容]]，其中【】成对出现。',
+        });
+      }
 
       for (const t of tools) {
         if (t.kind === 'read') {
