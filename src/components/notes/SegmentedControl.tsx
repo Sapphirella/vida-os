@@ -94,14 +94,19 @@ export function SegmentedControl() {
                 data-tab={t.key}
                 onClick={() => setTab(t.key)}
                 className={clsx(
-                  'relative z-10 flex-1 px-4 py-2.5 rounded-pill font-serif text-sm transition-colors flex items-center justify-center gap-2',
+                  // v4.7.1：四个分页在 390px 上原来会挤到换行 ——
+                  // 每个按钮 px-4(32) + 两个汉字(28) + gap-2(8) + 计数(20) = 88px，
+                  // 而 4 等分只有 87.5px，于是「碎片」被压成一列一个字竖着排。
+                  // 现在：窄屏收紧内边距与间距，并给文字加 whitespace-nowrap
+                  // 兜底（宁可略挤也不许断成竖排）。
+                  'relative z-10 flex-1 min-w-0 px-1.5 sm:px-4 py-2.5 rounded-pill font-serif text-sm transition-colors flex items-center justify-center gap-1 sm:gap-2',
                   active ? 'text-moon' : 'seg-tab text-bronze hover:text-paper',
                 )}
               >
-                <span>{t.label}</span>
+                <span className="whitespace-nowrap leading-none">{t.label}</span>
                 <span
                   className={clsx(
-                    'font-mono text-[10px] tracking-wider px-1.5 py-0.5 rounded-full',
+                    'flex-none font-mono text-[10px] tracking-wider px-1.5 py-0.5 rounded-full tabular-nums',
                     active
                       ? 'bg-moon/20 text-moon'
                       : 'bg-bronze/10 text-bronze-deep',

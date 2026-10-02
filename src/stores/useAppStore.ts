@@ -106,10 +106,15 @@ interface Actions {
   toggleTodo: (id: string) => void;
   reorderTodo: (ids: string[]) => void;
 
-  /** 碎片（v4.7 重新启用）：
-   *   - 自动写入 createdAt = now()、date = todayKey()（本地日历日）
-   *   - 补录时调用方传 date（选了历史日期），createdAt 仍然是补录的当下时间 */
-  addFragment: (content: string, tag?: string, date?: string) => string;
+  /**
+   * 碎片（v4.7 重新启用）：
+   *   - 默认自动写入 createdAt = now()、date = todayKey()（本地日历日）
+   *   - 补录时调用方传 date（选了历史日期）
+   *   - v4.7.1：再给一个 `at` —— 补记时用户可以指定**具体时刻**（时间轴上的 HH:MM），
+   *     不传则仍用「按下加号的当下时间」。`at` 只在**创建**时生效
+   *     （updateFragment 依旧不改 createdAt：改文字不该顺手改时间）
+   */
+  addFragment: (content: string, tag?: string, date?: string, at?: number) => string;
   updateFragment: (id: string, patch: Partial<FragmentEntry>) => void;
   deleteFragment: (id: string) => void;
 
@@ -587,7 +592,7 @@ export const useAppStore = create<Store>((set, get) => ({
   },
 
   // 碎片（v4.7 重新启用）
-  addFragment: (content, tag, date) => {
+  addFragment: (content, tag, date, at) => {
     const id = uid('frag_');
     const t = now();
     set((s) => ({
@@ -598,7 +603,8 @@ export const useAppStore = create<Store>((set, get) => ({
           {
             id,
             content: content.trim(),
-            createdAt: t,
+            // at 是「补记时用户挑的具体时刻」；不传就是此刻
+            createdAt: at ?? t,
             // 不传 date 就默认今天（本地日历日）；传了则用调用方给的日期（补录）
             date: date || todayKey(),
             ...(tag ? { tag } : {}),

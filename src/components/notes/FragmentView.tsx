@@ -11,8 +11,9 @@
 // 配色一律走主题变量（--amber / --line / --text-* / --card-*），三套主题自动跟随：
 // 暗夜书房、白昼书房、猩红书房都不需要额外写规则。
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Check, X, Pencil, Trash2, Clock } from 'lucide-react';
+import { Plus, Check, X, Pencil, Trash2, Clock } from 'lucide-react';
 import { Card } from '@/components/common/Card';
+import { CalendarNav } from '@/components/common/CalendarNav';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -35,8 +36,18 @@ export function FragmentView() {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
-  /** 正在写的碎片（null = 收起，加号控制） */
-  const [composing, setComposing] = useState<{ content: string; tag: string } | null>(null);
+  /**
+   * 正在写的碎片（null = 收起，加号控制）。
+   * `at` 是时间输入框里的 "HH:MM"；`touched` 记录用户是否**动过**它 ——
+   * 今天这一格没动过就交回给 store 用真正的 now()（那样「自动记录当下时间」才是准的，
+   * 不会因为你在输入框里多敲了两分钟而记成打开输入框那一刻）。
+   */
+  const [composing, setComposing] = useState<{
+    content: string;
+    tag: string;
+    at: string;
+    touched: boolean;
+  } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const today = todayKey();
@@ -71,11 +82,14 @@ export function FragmentView() {
     return arr;
   }, [view, countByDate, today]);
 
-  /** 切到上/下个月；同时把选中日期带到那个月（否则日历高亮与时间轴会各说各话） */
+  /**
+   * 翻月 / 选年月：**只改「正在看哪个月」，不动选中日期**。
+   * 与主页日历同一套语义 —— 日历是导航器，选中的是哪天由点日期决定；
+   * 否则「翻到去年看看」这种纯浏览动作会顺手改掉全应用的选中日期。
+   */
   const shiftMonth = (delta: number) => {
     const d = new Date(view.year, view.month + delta, 1);
     setView({ year: d.getFullYear(), month: d.getMonth() });
-    setSelected(todayKey(d));
   };
 
   const backToToday = () => {
@@ -84,11 +98,22 @@ export function FragmentView() {
     setSelected(today);
   };
 
-  const submitCompose = (content: string, tag: string) => {
-    const text = content.trim();
+  /** "HH:MM" + 日期 → 时间戳（本地时区） */
+  const stampOf = (date: string, hhmm: string): number | undefined => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+    if (!m) return undefined;
+    const d = new Date(`${date}T00:00:00`);
+    d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    return d.getTime();
+  };
+
+  const submitCompose = (draft: { content: string; tag: string; at: string; touched: boolean }) => {
+    const text = draft.content.trim();
     if (!text) return;
-    // 补录：看的是历史日期就往那天记（store 里 createdAt 仍是「补录的当下时间」）
-    addFragment(text, tag.trim() || undefined, selected);
+    // 今天且没动过时间 → 不传 at，让 store 用真正的 now()；
+    // 其余情况（补记到历史某天 / 手动改过时间）都用输入框里那个时刻。
+    const at = isToday && !draft.touched ? undefined : stampOf(selected, draft.at);
+    addFragment(text, draft.tag.trim() || undefined, selected, at);
     setComposing(null);
     showToast(isToday ? '已记下此刻' : `已补记到 ${selected}`, 'success');
   };
@@ -97,39 +122,14 @@ export function FragmentView() {
     <div>
       {/* ── 日历：点日期就跳过去，有碎片的日期带圆点 ── */}
       <Card className="p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
-              fragments
-            </p>
-            <h3 className="font-serif text-headline text-lg mt-0.5">
-              {view.year} 年 {view.month + 1} 月
-            </h3>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={backToToday}
-              className="h-7 px-2.5 rounded-full font-mono text-[11px] tracking-widest text-bronze hover:text-candle hover:bg-bronze/10 transition-colors"
-              aria-label="回到今天"
-            >
-              今
-            </button>
-            <button
-              onClick={() => shiftMonth(-1)}
-              className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-              aria-label="上个月"
-            >
-              <ChevronLeft size={16} strokeWidth={1.5} />
-            </button>
-            <button
-              onClick={() => shiftMonth(1)}
-              className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-              aria-label="下个月"
-            >
-              <ChevronRight size={16} strokeWidth={1.5} />
-            </button>
-          </div>
-        </div>
+        <CalendarNav
+          eyebrow="fragments"
+          year={view.year}
+          month={view.month}
+          onPick={(y, m) => setView({ year: y, month: m })}
+          onToday={backToToday}
+          onStepMonth={shiftMonth}
+        />
 
         <div className="grid grid-cols-7 mb-1">
           {['日', '一', '二', '三', '四', '五', '六'].map((w, i) => (
@@ -157,8 +157,12 @@ export function FragmentView() {
                 aria-label={`跳到 ${d.date}`}
                 className={clsx(
                   'h-9 flex flex-col items-center justify-center relative rounded-card transition-colors',
+                  // ⚠️ 选中日必须带 cal-selected：日间主题下 bg-wine/30 + text-moon
+                  // 是「浅玫瑰底 + 米色字」，数字几乎看不见；globals.css 里
+                  // :root[data-theme='day'] .cal-selected 把它换成实色深橄榄底 + 米色字。
+                  // 主页日历一直带这个类，碎片日历漏了 —— 所以只有它糊成灰的（v4.7.1 修）。
                   on
-                    ? 'bg-wine/30 text-moon'
+                    ? 'bg-wine/30 text-moon cal-selected'
                     : d.isToday
                       ? 'text-candle'
                       : 'text-paper hover:bg-bronze/10',
@@ -206,7 +210,7 @@ export function FragmentView() {
               // 碎片是「一句话」：Enter 直接记下，Shift+Enter 换行
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                submitCompose(composing.content, composing.tag);
+                submitCompose(composing);
               } else if (e.key === 'Escape') {
                 setComposing(null);
               }
@@ -224,11 +228,21 @@ export function FragmentView() {
               aria-label="标签（可选）"
               className="px-2 py-0.5 text-xs bg-bronze/10 rounded-pill text-paper outline-none w-20"
             />
-            {/* 时间戳不是用户填的：告诉他会记成什么，避免「为什么不是现在」 */}
+            {/* 具体时刻：补记历史日期时可以不改（默认给你当下的钟点），也可以改成当时那一刻 */}
+            <input
+              type="time"
+              value={composing.at}
+              onChange={(e) => setComposing({ ...composing, at: e.target.value, touched: true })}
+              aria-label="这条碎片的时间"
+              title="这条碎片的时间"
+              className="px-2 py-1 text-xs bg-bronze/10 rounded-card text-paper outline-none font-mono tabular-nums"
+            />
             <span className="flex items-center gap-1 font-mono text-[10px] tracking-wider text-bronze-deep">
               <Clock size={10} strokeWidth={1.8} />
               {isToday
-                ? `记到 今天 ${formatDate(new Date(), 'HH:mm')}`
+                ? composing.touched
+                  ? `记到今天 ${composing.at}`
+                  : '记到此刻'
                 : `补记到 ${formatDate(new Date(selected), 'M')} 月 ${formatDate(new Date(selected), 'D')} 日`}
             </span>
             <span className="flex-1" />
@@ -236,7 +250,7 @@ export function FragmentView() {
               <X size={13} strokeWidth={1.8} /> 取消
             </button>
             <button
-              onClick={() => submitCompose(composing.content, composing.tag)}
+              onClick={() => submitCompose(composing)}
               disabled={!composing.content.trim()}
               className="btn-primary disabled:opacity-40"
               style={{ padding: '6px 14px' }}
@@ -308,7 +322,7 @@ export function FragmentView() {
       {/* 加号：与灵感/日程/待办同一个位置与样式（bottom-24 避开固定底栏） */}
       {!composing && (
         <button
-          onClick={() => setComposing({ content: '', tag: '' })}
+          onClick={() => setComposing({ content: '', tag: '', at: formatDate(new Date(), 'HH:mm'), touched: false })}
           className="fixed right-5 bottom-24 z-30 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
           style={{ background: 'var(--wine)', boxShadow: '0 4px 20px rgba(106, 8, 14, 0.5)' }}
           aria-label="记一条碎片"

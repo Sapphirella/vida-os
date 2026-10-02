@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/common/Card';
+import { CalendarNav } from '@/components/common/CalendarNav';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { todayKey, chineseDate, chineseWeekday } from '@/lib/utils';
@@ -41,52 +41,24 @@ export function CalendarCard() {
     return arr;
   }, [view, schedule]);
 
-  const monthLabel = `${view.year} 年 ${view.month + 1} 月`;
-
   return (
     <Card className="p-4 sm:p-5 h-full flex flex-col">
-      {/* 头部 */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
-            calendar
-          </p>
-          <h3 className="font-serif text-headline text-lg mt-0.5">{monthLabel}</h3>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => {
-              const d = new Date();
-              setView({ year: d.getFullYear(), month: d.getMonth() });
-              setSelected(todayKey());
-            }}
-            className="h-7 px-2.5 rounded-full font-mono text-[11px] tracking-widest text-bronze hover:text-candle hover:bg-bronze/10 transition-colors"
-            aria-label="回到今天"
-          >
-            今
-          </button>
-          <button
-            onClick={() => {
-              const d = new Date(view.year, view.month - 1, 1);
-              setView({ year: d.getFullYear(), month: d.getMonth() });
-            }}
-            className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-            aria-label="上个月"
-          >
-            <ChevronLeft size={16} strokeWidth={1.5} />
-          </button>
-          <button
-            onClick={() => {
-              const d = new Date(view.year, view.month + 1, 1);
-              setView({ year: d.getFullYear(), month: d.getMonth() });
-            }}
-            className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle transition-colors"
-            aria-label="下个月"
-          >
-            <ChevronRight size={16} strokeWidth={1.5} />
-          </button>
-        </div>
-      </div>
+      {/* 头部：年 / 月可直接选（v4.7.1），只改「看哪个月」，不动选中日期 */}
+      <CalendarNav
+        eyebrow="calendar"
+        year={view.year}
+        month={view.month}
+        onPick={(y, m) => setView({ year: y, month: m })}
+        onToday={() => {
+          const d = new Date();
+          setView({ year: d.getFullYear(), month: d.getMonth() });
+          setSelected(todayKey());
+        }}
+        onStepMonth={(delta) => {
+          const d = new Date(view.year, view.month + delta, 1);
+          setView({ year: d.getFullYear(), month: d.getMonth() });
+        }}
+      />
 
       {/* 星期行 */}
       <div className="grid grid-cols-7 mb-1.5">
