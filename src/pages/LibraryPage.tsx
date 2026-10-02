@@ -98,7 +98,9 @@ export function LibraryPage() {
           if (
             charCount > RECOMMENDED_MAX_CHARS &&
             !(await useUIStore.getState().confirmDialog(
-              `「${title}」约 ${charCount} 字，超过建议的 1 万字，阅读与划线可能会卡。\n仍要导入吗？`,
+              `「${title}」约 ${charCount} 字，超过建议的 ${Math.round(
+                RECOMMENDED_MAX_CHARS / 10000,
+              )} 万字 —— 手机上打开会明显变慢，滚动也可能掉帧。\n仍要导入吗？`,
             ))
           ) {
             continue;
@@ -266,7 +268,8 @@ export function LibraryPage() {
           章节收在<span className="text-candle">「目录」</span>——md 标题或「第 X 章」会被自动拆开。
           <br />
           <span className="text-bronze-deep">
-            单本建议 1 万字以内（上限 {HARD_MAX_CHARS} 字），太长会卡。
+            单本建议 {Math.round(RECOMMENDED_MAX_CHARS / 10000)} 万字以内，最长{' '}
+            {Math.round(HARD_MAX_CHARS / 10000)} 万字（超过会拒绝导入）。
           </span>
         </p>
 

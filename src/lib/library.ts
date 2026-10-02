@@ -12,8 +12,16 @@ import { sanitizeHtml } from './markdown';
 import { plainText, uid } from './utils';
 import type { BookChapter, BookMark } from '@/types';
 
-/** 单本建议上限：再长渲染与标注都会明显卡顿（导入时会提示） */
-export const RECOMMENDED_MAX_CHARS = 10000;
+/**
+ * 单本「建议上限」：超过它在导入时会弹一句确认（不是硬性拒绝）。
+ *
+ * 这个数字来自实测（v4.6.3，无头 Chrome，桌面 + 6× CPU 降速粗略模拟手机）：
+ *   1 万字 / 170 块 → 打开约 130ms；4 万字 / 680 块 → 约 120ms；
+ *   23 万字 / 4840 块 / 1.7 万 DOM 节点 → 桌面 1.0s，6× 降速 5.6s 且滚动掉帧。
+ * 所以真正的分水岭在**十万字量级**，原先写 1 万字比实际能力保守了一个数量级，
+ * 白白在导入时打扰用户（旧值 10000 已按数据放宽到 5 万，见第 12 节教训 27）。
+ */
+export const RECOMMENDED_MAX_CHARS = 50000;
 
 /** 最多允许导入的字数（超过直接拒绝，避免把浏览器拖死） */
 export const HARD_MAX_CHARS = 200000;
@@ -185,8 +193,37 @@ function blocksFromMarkdown(content: string): BookBlock[] {
 
 export function parseBook(content: string, format: 'txt' | 'md'): BookBlock[] {
   if (!content?.trim()) return [];
-  return format === 'md' ? blocksFromMarkdown(content) : blocksFromText(content);
+  const key = format;
+  const hit = parseCache.find((c) => c.format === key && c.content === content);
+  if (hit) {
+    // 命中就把它挪到队首（LRU），下次同本书再解析直接返回
+    parseCache.splice(parseCache.indexOf(hit), 1);
+    parseCache.unshift(hit);
+    return hit.blocks;
+  }
+  const blocks = format === 'md' ? blocksFromMarkdown(content) : blocksFromText(content);
+  parseCache.unshift({ format: key, content, blocks });
+  if (parseCache.length > PARSE_CACHE_SIZE) parseCache.length = PARSE_CACHE_SIZE;
+  return blocks;
 }
+
+/**
+ * `parseBook` 的小 LRU 缓存。
+ *
+ * 为什么值得缓存：md 书的解析里 **`sanitizeHtml`（DOMPurify）逐块调用占了约 89%**
+ * —— 实测 23 万字 / 4840 块的书，解析总耗时 297ms（1×）/ 1886ms（6× CPU 降速），
+ * 其中 DOMPurify 一项就是 264ms / 1638ms。而同一本书在一次浏览里会被解析好几遍：
+ * 书架的 `BookCard` 为了算进度解析一次、进阅读器再解析一次、正文没变时的重渲染也算。
+ * 缓存命中后这几处直接返回同一份块数组（6× 降速下省掉约 1.9 秒）。
+ *
+ * 两条安全性说明：
+ *   - **比较用 `===` 比字符串本身，不用哈希** —— 哈希碰撞会返回「别的书的正文」，
+ *     这是数据正确性不能接受的；字符串全等比较只会慢几十微秒。
+ *   - 块数组是只读的：阅读器只读 `html`/`text`，标注是往 DOM 上包 `<mark>`（不改 block），
+ *     所以多处分发同一个数组是安全的。
+ */
+const PARSE_CACHE_SIZE = 4;
+const parseCache: { format: 'txt' | 'md'; content: string; blocks: BookBlock[] }[] = [];
 
 // ============================================================
 // 章节（目录）

@@ -34,6 +34,12 @@ import { clsx } from '@/lib/utils';
 import { copyText } from '@/lib/clipboard';
 import type { BookChapter, BookMark } from '@/types';
 
+/**
+ * 分批挂载：首屏先渲染这么多块，剩下的在空闲帧里补齐（见下面 renderedCount 的注释）
+ */
+const FIRST_SCREEN_BLOCKS = 60;
+const BLOCK_CHUNK = 240;
+
 export function ReaderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -76,6 +82,44 @@ export function ReaderPage() {
   const chapters = useMemo(() => book?.chapters ?? [], [book?.chapters]);
   const curChapter = chapterIndexOfBlock(chapters, curBlock);
 
+  /**
+   * 已挂载的块数 —— 长篇正文分批挂载。
+   *
+   * 为什么用「分批挂载」而不是虚拟滚动：虚拟滚动要**卸载**离屏的块，而标注锚点、
+   * 跨块选区、阅读进度、目录跳转全都建立在「所有块都在 DOM 里」这条前提上
+   * （那套块索引 + 字符偏移的数学正是本项目历史上反复出 bug 的地方）。
+   * 分批挂载保留「最终所有块都在 DOM 里」这条不变式，只把「一次性阻塞几秒」
+   * 换成「先出首屏、其余在空闲帧补齐」。
+   *
+   * 实测依据（v4.6.3，23 万字 / 4840 块，6× CPU 降速）：一次性挂载要 5.6 秒才出内容，
+   * 其中解析约 1.9 秒、React 挂载 + 布局约 3.7 秒；分批之后首屏立即可见，
+   * 且这期间页面不再卡死（`requestIdleCallback` 会在空闲时才继续）。
+   *
+   * 注意：**恢复上次阅读位置**要等目标块挂载出来才能滚 —— 深度续读时正文是从上往下
+   * 补齐的，所以会先看到开头、补齐到目标处再落位（见下面的恢复 effect）。
+   */
+  const [renderedCount, setRenderedCount] = useState(FIRST_SCREEN_BLOCKS);
+  useEffect(() => {
+    setRenderedCount(FIRST_SCREEN_BLOCKS);
+    restoredRef.current = false;
+  }, [content, format]);
+
+  useEffect(() => {
+    if (renderedCount >= blocks.length) return;
+    let cancelled = false;
+    const step = () => {
+      if (cancelled) return;
+      setRenderedCount((n) => Math.min(n + BLOCK_CHUNK, blocks.length));
+    };
+    const hasIdle = typeof window.requestIdleCallback === 'function';
+    const id = hasIdle ? window.requestIdleCallback(step, { timeout: 250 }) : window.setTimeout(step, 16);
+    return () => {
+      cancelled = true;
+      if (hasIdle) window.cancelIdleCallback?.(id as number);
+      else window.clearTimeout(id as number);
+    };
+  }, [renderedCount, blocks.length]);
+
   // 老数据（v4.6 之前导入的书）可能没有目录：进页面时补解析一次，只补一次，
   // 否则 set → 重新渲染 → 再补 的循环会一直转
   const rebuiltRef = useRef(false);
@@ -86,7 +130,8 @@ export function ReaderPage() {
   }, [book?.id, chapters.length, blocks.length]);
 
   // ── 标注渲染：先还原块 HTML，再把本块的标注包成 <mark> ──
-  // 用 useLayoutEffect：在浏览器绘制前完成，避免「先看到无标注的正文再闪一下」
+  // 用 useLayoutEffect：在浏览器绘制前完成，避免「先看到无标注的正文再闪一下」。
+  // 依赖里带 renderedCount：分批挂载时，后补上来的块也要套上标注。
   useLayoutEffect(() => {
     const root = bookRef.current;
     if (!root) return;
@@ -102,7 +147,7 @@ export function ReaderPage() {
       targets.forEach((t) => t.classList.add('vd-mk-flash'));
       window.setTimeout(() => targets.forEach((t) => t.classList.remove('vd-mk-flash')), 1200);
     }
-  }, [marks, blocks, flashId]);
+  }, [marks, blocks, flashId, renderedCount]);
 
   // ── 选区 → 浮动工具条 ──
   useEffect(() => {
@@ -162,23 +207,80 @@ export function ReaderPage() {
     touchBookLastRead(book.id);
   }, [book?.id, touchBookLastRead]);
 
-  // ── 恢复上次读到的位置（只在进页面时执行一次） ──
+  /**
+   * 用户是否**自己**滚动过。
+   * 只认 wheel / touchstart / keydown 这类明确的用户意图事件 —— 程序化的
+   * `scrollIntoView` 不会触发它们，所以不会把自己的滚动误判成人操作。
+   * 用途：分批挂载期间若用户已经开始往下看，就放弃「恢复上次位置」的延迟落位，
+   * 否则几秒后内容补齐时会把正在阅读的人拽走。
+   */
+  const userScrolledRef = useRef(false);
+  useEffect(() => {
+    const mark = () => {
+      userScrolledRef.current = true;
+    };
+    window.addEventListener('wheel', mark, { passive: true });
+    window.addEventListener('touchstart', mark, { passive: true });
+    window.addEventListener('keydown', mark);
+    return () => {
+      window.removeEventListener('wheel', mark);
+      window.removeEventListener('touchstart', mark);
+      window.removeEventListener('keydown', mark);
+    };
+  }, []);
+
+  // ── 恢复上次读到的位置 ──
+  // 分批挂载时目标块可能还没渲染出来，所以要跟着 renderedCount 反复试；
+  // 一旦真的落位（或本来就是第 0 块）就置 restoredRef，不再重试。
   useEffect(() => {
     if (!book || restoredRef.current || !blocks.length) return;
     const idx = Math.min(book.lastBlockIndex ?? 0, blocks.length - 1);
     setCurBlock(idx);
-    if (idx > 0) {
-      const el = bookRef.current?.querySelector(`[data-block-idx="${idx}"]`);
-      el?.scrollIntoView({ block: 'start' });
+    if (idx === 0) {
+      restoredRef.current = true;
+      return;
     }
+    // 用户已经自己滚起来看书了 → 放弃这次延迟落位，别把人拽走
+    if (userScrolledRef.current) {
+      restoredRef.current = true;
+      return;
+    }
+    const el = bookRef.current?.querySelector(`[data-block-idx="${idx}"]`);
+    if (!el) return; // 还没挂载到那里，等下一批
+    el.scrollIntoView({ block: 'start' });
     restoredRef.current = true;
-  }, [book, blocks.length]);
+  }, [book, blocks.length, renderedCount]);
+
+  // ── 目录跳转的待落位目标 ──
+  // 跳转目标（章节）还没挂载时先记下来，等它进了 DOM 再滚 —— 否则会静默不跳。
+  const pendingJumpRef = useRef<number | null>(null);
+  useEffect(() => {
+    const idx = pendingJumpRef.current;
+    if (idx === null) return;
+    const el = bookRef.current?.querySelector<HTMLElement>(`[data-block-idx="${idx}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    pendingJumpRef.current = null;
+  }, [renderedCount, blocks.length, book?.id]);
 
   // ── 记录阅读位置 ──
   // 常规情况：谁在视口里就记最小的那个块（= 你正在看的位置）。
   // 例外（v4.4.1 修）：滑到最底部时，最后一屏里「最靠上的块」并不是最后一块，
   // 于是进度永远差几个百分点（实测 44 块的书停在 93%）。所以到底部就直接记最后一块。
   const progressTimer = useRef<number | null>(null);
+  /** 阅读进度用的观察器：分批挂载时新块要补进同一个观察器，所以存在 ref 里 */
+  const ioRef = useRef<IntersectionObserver | null>(null);
+  /**
+   * 已挂载块数的最新值（给 IO 回调里的 `atBottom` 用）。
+   *
+   * ⚠️ 这个守卫不能省：分批挂载时还没挂完，滚动容器**天然是短的**
+   * （scrollHeight ≈ clientHeight），`atBottom()` 会在刚打开时就返回 true，
+   * 于是进度被直接写成最后一页 —— 一本书刚点开就显示「读到 100%」。
+   */
+  const renderedCountRef = useRef(renderedCount);
+  useEffect(() => {
+    renderedCountRef.current = renderedCount;
+  }, [renderedCount]);
   useEffect(() => {
     const root = bookRef.current;
     if (!root || !book || !blocks.length) return;
@@ -191,6 +293,8 @@ export function ReaderPage() {
     };
     const atBottom = () => {
       if (!scroller) return false;
+      // 还有块没挂载 → 容器高度还不完整，此刻的「到底了」是假象
+      if (renderedCountRef.current < blocks.length) return false;
       return scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 8;
     };
     const flush = () => {
@@ -217,6 +321,7 @@ export function ReaderPage() {
       { threshold: 0.01 },
     );
     root.querySelectorAll('[data-block-idx]').forEach((el) => io.observe(el));
+    ioRef.current = io;
     // 滚动到底的那一刻 IntersectionObserver 可能不再变化，所以自己也听一次 scroll
     const onScroll = () => {
       if (!atBottom()) return;
@@ -226,10 +331,19 @@ export function ReaderPage() {
     scroller?.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       io.disconnect();
+      ioRef.current = null;
       scroller?.removeEventListener('scroll', onScroll);
       if (progressTimer.current) window.clearTimeout(progressTimer.current);
     };
   }, [book?.id, blocks.length]);
+
+  // 分批挂载会把新块陆续插进 DOM：新块也要进观察集，否则「读到哪了」会漏掉它们
+  // （对同一个目标 observe 两次是空操作，所以直接全量补一遍最省心）
+  useEffect(() => {
+    const io = ioRef.current;
+    if (!io) return;
+    bookRef.current?.querySelectorAll('[data-block-idx]').forEach((el) => io.observe(el));
+  }, [renderedCount, blocks.length, book?.id]);
 
   const clearSelection = useCallback(() => {
     window.getSelection()?.removeAllRanges();
@@ -276,8 +390,25 @@ export function ReaderPage() {
     setMarksOpen(false);
   };
 
-  /** 跳到某章开头：块索引就是章节边界，滚动后目录会自动高亮到那一章 */
+  /**
+   * 跳到某章开头：块索引就是章节边界，滚动后目录会自动高亮到那一章。
+   *
+   * 分批挂载下目标章可能还没进 DOM —— 不能据此报「正文不在了」（那是误报）。
+   * 真正的失效判据是**块索引是否越界**；没挂载就把这一章之前的块先挂出来，
+   * 然后交给 pendingJump 等它进 DOM 再滚（滚动位置本来就依赖前面所有块的高度）。
+   */
   const gotoChapter = (c: BookChapter) => {
+    setTocOpen(false);
+    if (c.from >= blocks.length) {
+      showToast('这一章的正文已经不在了', 'error');
+      return;
+    }
+    if (blocks[c.from] && !bookRef.current?.querySelector(`[data-block-idx="${c.from}"]`)) {
+      setRenderedCount((n) => Math.max(n, c.from + 1));
+      pendingJumpRef.current = c.from;
+      setCurBlock(c.from);
+      return;
+    }
     const el = bookRef.current?.querySelector<HTMLElement>(`[data-block-idx="${c.from}"]`);
     if (!el) {
       showToast('这一章的正文已经不在了', 'error');
@@ -285,7 +416,6 @@ export function ReaderPage() {
     }
     el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     setCurBlock(c.from);
-    setTocOpen(false);
   };
 
   /** 新建章节：以「当前阅读位置」为起点 —— 语义是「我读到这里，往后另起一章」 */
@@ -430,7 +560,7 @@ export function ReaderPage() {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div ref={bookRef}>
-            {blocks.map((b) => (
+            {blocks.slice(0, renderedCount).map((b) => (
               <div
                 key={b.index}
                 data-block-idx={b.index}

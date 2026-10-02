@@ -172,7 +172,8 @@ export function SettingsPage() {
               都收进右上角「书签」，点书签会精确跳到标注所在的那一行。
             </p>
             <p className="text-paper mt-1">
-              单本建议 1 万字以内（上限 20 万字），太长会卡。
+              单本建议 5 万字以内，最长 20 万字；超长正文会自动分批渲染，
+              首屏先出来、其余在空闲时补齐。
             </p>
             <p className="text-paper mt-1">
               书架上固定有一本<span className="text-candle">《Agent》</span>——
