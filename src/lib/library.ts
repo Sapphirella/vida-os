@@ -493,6 +493,80 @@ export function markPreview(text: string, max = 60): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
+/**
+ * 唯一匹配重锚定时，原文短于这个长度就不去全书检索。
+ * 定成 2 而不是更大：**安全性由「全书唯一」这条保证，不靠长度**（检索到的位置必须逐字相同），
+ * 长度只影响代价。中文里三四个字的划线很常见，门槛定高了会把它们白白丢掉（实测过 3 字的
+ * 「第三段」因为门槛是 4 而被丢弃）。
+ */
+const REMAP_MIN_CHARS = 2;
+
+/**
+ * 正文被改写后，把书里的标注重新锚定到新正文上。
+ *
+ * 背景：标注锚点是「块索引 + 块内字符偏移」（见本文件开头）。Agent 的查找替换
+ * （`[[替:馆藏|原文→新文]]`）会改写正文，于是偏移可能失效。早先的做法是
+ * **一发现书正文被改就清空全书标注** —— 确实安全，但代价过大：在一本书里改一个
+ * 错别字，会把用户所有划线一起抹掉；而《Agent》这本书的定位恰恰是「Agent 经常改、
+ * 用户会在上面划线」，两个一等功能互相打架。
+ *
+ * 判定规则（**逐条**判定，宁可丢一条，绝不把标注留在猜出来的位置上）：
+ *   1. 快路径：新正文里同一块、同一偏移处仍然正好是这段原文 → 原样保留
+ *      （改动发生在这条标注**之后**时命中，最常见）；
+ *   2. 唯一匹配：这段原文在全书里**恰好只出现一次** → 重新锚定到那一处
+ *      （改动发生在这条标注**之前**、导致块内偏移变化或后面所有块位移时命中）；
+ *   3. 找不到、或出现多次（无法判断是哪一处）→ 丢弃，交给调用方如实告诉用户。
+ *
+ * 注意「唯一匹配」不引入指错位置的风险：只有原文在新正文里逐字出现、且全书仅此一处时
+ * 才会重新锚定 —— 最坏情况就是退回第 3 条（丢弃），不会比原行为更差。
+ */
+export function remapMarks(
+  marks: BookMark[],
+  blocks: BookBlock[],
+): { marks: BookMark[]; dropped: BookMark[] } {
+  if (!marks.length || !blocks.length) return { marks: [], dropped: [...marks] };
+  const texts = blocks.map((b) => b.text ?? '');
+  const kept: BookMark[] = [];
+  const dropped: BookMark[] = [];
+
+  for (const m of marks) {
+    // 1) 快路径
+    const same = texts[m.blockIndex];
+    if (same !== undefined && m.end <= same.length && same.slice(m.start, m.end) === m.text) {
+      kept.push(m);
+      continue;
+    }
+    // 2) 全文找唯一一处相同原文
+    const needle = m.text ?? '';
+    let found: { blockIndex: number; start: number } | null = null;
+    let ambiguous = false;
+    if (needle.length >= REMAP_MIN_CHARS) {
+      for (let i = 0; i < texts.length && !ambiguous; i++) {
+        let at = texts[i].indexOf(needle);
+        while (at >= 0) {
+          if (found) {
+            ambiguous = true;
+            break;
+          }
+          found = { blockIndex: i, start: at };
+          at = texts[i].indexOf(needle, at + 1);
+        }
+      }
+    }
+    if (found && !ambiguous) {
+      kept.push({
+        ...m,
+        blockIndex: found.blockIndex,
+        start: found.start,
+        end: found.start + needle.length,
+      });
+    } else {
+      dropped.push(m);
+    }
+  }
+  return { marks: kept, dropped };
+}
+
 /** 阅读进度（0~1）：按「上次读到的块」算 */
 export function progressOf(book: { lastBlockIndex?: number }, blockCount: number): number {
   if (!blockCount) return 0;

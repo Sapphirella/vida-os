@@ -11,7 +11,7 @@
 //   3. 所有变更都会回一条 sys 消息，让用户看见 Agent 到底动了什么
 import { useAppStore } from '@/stores/useAppStore';
 import { errMsg } from '@/lib/utils';
-import { AGENT_BOOK_ID, bookCharCount } from '@/lib/library';
+import { AGENT_BOOK_ID, bookCharCount, markPreview, parseBook, remapMarks } from '@/lib/library';
 
 /** 单条写入结果 */
 export interface ToolResult {
@@ -35,11 +35,15 @@ export interface PendingReplace {
   /** 改写后的完整正文（确认后直接写入） */
   next: string;
   /**
-   * 这次替换会动正文，块索引整体位移 → 本书已有的划线锚点会指错段落。
-   * 确认卡片据此预告「标注会被清空」，不装作什么都没发生。
-   * （只有写书工具的「书末追加」不会触发它：已有块索引不变。）
+   * 这次替换会动书正文，标注锚点可能失效。确认卡片据此预告结果。
+   * `marksKept` / `marksDropped` 是**确认前就预测出来的**数字（用同一套重锚定逻辑
+   * 先跑一遍），让用户在看到「会丢掉几条」之后再决定，而不是事后才被告知。
    */
   dropsMarks?: boolean;
+  marksKept?: number;
+  marksDropped?: number;
+  /** 会被丢掉的那几条原文（最多 3 条），写进结果消息里，用户能照着重新划 */
+  droppedTexts?: string[];
 }
 
 let pendingSeq = 0;
@@ -194,7 +198,8 @@ export function proposeReplace(
         st.books.map((b) => ({ get: () => b })),
         'book',
         'content',
-        // 书正文被改写会让块索引位移，划线锚点会指错段落 → 明确预告会清空标注
+        // 书正文被改写会让锚点（块索引 + 块内偏移）可能失效 → 确认卡片会带上
+        // 「能保住几条 / 会丢几条」的预测（见下面 proposeReplace 里的 remapMarks 预演）
         (v) => (v.marks?.length ?? 0) > 0,
       );
     } else {
@@ -210,6 +215,17 @@ export function proposeReplace(
 
   // 只保留第一处作为待确认项（一次改一处，够安全也够清楚）
   const first = hits[0];
+  // 改书正文时，先按同一套重锚定逻辑预演一遍：能保住几条、会丢几条。
+  // 只预测、不落盘 —— 用户在卡片上看到数字后才决定要不要改。
+  if (first.target === 'book') {
+    const book = st.books.find((b) => b.id === first.targetId);
+    if (book) {
+      const { marks: kept, dropped } = remapMarks(book.marks, parseBook(first.next, book.format));
+      first.marksKept = kept.length;
+      first.marksDropped = dropped.length;
+      first.droppedTexts = dropped.slice(0, 3).map((m) => markPreview(m.text, 16));
+    }
+  }
   pending.set(first.id, first);
   const total = hits.reduce((n, h) => n + h.count, 0);
   return {
@@ -228,7 +244,8 @@ export function applyReplace(id: string): ToolResult {
   pending.delete(id);
   const st = useAppStore.getState();
   try {
-    let clearedMarks = 0;
+    let marksKept = 0;
+    let marksDropped: string[] = [];
     switch (p.target) {
       case 'article':
         st.updateArticle(p.targetId, { content: p.next });
@@ -247,11 +264,14 @@ export function applyReplace(id: string): ToolResult {
         break;
       case 'book': {
         const book = st.books.find((b) => b.id === p.targetId);
-        clearedMarks = book?.marks.length ?? 0;
-        // 正文一变，块索引就整体位移，旧的划线锚点会指到别的段落上去。
-        // 与其留一批悄悄指错的标注，不如清掉并如实告诉用户 —— 书签里存的原文还在，
-        // 需要的话可以重新划。
-        if (clearedMarks > 0) st.updateBook(p.targetId, { marks: [] });
+        // 正文一变，锚点（块索引 + 块内偏移）就可能失效。逐条重新锚定：
+        // 对得上原文的保留，对不上的才丢掉并如实报出来 —— 不再一见改动就清空全书划线。
+        const { marks, dropped } = remapMarks(book?.marks ?? [], parseBook(p.next, book?.format ?? 'txt'));
+        marksKept = marks.length;
+        marksDropped = dropped.map((m) => markPreview(m.text, 16));
+        if (book && marks.length !== book.marks.length) {
+          st.updateBook(p.targetId, { marks });
+        }
         st.setBookContent(p.targetId, p.next);
         break;
       }
@@ -262,8 +282,15 @@ export function applyReplace(id: string): ToolResult {
       ok: true,
       message:
         `已在「${p.targetTitle}」替换 ${p.count} 处` +
-        (clearedMarks > 0
-          ? `。正文改动会让原有 ${clearedMarks} 处划线错位，已一并清空（书签里存的原文还在，可以重新划）`
+        (p.target === 'book'
+          ? marksKept + marksDropped.length > 0
+            ? `。书里 ${marksKept} 处标注仍然对得上、已保留` +
+              (marksDropped.length
+                ? `；${marksDropped.length} 处因为原文被这次改动改掉了、无法定位，已移除：${marksDropped
+                    .map((t) => `「${t}」`)
+                    .join('、')}${marksDropped.length > 3 ? ' 等' : ''}（可按上面的原文重新划）`
+                : '')
+            : ''
           : ''),
     };
   } catch (e) {

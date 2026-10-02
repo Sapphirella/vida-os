@@ -10,8 +10,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ArrowUpDown, Check, ImagePlus } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { compressImage, uid, clsx } from '@/lib/utils';
-import { putFile } from '@/lib/db';
-import { fileURL } from '@/lib/fileUrl';
+import { putFile, deleteFile } from '@/lib/db';
+import { fileURL, revokeFileURL } from '@/lib/fileUrl';
 
 export interface AlbumUploadEditorProps {
   /** 初始图片（编辑时传入旧组；发布时传空） */
@@ -47,6 +47,37 @@ export function AlbumUploadEditor({
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
   /** 拖拽刚结束后 350ms 内抑制 click，避免松手触发预览大图 */
   const clickSuppressed = useRef(false);
+  /**
+   * 本次编辑会话里**新入库**的图片 id。
+   *
+   * 为什么必须记着它们：选图是「压缩 → 写进 files 表 → 拿到 id」的即时动作，
+   * 而 id 只有点「发布 / 保存修改」时才会被图片组引用。
+   * 于是「选了 20 张 → 反悔点取消」会留下 20 个谁都不认领的孤儿 blob
+   * （实测：取消后 files 表里仍有一张没有组引用的压缩图）。
+   * 这些 id 是本次刚生成的，**不可能被别处引用**，所以丢弃它们是安全的
+   * —— 编辑旧组时被移除的旧图不在此列（那张图可能已被收进星标集），只能交给
+   * 设置里的「清除缓存」按引用关系回收。
+   */
+  const sessionIds = useRef<Set<string>>(new Set());
+
+  /** 丢弃本次会话里「不再需要」的新图（keep 传最终要用的那些） */
+  const dropSessionImages = (keep: string[]) => {
+    const kept = new Set(keep);
+    for (const id of [...sessionIds.current]) {
+      if (kept.has(id)) continue;
+      sessionIds.current.delete(id);
+      revokeFileURL(id);
+      void deleteFile(id).catch(() => {});
+    }
+  };
+
+  /** 取消 / 关闭：本次新加的图一张都不会进相册，全部回收 */
+  const close = () => {
+    const n = sessionIds.current.size;
+    dropSessionImages([]);
+    if (n > 0) showToast(`已取消，本次上传的 ${n} 张照片已丢弃`, 'info');
+    onClose();
+  };
   /** 桌面鼠标拖拽状态（mousedown 即拖，无需长按） */
   const mouseDrag = useRef<{ from: number; moved: boolean } | null>(null);
 
@@ -123,6 +154,8 @@ export function AlbumUploadEditor({
       const batch = await Promise.all(picked.slice(i, i + CHUNK).map(process));
       ids.push(...batch.filter((x): x is string => !!x));
     }
+    // 登记「本次会话新入库」的 id，取消/移除时才有得回收（见 sessionIds 注释）
+    ids.forEach((id) => sessionIds.current.add(id));
     if (ids.length > 0) setImages((prev) => [...prev, ...ids]);
     setUploading(false);
   };
@@ -242,6 +275,8 @@ export function AlbumUploadEditor({
       showToast('写点文案，或选一张照片', 'error');
       return;
     }
+    // 发布前把「选了又移除」的新图回收掉：它们不会进相册，留着就是孤儿 blob
+    dropSessionImages(images);
     onSubmit(images, caption.trim());
   };
 
@@ -249,7 +284,7 @@ export function AlbumUploadEditor({
     <div className="fixed inset-0 z-[55] flex flex-col" style={{ background: 'var(--bg-base, rgba(20,18,22,0.98))' }}>
       {/* 顶栏 */}
       <div className="flex items-center justify-between px-4 h-[52px] flex-none border-b border-line/50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <button onClick={onClose} className="flex items-center gap-1 font-mono text-[11px] tracking-wider text-bronze hover:text-candle">
+        <button onClick={close} className="flex items-center gap-1 font-mono text-[11px] tracking-wider text-bronze hover:text-candle">
           <X size={14} strokeWidth={1.6} /> 取消
         </button>
         <p className="font-serif text-headline text-sm">{title}</p>
@@ -308,7 +343,10 @@ export function AlbumUploadEditor({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setImages(images.filter((x) => x !== id));
+                      const next = images.filter((x) => x !== id);
+                      setImages(next);
+                      // 如果这张是本次刚上传的，立刻回收（旧图不动，见 sessionIds 注释）
+                      dropSessionImages(next);
                     }}
                     className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-moon border border-moon/20"
                     style={{ background: 'var(--wine-deep)' }}
@@ -360,7 +398,7 @@ export function AlbumUploadEditor({
 
       {/* 底部：发布 / 保存修改 */}
       <div className="flex-none px-4 py-3 border-t border-line/50 flex items-center justify-end gap-2" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
-        <button onClick={onClose} className="btn-text">
+        <button onClick={close} className="btn-text">
           取消
         </button>
         <button

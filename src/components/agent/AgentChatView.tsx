@@ -393,8 +393,26 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
                   style={{ background: 'var(--agent-accent-soft)', color: 'var(--text-bronze)' }}
                 >
                   <AlertTriangle size={11} strokeWidth={1.8} className="inline -mt-px mr-1" />
-                  这次改动会重排正文的分段，书里原有的划线会指错位置，所以会一并清空
-                  （书签面板里存的原文仍在，可以重新划）。
+                  {typeof pendingReplace.marksDropped === 'number' ? (
+                    pendingReplace.marksDropped === 0 ? (
+                      <>
+                        这本书里有 {pendingReplace.marksKept} 处划线 / 高亮，改动后原文都还对得上，
+                        <span className="text-candle">会原样保留</span>。
+                      </>
+                    ) : (
+                      <>
+                        这本书里有{' '}
+                        <span className="text-candle">
+                          {(pendingReplace.marksKept ?? 0) + pendingReplace.marksDropped} 处
+                        </span>
+                        划线 / 高亮：对得上原文的 {pendingReplace.marksKept} 处会保留，
+                        另外 {pendingReplace.marksDropped} 处的原文正好被这次改动改掉了、无法定位，
+                        会被移除（改完会把是哪几句告诉你，能照着重新划）。
+                      </>
+                    )
+                  ) : (
+                    <>这次改动会重排正文，书里原有的划线可能对不上位置，改完后会逐条核对。</>
+                  )}
                 </p>
               )}
               <div className="flex gap-2">
@@ -402,6 +420,12 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
                   onClick={() => {
                     const r = applyReplace(pendingReplace.id);
                     showToast(r.message, r.ok ? 'success' : 'error');
+                    // 落盘结果同时记一条 sys 消息：toast 几秒就没了，而「这次改动移除了
+                    // 哪几条划线」是用户之后可能要照着重新划的依据，得留在会话里
+                    // （写书/其它工具的落盘结果本来也是这么记的）。
+                    if (r.ok) {
+                      useAppStore.getState().appendAgentMessage(sessionId, { role: 'sys', content: r.message });
+                    }
                     setPendingReplace(null);
                   }}
                   className="btn-primary flex-1 justify-center"
