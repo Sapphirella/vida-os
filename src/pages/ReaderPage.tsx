@@ -5,8 +5,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Bookmark,
+  Check,
   Copy,
   Highlighter,
+  ListTree,
+  Pencil,
+  Plus,
   Trash2,
   Underline,
   X,
@@ -18,6 +22,7 @@ import {
   type BookAnchor,
   anchorsFromSelection,
   applyMarksToDom,
+  chapterIndexOfBlock,
   markPreview,
   marksByBlock,
   parseBook,
@@ -27,16 +32,22 @@ import {
 } from '@/lib/library';
 import { clsx } from '@/lib/utils';
 import { copyText } from '@/lib/clipboard';
-import type { BookMark } from '@/types';
+import type { BookChapter, BookMark } from '@/types';
 
 export function ReaderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const book = useAppStore((s) => s.books.find((b) => b.id === id));
+  /** Agent 关掉时，它的专属书在书架隐藏；直接敲 URL 进来看也不该放行 */
+  const agentEnabled = useAppStore((s) => s.settings.agentEnabled !== false);
   const addBookMark = useAppStore((s) => s.addBookMark);
   const deleteBookMark = useAppStore((s) => s.deleteBookMark);
+  const addBookChapter = useAppStore((s) => s.addBookChapter);
+  const renameBookChapter = useAppStore((s) => s.renameBookChapter);
+  const removeBookChapter = useAppStore((s) => s.removeBookChapter);
   const touchBookLastRead = useAppStore((s) => s.touchBookLastRead);
   const showToast = useUIStore((s) => s.showToast);
+  const showModal = useUIStore((s) => s.showModal);
 
   const content = book?.content ?? '';
   const format = book?.format ?? 'txt';
@@ -53,9 +64,23 @@ export function ReaderPage() {
     anchors: BookAnchor[];
   } | null>(null);
   const [marksOpen, setMarksOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
+  /** 视口最靠上的块 —— 目录页据此高亮「正在读这一章」 */
+  const [curBlock, setCurBlock] = useState(0);
   const [flashId, setFlashId] = useState<string | null>(null);
 
   const marks = book?.marks ?? [];
+  const chapters = useMemo(() => book?.chapters ?? [], [book?.chapters]);
+  const curChapter = chapterIndexOfBlock(chapters, curBlock);
+
+  // 老数据（v4.6 之前导入的书）可能没有目录：进页面时补解析一次，只补一次，
+  // 否则 set → 重新渲染 → 再补 的循环会一直转
+  const rebuiltRef = useRef(false);
+  useEffect(() => {
+    if (rebuiltRef.current || !book || chapters.length || !blocks.length) return;
+    rebuiltRef.current = true;
+    useAppStore.getState().rebuildBookChapters(book.id);
+  }, [book?.id, chapters.length, blocks.length]);
 
   // ── 标注渲染：先还原块 HTML，再把本块的标注包成 <mark> ──
   // 用 useLayoutEffect：在浏览器绘制前完成，避免「先看到无标注的正文再闪一下」
@@ -138,6 +163,7 @@ export function ReaderPage() {
   useEffect(() => {
     if (!book || restoredRef.current || !blocks.length) return;
     const idx = Math.min(book.lastBlockIndex ?? 0, blocks.length - 1);
+    setCurBlock(idx);
     if (idx > 0) {
       const el = bookRef.current?.querySelector(`[data-block-idx="${idx}"]`);
       el?.scrollIntoView({ block: 'start' });
@@ -167,10 +193,13 @@ export function ReaderPage() {
     const flush = () => {
       if (atBottom()) {
         write(blocks.length - 1);
+        setCurBlock(blocks.length - 1);
         return;
       }
       if (!visible.size) return;
-      write(Math.min(...visible));
+      const top = Math.min(...visible);
+      write(top);
+      setCurBlock(top);
     };
     const io = new IntersectionObserver(
       (entries) => {
@@ -244,13 +273,88 @@ export function ReaderPage() {
     setMarksOpen(false);
   };
 
-  if (!book) {
+  /** 跳到某章开头：块索引就是章节边界，滚动后目录会自动高亮到那一章 */
+  const gotoChapter = (c: BookChapter) => {
+    const el = bookRef.current?.querySelector<HTMLElement>(`[data-block-idx="${c.from}"]`);
+    if (!el) {
+      showToast('这一章的正文已经不在了', 'error');
+      return;
+    }
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    setCurBlock(c.from);
+    setTocOpen(false);
+  };
+
+  /** 新建章节：以「当前阅读位置」为起点 —— 语义是「我读到这里，往后另起一章」 */
+  const openAddChapter = () => {
+    if (!book) return;
+    showModal({
+      title: '新建章节',
+      content: (
+        <ChapterTitleField
+          initial=""
+          hint={`将从你当前读到的位置（第 ${curBlock + 1} 段）开始新的一章。`}
+          placeholder="章节标题"
+          onDone={(title) => {
+            addBookChapter(book.id, { title, from: curBlock });
+            useUIStore.getState().closeModal();
+            showToast('已新建章节', 'success');
+          }}
+        />
+      ),
+    });
+  };
+
+  const openRenameChapter = (c: BookChapter) => {
+    if (!book) return;
+    showModal({
+      title: '重命名章节',
+      content: (
+        <ChapterTitleField
+          initial={c.title}
+          hint="只改目录里显示的标题，正文一个字都不会动。"
+          placeholder="章节标题"
+          onDone={(title) => {
+            renameBookChapter(book.id, c.id, title);
+            useUIStore.getState().closeModal();
+            showToast('已重命名', 'success');
+          }}
+        />
+      ),
+    });
+  };
+
+  /**
+   * 从目录里移除章节。
+   *
+   * ⚠️ 刻意**不动正文**：划线锚点是块索引，删掉正文会让后面所有块索引位移、
+   * 整本书的标注全部错位；而 Agent 也没有删除能力。目录条目随时可以重建。
+   */
+  const openRemoveChapter = async (c: BookChapter) => {
+    if (!book) return;
+    useUIStore.getState().closeModal();
+    const ok = await useUIStore
+      .getState()
+      .confirmDialog(
+        `把《${c.title}》从目录里移除？\n\n正文会原封不动保留在书里，划线也不受影响。` +
+          `如果只是标题识别错了，可以重命名或回书架重建目录。`,
+      );
+    if (!ok) return;
+    removeBookChapter(book.id, c.id);
+    showToast('已从目录移除，正文保留', 'info');
+  };
+
+  if (!book || (book.agentBook && !agentEnabled)) {
     return (
       <div className="px-4 sm:px-6">
         <div className="max-w-3xl mx-auto">
           <EmptyState
-            title="这本书不在书架上了"
-            hint="可能已经被移出书架，回书架看看其它书"
+            title={book ? 'Agent 已经关上了' : '这本书不在书架上了'}
+            hint={
+              book
+                ? '《Agent》是专门给 Agent 写的书。设置里重新打开 Agent 开关，它就会回到书架。书里的内容一个字都没少。'
+                : '可能已经被移出书架，回书架看看其它书'
+            }
             action={
               <button className="btn-primary" onClick={() => navigate('/library')}>
                 回书架
@@ -279,6 +383,23 @@ export function ReaderPage() {
               {book.charCount} 字 · 读到 {Math.round(progress * 100)}%
             </p>
           </div>
+          <button
+            onClick={() => setTocOpen(true)}
+            className={clsx(
+              'relative flex items-center gap-1 px-2.5 py-1.5 rounded-pill text-[11px] font-mono tracking-wider transition-colors',
+              chapters.length
+                ? 'bg-wine/25 text-candle'
+                : 'bg-bronze/10 text-bronze hover:text-candle',
+            )}
+            aria-label="目录"
+            title={`目录 · ${chapters.length} 章`}
+          >
+            <ListTree size={12} strokeWidth={1.6} />
+            目录
+            {chapters.length > 0 && (
+              <span className="font-mono text-[9px] text-amber">{chapters.length}</span>
+            )}
+          </button>
           <button
             onClick={() => setMarksOpen(true)}
             className={clsx(
@@ -341,6 +462,124 @@ export function ReaderPage() {
             <ToolBtn icon={Copy} label="复制" onClick={() => void copySelection()} />
           </div>
         </div>
+      )}
+
+      {/* 目录页（顶栏「目录」打开）：章节列表 + 跳转 + 增删改 */}
+      {tocOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            style={{ background: 'rgba(0,0,0,0.42)' }}
+            onClick={() => setTocOpen(false)}
+          />
+          <aside
+            className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md overflow-y-auto border-l border-bronze/15"
+            style={{ background: 'var(--card-bg-elevated)' }}
+          >
+            <div
+              className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-bronze/10"
+              style={{ background: 'var(--card-bg-elevated)' }}
+            >
+              <ListTree size={15} strokeWidth={1.5} className="text-amber" />
+              <div className="flex-1 min-w-0">
+                <p className="font-serif text-title text-headline">目录</p>
+                <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
+                  {chapters.length} 章 · 《{book.title}》
+                </p>
+              </div>
+              <button
+                onClick={() => setTocOpen(false)}
+                className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle"
+                aria-label="关闭目录"
+              >
+                <X size={16} strokeWidth={1.6} />
+              </button>
+            </div>
+
+            {chapters.length === 0 ? (
+              <p className="px-4 py-6 text-bronze text-xs leading-relaxed">
+                这本还没有目录。回到正文读一段，再用下面的
+                <span className="text-candle">「在当前阅读位置新建章节」</span>
+                就能把长文拆开。
+              </p>
+            ) : (
+              <ul className="p-3 space-y-1.5">
+                {chapters.map((c, i) => {
+                  const on = i === curChapter;
+                  return (
+                    <li key={c.id}>
+                      <div
+                        className={clsx(
+                          'group flex items-stretch rounded-card border transition-colors',
+                          on
+                            ? 'border-wine/45 bg-wine/12'
+                            : 'border-bronze/12 hover:border-bronze/25',
+                        )}
+                        style={on ? undefined : { background: 'var(--card-bg)' }}
+                      >
+                        <button
+                          onClick={() => gotoChapter(c)}
+                          className="flex-1 min-w-0 text-left px-3 py-2.5 flex items-start gap-2.5"
+                          title="跳到这一章"
+                        >
+                          <span
+                            className={clsx(
+                              'font-mono text-[10px] tabular-nums leading-5 flex-none w-5 text-right',
+                              on ? 'text-amber' : 'text-bronze-deep',
+                            )}
+                          >
+                            {String(i + 1).padStart(2, '0')}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span
+                              className={clsx(
+                                'block font-serif text-[14px] leading-snug',
+                                on ? 'text-candle' : 'text-paper',
+                              )}
+                            >
+                              {c.title}
+                            </span>
+                            <span className="mt-0.5 block font-mono text-[9px] tracking-wider text-bronze-deep">
+                              {c.charCount} 字
+                              {on && <span className="text-amber"> · 正在读</span>}
+                            </span>
+                          </span>
+                        </button>
+                        <div className="flex items-center flex-none pr-1.5 gap-0.5">
+                          <button
+                            onClick={() => openRenameChapter(c)}
+                            className="w-7 h-7 flex items-center justify-center text-bronze-deep hover:text-candle"
+                            aria-label={`重命名「${c.title}」`}
+                          >
+                            <Pencil size={12} strokeWidth={1.6} />
+                          </button>
+                          <button
+                            onClick={() => void openRemoveChapter(c)}
+                            className="w-7 h-7 flex items-center justify-center text-bronze-deep hover:text-wine-bright"
+                            aria-label={`从目录移除「${c.title}」`}
+                          >
+                            <Trash2 size={12} strokeWidth={1.6} />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div className="px-3 pb-8 pt-1 space-y-3">
+              <button onClick={openAddChapter} className="btn-ghost w-full justify-center">
+                <Plus size={13} strokeWidth={1.6} />
+                在当前阅读位置新建章节
+              </button>
+              <p className="px-1 font-mono text-[10px] tracking-wider text-bronze-deep leading-relaxed">
+                导入时会按 md 标题或「第 X 章 / Chapter N」自动拆章，识别不准的地方可以在
+                这里重命名或移除。目录只存位置，正文始终完整保留。
+              </p>
+            </div>
+          </aside>
+        </>
       )}
 
       {/* 书签面板（右上角按钮打开） */}
@@ -449,5 +688,51 @@ function ToolBtn({
       <Icon size={12} strokeWidth={1.6} />
       {label}
     </button>
+  );
+}
+
+/** 章节标题输入框（新建 / 重命名共用）。放应用内 Modal —— 手机上 prompt() 不可用。 */
+function ChapterTitleField({
+  initial,
+  hint,
+  placeholder,
+  onDone,
+}: {
+  initial: string;
+  hint?: string;
+  placeholder: string;
+  onDone: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <div className="space-y-3">
+      {hint && <p className="font-mono text-[10px] tracking-wider text-bronze-deep">{hint}</p>}
+      <input
+        autoFocus
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && value.trim()) onDone(value.trim());
+          if (e.key === 'Escape') useUIStore.getState().closeModal();
+        }}
+        className="w-full px-3 py-2 rounded-card border border-line/50 bg-bg-base text-paper text-sm focus:border-wine/60 focus:outline-none"
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={() => useUIStore.getState().closeModal()}
+          className="btn-ghost"
+        >
+          取消
+        </button>
+        <button
+          onClick={() => value.trim() && onDone(value.trim())}
+          disabled={!value.trim()}
+          className="btn-primary disabled:opacity-40"
+        >
+          <Check size={13} strokeWidth={2} /> 确定
+        </button>
+      </div>
+    </div>
   );
 }

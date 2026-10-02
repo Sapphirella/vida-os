@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   LibraryBig,
+  ListTree,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -39,18 +40,30 @@ export function LibraryPage() {
   const addBook = useAppStore((s) => s.addBook);
   const updateBook = useAppStore((s) => s.updateBook);
   const deleteBook = useAppStore((s) => s.deleteBook);
+  const rebuildBookChapters = useAppStore((s) => s.rebuildBookChapters);
   const showToast = useUIStore((s) => s.showToast);
   const showModal = useUIStore((s) => s.showModal);
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
+  /**
+   * Agent 专属书：设置里关掉 Agent 开关就一起隐藏。
+   * 过滤放在「所有列表的计算之前」——置顶区、筛选、头部计数全部自动跟着变，
+   * 不会有某个角落漏出这本不该出现的书。
+   */
+  const agentEnabled = useAppStore((s) => s.settings.agentEnabled !== false);
+  const visibleBooks = useMemo(
+    () => (agentEnabled ? books : books.filter((b) => !b.agentBook)),
+    [books, agentEnabled],
+  );
+
   // 书架排序：最近阅读优先（没读过的按上架时间兜底）；置顶的书进「置顶区」
   const sorted = useMemo(() => {
     const byRecent = (a: LibraryBook, b: LibraryBook) =>
       (b.lastReadAt ?? b.createdAt) - (a.lastReadAt ?? a.createdAt);
-    return [...books].sort(byRecent);
-  }, [books]);
+    return [...visibleBooks].sort(byRecent);
+  }, [visibleBooks]);
   const visible = useMemo(
     () =>
       selectedTag
@@ -107,14 +120,21 @@ export function LibraryPage() {
   };
 
   const openBookMenu = (book: LibraryBook) => {
+    const chapterN = book.chapters?.length ?? 0;
     showModal({
       title: book.title,
       content: (
         <div className="space-y-3">
           <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-            {book.format} · {book.charCount} 字 · {book.marks.length} 处标注 · 上架于{' '}
+            {book.format} · {book.charCount} 字 · {chapterN} 章 · {book.marks.length} 处标注 · 上架于{' '}
             {formatDate(book.createdAt, 'YYYY-MM-DD')}
           </p>
+          {book.agentBook && (
+            <p className="text-bronze text-xs leading-relaxed">
+              这是 Agent 专属书：你在聊天里喜欢的回复可以让它写进这本书的章节里。
+              <span className="text-candle">固定保留、不可删除</span>。
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             <button
               className="btn-ghost"
@@ -145,17 +165,31 @@ export function LibraryPage() {
               <Pencil size={13} strokeWidth={1.5} /> 重命名
             </button>
             <button
-              className="btn-ghost text-wine-light"
-              onClick={async () => {
+              className="btn-ghost"
+              onClick={() => {
                 useUIStore.getState().closeModal();
-                if (await useUIStore.getState().confirmDialog(`把《${book.title}》从书架移除？划线记录会一起删掉。`)) {
-                  deleteBook(book.id);
-                  showToast('已移出书架', 'info');
-                }
+                rebuildBookChapters(book.id);
+                showToast('已按正文重新解析目录', 'success');
               }}
+              title="重新按标题 / 「第 X 章」拆分章节"
             >
-              <Trash2 size={13} strokeWidth={1.5} /> 移出书架
+              <ListTree size={13} strokeWidth={1.5} /> 重建目录
             </button>
+            {/* Agent 专属书不可删除：入口都不给，store 层还有一道兜底 */}
+            {!book.agentBook && (
+              <button
+                className="btn-ghost text-wine-light"
+                onClick={async () => {
+                  useUIStore.getState().closeModal();
+                  if (await useUIStore.getState().confirmDialog(`把《${book.title}》从书架移除？划线记录会一起删掉。`)) {
+                    deleteBook(book.id);
+                    showToast('已移出书架', 'info');
+                  }
+                }}
+              >
+                <Trash2 size={13} strokeWidth={1.5} /> 移出书架
+              </button>
+            )}
           </div>
         </div>
       ),
@@ -212,7 +246,7 @@ export function LibraryPage() {
           <div className="flex-1 min-w-0">
             <h2 className="font-serif text-headline text-lg leading-tight">书架</h2>
             <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
-              {books.length} 本 · 按最近阅读排序 · 可划线
+              {visibleBooks.length} 本 · 按最近阅读排序 · 可划线
             </p>
           </div>
           <button
@@ -228,8 +262,8 @@ export function LibraryPage() {
 
         <p className="text-bronze text-xs leading-relaxed mb-5">
           从本地导入 <span className="text-candle">txt / md</span> 文本，就能像读书一样读它：
-          长按选中一段可以<span className="text-candle">划线 / 高亮</span>，也可以
-          <span className="text-candle">引用这段去问 AI</span>。标注都收在书里右上角的「书签」。
+          长按选中一段可以<span className="text-candle">划线 / 高亮</span>。标注收在右上角「书签」，
+          章节收在<span className="text-candle">「目录」</span>——md 标题或「第 X 章」会被自动拆开。
           <br />
           <span className="text-bronze-deep">
             单本建议 1 万字以内（上限 {HARD_MAX_CHARS} 字），太长会卡。
@@ -237,13 +271,13 @@ export function LibraryPage() {
         </p>
 
         {/* 标签栏：创建 / 删除 / 点击筛选（与灵感页一致） */}
-        {books.length > 0 && (
+        {visibleBooks.length > 0 && (
           <div className="mb-4">
             <CategoryChips which="book" selected={selectedTag} onSelect={setSelectedTag} />
           </div>
         )}
 
-        {books.length === 0 ? (
+        {visibleBooks.length === 0 ? (
           <EmptyState
             title="书架还空着"
             hint="导入一本 txt 或 md 文本，开始你的第一本书"
@@ -320,6 +354,25 @@ function BookCard({ book, onMenu }: { book: LibraryBook; onMenu: (book: LibraryB
             <span className="font-mono text-[10px] tracking-wider text-bronze-deep">
               {book.charCount} 字
             </span>
+            {/* 目录页入口的入口：卡片上先让用户看见「这本书有几章」 */}
+            {(book.chapters?.length ?? 0) > 1 && (
+              <span
+                className="font-mono text-[10px] tracking-wider text-bronze flex items-center gap-0.5"
+                title="章节数"
+              >
+                <ListTree size={10} strokeWidth={1.8} />
+                {book.chapters!.length}
+              </span>
+            )}
+            {book.agentBook && (
+              <span
+                className="font-mono text-[9px] tracking-wider px-1.5 py-px rounded-pill"
+                style={{ background: 'rgba(233,196,106,0.18)', color: 'var(--amber)' }}
+                title="Agent 专属书 · 不可删除"
+              >
+                AGENT
+              </span>
+            )}
             {book.marks.length > 0 && (
               <span className="font-mono text-[10px] tracking-wider text-amber">
                 标注 {book.marks.length}
