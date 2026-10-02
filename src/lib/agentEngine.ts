@@ -45,15 +45,21 @@ export const TOOL_CONTRACT = `【工具约定】你有一组可以直接操作�
 [[读:名称]]        读取内容。名称可以是资料库文档名、《书名》、文章标题（文章·标题）
                     或模块名（文章 / 动态 / 灵感 / 便签 / 日程 / 待办 / 收藏夹 / 相册 / 馆藏）
 [[搜:关键词]]      需要你自己不了解的外部信息时使用（天气、时事、某个概念等）。
-[[写:模块|内容]]   把内容写进用户的数据。模块只能是：灵感 / 待办 / 日程 / 动态 / 文章
+[[写:模块|内容]]   把内容写进用户的数据。模块只能是：灵感 / 待办 / 日程 / 动态 / 文章 / 书
                     例：[[写:待办|周五前把体检报告取回来]]
                     想同时指定分类或日期，用【】补充：[[写:日程【2026-10-08】|晚上八点看牙医]]
+                    模块写成「书」时，【】里填章节标题，正文会作为**一个新章节**写进
+                    书架上那本《Agent》书里（永远追加到书末，不会覆盖旧章节）：
+                    例：[[写:书【关于拖延的三个观察】|……正文……]]
+                    书里已有同名标题时会自动改成「标题 · 2」，不会覆盖你原来的内容。
 [[替:模块|原文→新文]]  在模块（文章/灵感/待办/日程/动态/馆藏）里查找替换。
                     替换需要用户确认后才会真正生效，所以你只要把替换意图说出来即可。
+                    注意：改书籍正文会重排分段，该书原有的划线会一并清空，确认卡片上会写明。
 
 判断原则：
 - 需要看细节才能回答 → 先 [[读:]]，拿到内容再回答，不要凭空猜测用户记录里有什么
 - 用户说"记一下""提醒我""加到待办" → 直接 [[写:]]，不要反问
+- 用户说"这段写得很好，存下来" → [[写:书【起个标题|…]]，章节标题你自己起，取这段内容的要点
 - 用户说"帮我把 X 改成 Y" → 用 [[替:]]；如果用户没说清范围，用 [[读:]] 先看看有哪些内容再问用户
 - 你自己不确定的外部事实 → [[搜:]]，不要编造
 
@@ -63,8 +69,9 @@ export const TOOL_CONTRACT = `【工具约定】你有一组可以直接操作�
 
 export const GREETING =
   '你好，我是 **VidaOS Agent**。\n\n我可以读取你的空间文章、动态、灵感、便签、馆藏与收藏夹，帮你归纳整理、生成文章，' +
-  '也能帮你把想到的东西直接写进灵感 / 待办 / 日程，或在已有内容里查找替换。' +
-  '像朋友一样聊生活、学习也可以 —— 你只要像平时说话那样讲，剩下的我自己判断该做什么，你不用记任何命令。' +
+  '也能帮你把想到的东西直接写进灵感 / 待办 / 日程，或在已有内容里查找替换。\n' +
+  '你在聊天里遇到喜欢的回答，说一声「把这段存进书里」，我会在书架上那本《Agent》里给你新起一个章节。\n' +
+  '像朋友一样聊生活、学习也可以 —— 你只要像平时说话那样讲，剩下的我自己判断该做什么，你不用记任何命令。\n' +
   '一切只保存在本机。';
 
 export interface AgentContext {
@@ -110,7 +117,17 @@ export function booksIndexText(books: LibraryBook[]): string {
   return books
     .map((b) => {
       const marks = b.marks?.length ? ` 划线/高亮 ${b.marks.length} 处` : '';
-      return `《${b.title}》 ${b.charCount} 字${marks}`;
+      const chs = b.chapters ?? [];
+      // 目录列出来，模型才知道「写进书里的某一章」到底指哪一章
+      const dir =
+        chs.length > 1
+          ? ` 目录：${chs
+              .slice(0, 12)
+              .map((c) => c.title)
+              .join(' / ')}${chs.length > 12 ? ` …共 ${chs.length} 章` : ''}`
+          : '';
+      const tag = b.agentBook ? '（Agent 专属书，可写入新章节）' : '';
+      return `《${b.title}》 ${b.charCount} 字${marks}${dir}${tag}`;
     })
     .join('\n');
 }
@@ -323,7 +340,13 @@ export function resolveDoc(name: string, ctx: AgentContext): { name: string; con
     books.find((b) => b.title === bare) ??
     books.find((b) => b.title.includes(bare)) ??
     books.find((b) => bare.includes(b.title));
-  if (book) return { name: `《${book.title}》`, content: book.content };
+  if (book) {
+    const chs = book.chapters ?? [];
+    const dir = chs.length
+      ? `目录（${chs.length} 章）：${chs.map((c) => c.title).join(' / ')}\n\n`
+      : '';
+    return { name: `《${book.title}》`, content: dir + book.content };
+  }
   // 「馆藏」是书架索引（不是某一本书）
   if (bare === '馆藏') {
     const text = booksIndexText(books);
@@ -425,18 +448,23 @@ export function scanTools(text: string): { display: string; tools: ParsedTool[] 
   });
 
   // [[写:模块|内容]] / [[写:模块【限定】|内容]]
-  display = display.replace(/\[\[写:([^\]|【】]+)(?:【([^】]*)】)?\|([\s\S]*?)\]\]/g, (_m, mod, extra, body) => {
-    tools.push({
-      kind: 'write',
-      arg: mod.trim(),
-      payload: body.trim(),
-      extra: extra?.trim(),
-    });
-    return '';
-  });
+  // 结束符同时接受 ]] 与全角 ］］：模型要写入的 md 正文里很容易出现 `](url)` 这种链接，
+  // 半角 ]] 会被当成标记结束、把内容拦腰截断。给全角留一条退路。
+  display = display.replace(
+    /\[\[写:([^\]|【】]+)(?:【([^】]*)】)?\|([\s\S]*?)(?:\]\]|］］)/g,
+    (_m, mod, extra, body) => {
+      tools.push({
+        kind: 'write',
+        arg: mod.trim(),
+        payload: body.trim(),
+        extra: extra?.trim(),
+      });
+      return '';
+    },
+  );
 
   // [[替:模块|原文→新文]]
-  display = display.replace(/\[\[替:([^\]|]+)\|([\s\S]*?)\]\]/g, (_m, mod, pair) => {
+  display = display.replace(/\[\[替:([^\]|]+)\|([\s\S]*?)(?:\]\]|］］)/g, (_m, mod, pair) => {
     const idx = pair.indexOf('→');
     if (idx < 0) return '';
     const from = pair.slice(0, idx).trim();
@@ -662,8 +690,13 @@ export function demoReply(userText: string): string {
   if (/整理|总结|归纳/.test(t)) {
     return '好，我来整理。\n\n我读得到你的空间文章、动态、灵感、便签、馆藏与收藏夹——可以按主题归纳主线、生成结构化文案，还能一键存成空间文章。\n\n（当前是演示模式，配置 API 后我就能真正读取你的数据了。）';
   }
+  if (/存进|存到|记下来|记下|收进|书里|存档|收藏这段/.test(t)) {
+    return '好，我把它写进书架上那本《Agent》里，作为一个新的章节。\n\n[[写:书【' +
+      trunc(t, 12) +
+      '|把你要存的内容写在这里]]\n\n（演示模式：配置 API 后我就会真的在书末新建这一章。）';
+  }
   if (/馆藏|书|阅读|划线/.test(t)) {
-    return '馆藏是我的重要输入。让我 `[[读:书名]]` 读取某本书的正文，可以按章节归纳、解释难句，也能把读书笔记整理成文章存进空间。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';
+    return '馆藏是我的重要输入。让我 `[[读:书名]]` 读取某本书的正文，可以按章节归纳、解释难句，也能把读书笔记整理成文章存进空间。\n\n书架上有一本《Agent》是专门留给我写的 —— 你遇到喜欢的回答，说一声「把这段存进书里」，我就在那里新起一章。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';
   }
   if (/文章|动态|灵感|便签|收藏夹|相册/.test(t)) {
     return '这些内容我都能读到。说一声 `[[读:文章]]`、`[[读:动态]]` 或 `[[读:灵感]]`，我就能按需查看并帮你梳理。\n\n（演示模式下我先不真正读取，配置 API 后即可生效。）';

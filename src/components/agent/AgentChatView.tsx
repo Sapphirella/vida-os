@@ -387,6 +387,16 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
                 </span>
                 ，共 {pendingReplace.count} 处。
               </p>
+              {pendingReplace.dropsMarks && (
+                <p
+                  className="font-sans text-[11px] leading-relaxed px-2.5 py-2 rounded-card"
+                  style={{ background: 'var(--agent-accent-soft)', color: 'var(--text-bronze)' }}
+                >
+                  <AlertTriangle size={11} strokeWidth={1.8} className="inline -mt-px mr-1" />
+                  这次改动会重排正文的分段，书里原有的划线会指错位置，所以会一并清空
+                  （书签面板里存的原文仍在，可以重新划）。
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => {

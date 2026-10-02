@@ -11,6 +11,7 @@
 //   3. 所有变更都会回一条 sys 消息，让用户看见 Agent 到底动了什么
 import { useAppStore } from '@/stores/useAppStore';
 import { errMsg } from '@/lib/utils';
+import { AGENT_BOOK_ID, bookCharCount } from '@/lib/library';
 
 /** 单条写入结果 */
 export interface ToolResult {
@@ -33,6 +34,12 @@ export interface PendingReplace {
   count: number;
   /** 改写后的完整正文（确认后直接写入） */
   next: string;
+  /**
+   * 这次替换会动正文，块索引整体位移 → 本书已有的划线锚点会指错段落。
+   * 确认卡片据此预告「标注会被清空」，不装作什么都没发生。
+   * （只有写书工具的「书末追加」不会触发它：已有块索引不变。）
+   */
+  dropsMarks?: boolean;
 }
 
 let pendingSeq = 0;
@@ -44,7 +51,47 @@ const pending = new Map<string, PendingReplace>();
  *  写入工具
  * ============================================================ */
 
-type WriteTarget = '灵感' | '待办' | '日程' | '动态' | '文章';
+type WriteTarget = '灵感' | '待办' | '日程' | '动态' | '文章' | '书';
+
+/**
+ * 章节标题去重
+ *
+ * 同名时**不覆盖、不报错**，自动加「 · 2」「 · 3」后缀再新建一条。
+ * 理由见 writeBookChapter 的注释：章节正文是就地拼接的，覆盖会抹掉旧内容，
+ * 而 Agent 没有删除能力 —— 宁可多一条目录，也不能让它静默弄丢用户已有的章节。
+ */
+function uniqueChapterTitle(taken: string[], wanted: string): string {
+  if (!taken.includes(wanted)) return wanted;
+  for (let n = 2; n < 200; n++) {
+    const t = `${wanted} · ${n}`;
+    if (!taken.includes(t)) return t;
+  }
+  return `${wanted} · ${Date.now()}`;
+}
+
+/**
+ * 往《Agent》专属书的**书末**追加一个新章节。
+ *
+ * ⚠️ 为什么坚持「追加到书末」而不是「插到指定章节中间」：
+ *    划线锚点是「块索引」（lib/library.ts），块索引由「正文的切块顺序」决定。
+ *    在文末追加不会改变任何已有块的索引，因此**书里已有的划线一条都不会错位**；
+ *    而就地插入 / 替换正文必然让后面的块整体位移，标注会悄悄指向错误的段落。
+ *    这个取舍是刻意的：保住用户的划线，比让章节插在中间更重要。
+ */
+function writeBookChapter(title: string, body: string): ToolResult {
+  const st = useAppStore.getState();
+  const book = st.books.find((b) => b.id === AGENT_BOOK_ID);
+  if (!book) {
+    return { ok: false, message: '写入失败：书架上找不到《Agent》这本书（它可能被重置过，刷新页面即可补回）' };
+  }
+  const finalTitle = uniqueChapterTitle((book.chapters ?? []).map((c) => c.title), title);
+  const chunk = `\n\n## ${finalTitle}\n\n${body}\n`;
+  st.setBookContent(book.id, book.content.replace(/\s+$/, '') + chunk);
+  return {
+    ok: true,
+    message: `已在《${book.title}》书末新建章节「${finalTitle}」（${bookCharCount(body)} 字），去书架打开就能读到`,
+  };
+}
 
 /** 写入一条内容到指定模块 */
 export function writeContent(target: WriteTarget, body: string, extra?: string): ToolResult {
@@ -53,6 +100,8 @@ export function writeContent(target: WriteTarget, body: string, extra?: string):
   const st = useAppStore.getState();
   try {
     switch (target) {
+      case '书':
+        return writeBookChapter(extra?.trim() || text.slice(0, 24), text);
       case '灵感':
         st.addInspiration(text, extra?.trim() || '随想');
         return { ok: true, message: `已写入灵感「${text.slice(0, 20)}${text.length > 20 ? '…' : ''}」` };
@@ -106,6 +155,8 @@ export function proposeReplace(
     list: { get: () => { id: string; title: string; content: string } }[],
     targetKind: PendingReplace['target'],
     field: string,
+    /** 命中后额外标记（如「这次会清空划线」） */
+    flag?: (v: { marks?: unknown[] }) => boolean,
   ) => {
     for (const item of list) {
       const v = item.get();
@@ -121,6 +172,7 @@ export function proposeReplace(
         to: t,
         count,
         next: v.content.split(f).join(t),
+        ...(flag?.(v as { marks?: unknown[] }) ? { dropsMarks: true } : {}),
       });
     }
   };
@@ -138,7 +190,13 @@ export function proposeReplace(
     } else if (target === '动态') {
       scan(st.moments.map((m) => ({ get: () => ({ ...m, title: '动态' }) })), 'moment', 'content');
     } else if (target === '馆藏') {
-      scan(st.books.map((b) => ({ get: () => b })), 'book', 'content');
+      scan(
+        st.books.map((b) => ({ get: () => b })),
+        'book',
+        'content',
+        // 书正文被改写会让块索引位移，划线锚点会指错段落 → 明确预告会清空标注
+        (v) => (v.marks?.length ?? 0) > 0,
+      );
     } else {
       return { result: { ok: false, message: `查找替换失败：不认识的模块「${target}」` } };
     }
@@ -170,6 +228,7 @@ export function applyReplace(id: string): ToolResult {
   pending.delete(id);
   const st = useAppStore.getState();
   try {
+    let clearedMarks = 0;
     switch (p.target) {
       case 'article':
         st.updateArticle(p.targetId, { content: p.next });
@@ -186,13 +245,27 @@ export function applyReplace(id: string): ToolResult {
       case 'moment':
         st.updateMoment(p.targetId, { content: p.next });
         break;
-      case 'book':
-        st.updateBook(p.targetId, { content: p.next });
+      case 'book': {
+        const book = st.books.find((b) => b.id === p.targetId);
+        clearedMarks = book?.marks.length ?? 0;
+        // 正文一变，块索引就整体位移，旧的划线锚点会指到别的段落上去。
+        // 与其留一批悄悄指错的标注，不如清掉并如实告诉用户 —— 书签里存的原文还在，
+        // 需要的话可以重新划。
+        if (clearedMarks > 0) st.updateBook(p.targetId, { marks: [] });
+        st.setBookContent(p.targetId, p.next);
         break;
+      }
       default:
         return { ok: false, message: '替换失败：不认识的条目类型' };
     }
-    return { ok: true, message: `已在「${p.targetTitle}」替换 ${p.count} 处` };
+    return {
+      ok: true,
+      message:
+        `已在「${p.targetTitle}」替换 ${p.count} 处` +
+        (clearedMarks > 0
+          ? `。正文改动会让原有 ${clearedMarks} 处划线错位，已一并清空（书签里存的原文还在，可以重新划）`
+          : ''),
+    };
   } catch (e) {
     return { ok: false, message: `替换失败：${errMsg(e)}` };
   }
