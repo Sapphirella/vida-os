@@ -87,7 +87,7 @@ export function CalendarCard() {
               className={clsx(
                 'aspect-square flex flex-col items-center justify-center relative rounded-full transition-all',
                 isSelected
-                  ? 'bg-wine/30 text-moon cal-selected'
+                  ? 'vd-selected'
                   : d.isToday
                     ? 'text-candle'
                     : 'text-paper hover:bg-bronze/10',

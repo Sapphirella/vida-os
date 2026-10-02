@@ -544,13 +544,23 @@ textarea, input, [contenteditable] {
   box-shadow: 0 0 0 1px rgba(4, 2, 6, 0.24), 0 14px 44px 0 rgba(10, 4, 12, 0.58), 0 0 30px 0 rgba(255, 170, 200, 0.12);
 }
 
-/* 触屏按压：水被按下的弹性形变（过渡柔和） */
+/* 触屏按压：**不做几何形变**（v4.7.2 按用户反馈改）
+   原来这里是 transform: scale(0.982)。问题有两层：
+     ① 它把整张卡（毛玻璃底、液态边缘环、里面的文字）一起缩放 ——
+        358px 宽的卡片会缩掉约 6.4px，手指一按一松就是一次明显的「抖」，
+        用户的原话是「点卡片时跳来跳去」；
+     ② 这条规则作用于**所有** .glass-card（包括不可点的日历卡、统计卡），
+        而且只在 (hover: none) 里生效 —— 所以「只有手机上、只有猩红主题」会这样。
+   现在改成只压一层边缘光：按压仍有反馈，但没有任何位移。 */
 @media (hover: none) {
   :root[data-theme='scarlet'] .glass-card {
-    transition: box-shadow 0.3s ease, transform 0.18s ease;
+    transition: box-shadow 0.3s ease;
   }
   :root[data-theme='scarlet'] .glass-card:active {
-    transform: scale(0.982);
+    box-shadow:
+      var(--liquid-shadow),
+      inset 0 0 0 1px var(--liquid-edge-mid),
+      inset 0 0 28px 0 var(--liquid-edge-dim);
   }
 }
 
@@ -709,10 +719,24 @@ textarea, input, [contenteditable] {
   box-shadow: 0 0 16px rgb(var(--wine-deep-rgb) / 0.35) !important;
 }
 
-/* 日间：日历选中日实色深橄榄底 + 米色字（原 bg-wine/30 太淡，选中不可辨） */
-:root[data-theme='day'] .cal-selected {
-  background: var(--ink) !important;  /* #575527 更深，米字对比 ≥4.5 */
-  color: var(--moon) !important;
+/* ============================================================
+   「选中」态：日历选中日 / 年月・时间选择器里选中的格子，统一挂 .vd-selected
+   深色主题：半透明酒红底 + 亮字就够；
+   日间主题：浅玫瑰 30% 透明底 + 米色字在浅底上对比度不足（实测数字几乎不可辨），
+   必须换实色深橄榄底。这套差异只由下面两个变量承担，用的人只挂一个类，
+   不需要（也不应该）在各自的 JSX 里写 bg-wine/30 之类的主题特判。
+   ============================================================ */
+:root {
+  --sel-bg: rgb(var(--wine-rgb) / 0.3);
+  --sel-fg: var(--moon);
+}
+:root[data-theme='day'] {
+  --sel-bg: var(--ink);   /* #575527 深橄榄 */
+  --sel-fg: var(--moon);  /* #DDD3C9 米色（对比度实测 5.2:1） */
+}
+.vd-selected {
+  background: var(--sel-bg);
+  color: var(--sel-fg);
 }
 
 /* 文字按钮 */

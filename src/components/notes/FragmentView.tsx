@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Check, X, Pencil, Trash2, Clock } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { CalendarNav } from '@/components/common/CalendarNav';
+import { TimePicker } from '@/components/common/TimePicker';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -26,6 +27,7 @@ export function FragmentView() {
   const updateFragment = useAppStore((s) => s.updateFragment);
   const deleteFragment = useAppStore((s) => s.deleteFragment);
   const showToast = useUIStore((s) => s.showToast);
+  const showModal = useUIStore((s) => s.showModal);
   /**
    * 选中日期与主页日历、当日产出卡共用同一个（useUIStore.selectedDate）——
    * 「今天看哪天」在整个应用里只有一个真相，碎片里跳了日期，回主页也是那天。
@@ -98,6 +100,17 @@ export function FragmentView() {
     setSelected(today);
   };
 
+  /** 打开时间选择弹窗：点选只改 draft，Modal 的「确认」才写回输入区 */
+  const openTimePicker = () => {
+    if (!composing) return;
+    let draft = composing.at;
+    showModal({
+      title: '选择时间',
+      content: <TimePicker value={composing.at} onChange={(v) => { draft = v; }} />,
+      onConfirm: () => setComposing((c) => (c ? { ...c, at: draft, touched: true } : c)),
+    });
+  };
+
   /** "HH:MM" + 日期 → 时间戳（本地时区） */
   const stampOf = (date: string, hhmm: string): number | undefined => {
     const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
@@ -157,12 +170,11 @@ export function FragmentView() {
                 aria-label={`跳到 ${d.date}`}
                 className={clsx(
                   'h-9 flex flex-col items-center justify-center relative rounded-card transition-colors',
-                  // ⚠️ 选中日必须带 cal-selected：日间主题下 bg-wine/30 + text-moon
-                  // 是「浅玫瑰底 + 米色字」，数字几乎看不见；globals.css 里
-                  // :root[data-theme='day'] .cal-selected 把它换成实色深橄榄底 + 米色字。
-                  // 主页日历一直带这个类，碎片日历漏了 —— 所以只有它糊成灰的（v4.7.1 修）。
+                  // 选中日挂 .vd-selected：主题差异（深色=半透明酒红底 / 日间=实色深橄榄底）
+                  // 由 globals.css 的两个变量承担。别再在这里写 bg-wine/30 —— 那正是
+                  // v4.7.1「日间主题下选中日糊成灰」的成因（教训 30）。
                   on
-                    ? 'bg-wine/30 text-moon cal-selected'
+                    ? 'vd-selected'
                     : d.isToday
                       ? 'text-candle'
                       : 'text-paper hover:bg-bronze/10',
@@ -199,7 +211,14 @@ export function FragmentView() {
         </div>
       </Card>
 
-      {/* ── 输入区：点加号展开 ── */}
+      {/* ── 输入区：点加号展开 ──
+           布局按「手机上先把按钮放稳」来排（v4.7.2 重做）：
+             row1 正文输入
+             row2 标签 + 时间（两个入口，点时间开应用内弹窗）
+             row3 提示「记到此刻 / 补记到 X 月 X 日」
+             row4 取消 / 记下 —— 等宽平分整行，永远不会被前面的字段顶出屏幕
+           v4.7.1 的写法是「标签+时间+提示+取消+记下」全挤在一行，
+           390px 上确认键直接被顶到卡片外面（用户反馈）。 */}
       {composing && (
         <Card className="p-4 mb-4 animate-slide-up">
           <textarea
@@ -220,40 +239,60 @@ export function FragmentView() {
             className="w-full bg-transparent resize-none font-serif text-reading text-paper placeholder:text-bronze-deep outline-none"
             style={{ lineHeight: 1.95 }}
           />
+
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-bronze/10">
-            <input
-              value={composing.tag}
-              onChange={(e) => setComposing({ ...composing, tag: e.target.value })}
-              placeholder="标签"
-              aria-label="标签（可选）"
-              className="px-2 py-0.5 text-xs bg-bronze/10 rounded-pill text-paper outline-none w-20"
-            />
-            {/* 具体时刻：补记历史日期时可以不改（默认给你当下的钟点），也可以改成当时那一刻 */}
-            <input
-              type="time"
-              value={composing.at}
-              onChange={(e) => setComposing({ ...composing, at: e.target.value, touched: true })}
-              aria-label="这条碎片的时间"
-              title="这条碎片的时间"
-              className="px-2 py-1 text-xs bg-bronze/10 rounded-card text-paper outline-none font-mono tabular-nums"
-            />
-            <span className="flex items-center gap-1 font-mono text-[10px] tracking-wider text-bronze-deep">
-              <Clock size={10} strokeWidth={1.8} />
-              {isToday
-                ? composing.touched
-                  ? `记到今天 ${composing.at}`
-                  : '记到此刻'
-                : `补记到 ${formatDate(new Date(selected), 'M')} 月 ${formatDate(new Date(selected), 'D')} 日`}
-            </span>
-            <span className="flex-1" />
-            <button onClick={() => setComposing(null)} className="btn-ghost" style={{ padding: '6px 12px' }}>
+            <label className="flex-1 min-w-0 flex items-center gap-1.5">
+              <span className="font-mono text-[10px] tracking-wider text-bronze-deep uppercase flex-none">
+                标签
+              </span>
+              <input
+                value={composing.tag}
+                onChange={(e) => setComposing({ ...composing, tag: e.target.value })}
+                placeholder="可选"
+                aria-label="标签（可选）"
+                className="flex-1 min-w-0 px-2 py-1 text-xs bg-bronze/10 rounded-pill text-paper placeholder:text-bronze-deep outline-none"
+              />
+            </label>
+            {/* 时间：点开应用内的时间选择弹窗（原生 type=time 的系统弹窗样式不可控） */}
+            <button
+              onClick={openTimePicker}
+              className="flex-none flex items-center gap-1.5 px-2.5 py-1 rounded-pill bg-bronze/10 hover:bg-bronze/20 transition-colors"
+              aria-label="选择这条碎片的时间"
+              title="选择时间"
+            >
+              <Clock size={11} strokeWidth={1.8} className="text-bronze-deep" />
+              <span className="font-mono text-xs text-paper tabular-nums">{composing.at}</span>
+            </button>
+          </div>
+
+          <p className="mt-2 font-mono text-[10px] tracking-wider text-bronze-deep">
+            {isToday
+              ? composing.touched
+                ? `记到今天 ${composing.at}`
+                : '记到此刻（不动时间就是现在）'
+              : `补记到 ${formatDate(new Date(selected), 'M')} 月 ${formatDate(new Date(selected), 'D')} 日`}
+          </p>
+
+          <div className="flex gap-2 mt-3">
+            {/* 两个按钮要「等宽平分整行」，光有 flex-1 不够，得同时满足两件事：
+                 ① min-w-0 —— flex item 默认 min-width:auto 会被内容撑开；
+                 ② 两边 padding 一致 —— flex-basis:0% 下 Chrome 把剩余空间分给
+                    **内容盒**，padding 会额外叠上去，所以 .btn-ghost(14px) 与
+                    .btn-primary(18px) 就这么差出了 8px（实测 154 vs 162）。
+                    自定义类的 padding 定义在 @tailwind utilities 之后，utility 压不住它，
+                    所以这里用内联 style 统一。 */}
+            <button
+              onClick={() => setComposing(null)}
+              style={{ padding: '9px 16px' }}
+              className="btn-ghost flex-1 min-w-0 justify-center whitespace-nowrap"
+            >
               <X size={13} strokeWidth={1.8} /> 取消
             </button>
             <button
               onClick={() => submitCompose(composing)}
               disabled={!composing.content.trim()}
-              className="btn-primary disabled:opacity-40"
-              style={{ padding: '6px 14px' }}
+              style={{ padding: '9px 16px' }}
+              className="btn-primary flex-1 min-w-0 justify-center whitespace-nowrap disabled:opacity-40"
             >
               <Check size={13} strokeWidth={2} /> 记下
             </button>
