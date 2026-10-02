@@ -9,15 +9,27 @@ import {
   ListMusic,
   Trash2,
   Music,
+  ArrowRightLeft,
+  Shuffle,
+  Repeat,
+  Repeat1,
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
-import { useMusicStore } from '@/stores/useMusicStore';
+import { useMusicStore, PLAY_MODES, type PlayMode } from '@/stores/useMusicStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile, deleteFile, getFile } from '@/lib/db';
 import { uid, humanSize } from '@/lib/utils';
 import { revokeFileURL } from '@/lib/fileUrl';
 import type { Track } from '@/types';
+
+/** 每种模式一个图标；「顺序播放」用双向箭头，和随机/循环一眼分得开 */
+const MODE_ICON: Record<PlayMode, typeof Shuffle> = {
+  sequence: ArrowRightLeft,
+  shuffle: Shuffle,
+  'repeat-one': Repeat1,
+  'stop-after': Repeat,
+};
 
 export function MusicPlayerCard() {
   const tracks = useAppStore((s) => s.tracks);
@@ -29,6 +41,8 @@ export function MusicPlayerCard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentTrack = tracks.find((t) => t.id === music.currentTrackId) || tracks[0];
+  const modeMeta = PLAY_MODES.find((m) => m.key === music.playMode) ?? PLAY_MODES[0];
+  const ModeIcon = MODE_ICON[modeMeta.key];
 
   const handlePlay = () => {
     if (!currentTrack) return;
@@ -98,13 +112,27 @@ export function MusicPlayerCard() {
           </p>
           <h3 className="font-serif text-headline text-lg mt-0.5">音乐</h3>
         </div>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle rounded-full"
-          aria-label="导入音乐"
-        >
-          <Plus size={16} strokeWidth={1.5} />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* 播放模式：一键在四种之间循环。文字直给，不靠 tooltip ——
+              四个字比一个图标更容易一眼读懂当前是什么模式。 */}
+          <button
+            onClick={music.cyclePlayMode}
+            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-bronze hover:text-candle transition-colors"
+            style={{ border: '1px solid rgb(var(--bronze-rgb) / 0.25)' }}
+            aria-label={`播放模式：${modeMeta.label}，点击切换`}
+            title={modeMeta.hint}
+          >
+            <ModeIcon size={13} strokeWidth={1.5} />
+            <span className="font-mono text-[10px] tracking-wider">{modeMeta.label}</span>
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-7 h-7 flex items-center justify-center text-bronze hover:text-candle rounded-full"
+            aria-label="导入音乐"
+          >
+            <Plus size={16} strokeWidth={1.5} />
+          </button>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
