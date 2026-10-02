@@ -85,7 +85,7 @@ export function SettingsPage() {
     showToast(next ? '已开启 Agent' : '已关闭 Agent · 底栏入口已隐藏', 'success');
   };
 
-  // ── 关于 · 使用说明（初稿，后续会大改） ──
+  // ── 关于 · 使用说明 ──
   const openGuide = () => {
     showModal({
       title: '使用说明',
@@ -107,12 +107,13 @@ export function SettingsPage() {
             </p>
             <p className="text-paper mt-1">
               日程 / 待办：按天安排日程、管理未完成待办，勾选即完成。
-            </p>
-            <p className="text-paper mt-1">
               视图：统计你的文章、动态、灵感与书的字数与条数。
             </p>
             <p className="text-paper mt-1">
-              soundscape：本地音乐播放（上一首 / 暂停 / 下一首，音量在左侧）。
+              音乐：把本地音频文件拖进来就能听。播放器右上角的
+              <span className="text-candle"> 顺序 / 随机 / 单曲 / 播完暂停 </span>
+              按钮点一下循环切换四种模式——它只决定「一首自然放完之后怎么办」，
+              上一首 / 下一首永远按你导入的列表顺序走。音量在左侧。
             </p>
           </section>
 
@@ -155,20 +156,41 @@ export function SettingsPage() {
           </section>
 
           <section>
-            <h4 className="font-serif text-candle font-semibold mb-1">馆藏</h4>
+            <h4 className="font-serif text-candle font-semibold mb-1">馆藏 · 书架</h4>
             <p className="text-paper">
-              书架：导入本地 txt / md 文本当书读——选中一段可划线、高亮，都收在书里
-              右上角的「书签」，点书签会精确跳到标注所在的那一行。书架按最近阅读
-              排序，可置顶多本，进度条按真实阅读进度走；支持给书打标签，
-              点标签筛选（双击重命名、悬停 × 删除）。
+              导入本地 txt / md 文本当书读。书架按最近阅读排序，可置顶多本，
+              支持给书打标签（点标签筛选，双击重命名、悬停 × 删除），进度条按真实阅读位置走。
             </p>
             <p className="text-paper mt-1">
-              相册：收藏照片的地方。先建一个图集，可一次性上传一组最多 30 张照片、
+              <span className="text-candle">目录</span>：导入时会自动拆章节 —— md 取
+              1~3 级标题，txt 认「第 X 章 / 回 / 节」「Chapter N」这类标题行，
+              也认独占一行的短段。识别不准时，在书的右上角「目录」里可以重命名、
+              移除，或在当前阅读位置手动新建一章；书架的书籍菜单里也有「重建目录」。
+            </p>
+            <p className="text-paper mt-1">
+              <span className="text-candle">书签</span>：正文里长按选中一段即可划线 / 高亮 / 复制，
+              都收进右上角「书签」，点书签会精确跳到标注所在的那一行。
+            </p>
+            <p className="text-paper mt-1">
+              单本建议 1 万字以内（上限 20 万字），太长会卡。
+            </p>
+            <p className="text-paper mt-1">
+              书架上固定有一本<span className="text-candle">《Agent》</span>——
+              这是专门留给 Agent 写的书，你在聊天里遇到喜欢的回答，让它存进去就会
+              在书末新起一个章节。它不默认置顶、<span className="text-candle">不可删除</span>，
+              在设置里关掉 Agent 开关时也会跟着从书架隐藏（内容一个字都不会少）。
+            </p>
+          </section>
+
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">馆藏 · 相册</h4>
+            <p className="text-paper">
+              收藏照片的地方。先建一个图集，可一次性上传一组最多 30 张照片、
               写一段文案后发布（也可以不选图、只发文字）；编辑一组时照片可长按拖动排序。
               图集按最近阅读排序，组内照片按发布时间排序。
             </p>
             <p className="text-paper mt-1">
-              星标集：置顶在最前面的图集。文章、动态、灵感里的图片点开大图后都可以存入星标集，
+              星标集：置顶在最前面的图集，不可改名或删除。文章、动态、灵感里的图片点开大图后都可以存入星标集，
               相册里的照片也能单独星标；星标集按「文章 / 动态 / 灵感 / 相册」四个标签分类，
               图片带双链，可跳回对应的原文。
             </p>
@@ -177,22 +199,27 @@ export function SettingsPage() {
           <section>
             <h4 className="font-serif text-candle font-semibold mb-1">Agent</h4>
             <p className="text-paper">
-              多会话聊天助手：可以帮你整理文章、聊生活与学习。会话列表点进某个会话
-              再对话，随时新建会话。
+              多会话聊天助手。底栏是入口，进去可以新建 / 切换会话；
+              人设、模型配置在配置页里填（Base URL + API Key + 模型名，模型名可以用「拉取」直接选）。
             </p>
             <p className="text-paper mt-1">
-              Agent 能读取你的空间文章、动态、灵感、便签、馆藏与收藏夹。需要它看哪块内容
-              就说 <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:文章]]</code>、
-              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:动态]]</code>、
-              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:灵感]]</code>、
-              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:便签]]</code>、
-              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:收藏夹]]</code>、
-              <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:相册]]</code>，
-              读某篇正文用 <code className="font-mono text-xs px-1 rounded bg-bronze/10">[[读:文章·标题]]</code>，
-              也可以直接让它归纳整理。
+              它能读你的空间文章、动态、灵感、便签、馆藏与收藏夹，也能
+              <span className="text-candle">直接写</span>：你说「记一下」「加到待办」它就写，
+              说「把 X 改成 Y」它会先给一张改动清单、你点了确认才真的改。
+              <span className="text-candle">它没有删除能力</span>——要删什么只能你自己动手，
+              它最多告诉你东西在哪儿。
+            </p>
+            <p className="text-paper mt-1">
+              遇到写得好的回答，一句「把这段存进书里」就够了，它会在书架那本
+              《Agent》里新起一章。已有内容想改，走上面说的查找替换。
             </p>
             <p className="text-paper mt-1">
               输入框左侧有图片按钮，可以附带图片一起发送；不支持图片识别的模型会自动略过图片。
+              手机上键盘弹起时底栏会自动收起，不挡输入框。
+            </p>
+            <p className="text-paper mt-1">
+              这里的开关只控制入口可见性：关掉之后底栏从五格变四格，《Agent》书从书架隐藏，
+              但已有的会话、记忆、书里的内容全部保留，随时可以重新打开。
             </p>
           </section>
 
@@ -202,9 +229,9 @@ export function SettingsPage() {
               数据页：JSON 导出 / 导入（导出范围可选文章、动态、便签、收藏夹、个人资料、
               馆藏·书架、馆藏·相册、Agent 全数据，支持多选）、WebDAV 云备份、本地文件夹
               备份、重置。WebDAV 云端保存明文 JSON，每次同步全量覆盖——删除的内容也会同步消失。
-              设置页可换主题（跟随系统 / 白昼 / 暗夜 / 猩红书房）。
             </p>
             <p className="text-paper mt-1">
+              外观：可切换主题（跟随系统 / 白昼 / 暗夜 / 猩红书房）。
               顶栏搜索按钮或 ⌘K 打开全局查找替换；页面右上角另有页内查找替换。
               这是 PWA，可「添加到主屏幕」当 App 用。
             </p>
@@ -401,8 +428,8 @@ export function SettingsPage() {
               <h3 className="font-serif text-headline text-lg leading-tight">Agent</h3>
               <p className="font-sans text-bronze text-xs leading-relaxed mt-1.5">
                 {agentEnabled
-                  ? '已开启。底栏保留 Agent 入口，会话、人设、资料库与记忆馆都可用。'
-                  : '已关闭。底栏的 Agent 入口会隐藏，底栏自动重排为四个图标。已有的会话与记忆不会被删除，随时可以重新打开。'}
+                  ? '已开启。底栏保留 Agent 入口，会话、人设、资料库与记忆馆都可用；书架上那本《Agent》也会正常显示。'
+                  : '已关闭。底栏的 Agent 入口会隐藏、书架上的《Agent》也会一起隐藏，底栏自动重排为四个图标。已有的会话、记忆与书里的内容都不会被删除，随时可以重新打开。'}
               </p>
             </div>
             <Switch
