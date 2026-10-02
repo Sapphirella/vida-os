@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, StickyNote, Bot, Database, Settings as SettingsIcon } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAppStore } from '@/stores/useAppStore';
+import { useKeyboardOpen } from '@/lib/keyboard';
 import { clsx } from '@/lib/utils';
 import type { TabKey } from '@/types';
 
@@ -25,6 +26,11 @@ export function BottomTabBar() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // 软键盘可见时收起底栏（打字时它既挡视线又抢走输入区的空间）。
+  // 键盘信号同时写到 <html data-kbd>，App 内容区那份为底栏预留的 80px
+  // 由 globals.css 收回 —— 这两件事必须成对，否则输入框会离键盘 80px。
+  const keyboardOpen = useKeyboardOpen();
+
   const visibleTabs = agentEnabled ? TABS : TABS.filter((t) => t.key !== 'agent');
 
   // 兜底：开关关掉的瞬间如果正停在 Agent 页，把用户送回主页
@@ -35,9 +41,9 @@ export function BottomTabBar() {
 
   return (
     <nav
-      aria-hidden={commentInputFocused}
-      className={`fixed bottom-0 left-0 right-0 z-40 safe-bottom transition-transform duration-300 ease-out ${
-        commentInputFocused ? 'translate-y-full' : 'translate-y-0'
+      aria-hidden={commentInputFocused || keyboardOpen}
+      className={`vd-tabbar fixed bottom-0 left-0 right-0 z-40 safe-bottom transition-transform duration-300 ease-out ${
+        commentInputFocused || keyboardOpen ? 'translate-y-full' : 'translate-y-0'
       }`}
       style={{
         backdropFilter: 'blur(20px) saturate(140%)',

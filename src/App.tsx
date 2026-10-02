@@ -94,8 +94,10 @@ function App() {
             2) 滚动与「避让底栏」的 padding 都放在这一层：内容页是长内容，若把滚动交给
                main，子元素高度确定时 main 的 padding-bottom 不会被计入滚动范围
                （1863 变 1783，正好少 80px），滚到底时最后一个元素会压在固定定位的
-               BottomTabBar 下面 —— 实测「清空所有数据」按钮被遮 12px。 */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-[calc(80px+env(safe-area-inset-bottom))]">
+               BottomTabBar 下面 —— 实测「清空所有数据」按钮被遮 12px。
+               底上那个 vd-content-pad：软键盘弹出时由 CSS 收回这 80px，
+               否则输入框会离键盘 80px（见 globals.css 软键盘适配段）。 */}
+        <div className="vd-content-pad flex-1 min-h-0 flex flex-col overflow-y-auto pb-[calc(80px+env(safe-area-inset-bottom))]">
           <ErrorBoundary variant="inline" resetKey={location.pathname}>
             <Routes>
             <Route path="/" element={<DeskPage />} />

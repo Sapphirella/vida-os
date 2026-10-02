@@ -5,6 +5,7 @@
 //   <ErrorBoundary variant="inline" resetKey={pathname}>…页面…</ErrorBoundary>
 // resetKey 变化（例如切换路由）时会自动清除错误状态，避免一直卡在错误页。
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { copyText } from '@/lib/clipboard';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -76,12 +77,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   private handleCopy = async () => {
     const text = this.buildReport();
-    try {
-      await navigator.clipboard.writeText(text);
+    // 走 copyText 而不是直接 navigator.clipboard：明文 http（局域网 IP 访问）
+    // 下 navigator.clipboard 是 undefined，直调会抛。见 lib/clipboard.ts
+    if (await copyText(text)) {
       this.setState({ copied: true, copyFailed: false });
       setTimeout(() => this.setState({ copied: false }), 2000);
-    } catch {
-      // 剪贴板不可用（如非 HTTPS 或未授权）时退化为控制台输出，信息不至于丢失
+    } else {
+      // 剪贴板彻底不可用时退化为控制台输出，信息不至于丢失
       console.error(text);
       this.setState({ copyFailed: true });
       setTimeout(() => this.setState({ copyFailed: false }), 2500);

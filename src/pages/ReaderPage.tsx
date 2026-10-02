@@ -26,6 +26,7 @@ import {
   sortMarks,
 } from '@/lib/library';
 import { clsx } from '@/lib/utils';
+import { copyText } from '@/lib/clipboard';
 import type { BookMark } from '@/types';
 
 export function ReaderPage() {
@@ -227,12 +228,8 @@ export function ReaderPage() {
 
   const copySelection = async () => {
     if (!toolbar) return;
-    try {
-      await navigator.clipboard.writeText(toolbar.anchors.map((a) => a.text).join('\n'));
-      showToast('已复制', 'success');
-    } catch {
-      showToast('复制失败', 'error');
-    }
+    const ok = await copyText(toolbar.anchors.map((a) => a.text).join('\n'));
+    showToast(ok ? '已复制' : '复制失败', ok ? 'success' : 'error');
   };
 
   /** 从书签跳到正文对应位置：优先定位到标注本身（同一段内多条标注也能精确分开），兜底段落 */

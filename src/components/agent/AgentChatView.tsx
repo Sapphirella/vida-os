@@ -20,12 +20,30 @@ import { applyReplace, cancelReplace, type PendingReplace } from '@/lib/agentToo
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { MediaImage } from '@/components/common/MediaImage';
 import { saveText, formatDate, clsx, compressImage, uid } from '@/lib/utils';
+import { copyText } from '@/lib/clipboard';
 import { putFile, deleteFile } from '@/lib/db';
 // 逐轮回复的实现已抽到 lib/agentTurn.ts（与馆藏「共读」抽屉共用），
 // 这里只留这个组件自己还要用的几个（导出 / 人设默认值）
 import { hasApiConfig, sessionToTxt } from '@/lib/agentEngine';
 import { runAgentTurn } from '@/lib/agentTurn';
 import type { AgentMessage } from '@/types';
+
+/**
+ * 是否窄屏（< 640px）。只用来切换输入框提示语的长度。
+ * 用 matchMedia 而不是读一次 window.innerWidth：旋转屏幕 / 分屏时
+ * 宽度会变，只在挂载时读一次会拿到过期的值。
+ */
+function useNarrowScreen(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return narrow;
+}
 
 export function AgentChatView({ sessionId }: { sessionId: string }) {
   const session = useAppStore((s) => s.agentSessions.find((x) => x.id === sessionId));
@@ -47,6 +65,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const [imgBusy, setImgBusy] = useState(false);
   /** 已选待发图片（压缩入库，等文字输入后随消息一并发送） */
   const [picked, setPicked] = useState<{ id: string; url: string | null }[]>([]);
+  /** 窄屏：输入框提示语要缩短，见下面 placeholder 处的注释 */
+  const narrow = useNarrowScreen();
 
   const messages = session?.messages ?? [];
   const isStreamingThis = (m: AgentMessage) => m.id === streamMsgId && streaming;
@@ -171,12 +191,10 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   };
 
   const copyMsg = async (m: AgentMessage) => {
-    try {
-      await navigator.clipboard.writeText(m.content);
-      showToast('已复制', 'success');
-    } catch {
-      showToast('复制失败', 'error');
-    }
+    // 必须走 copyText：直接调 navigator.clipboard 在明文 http（局域网 IP
+    // 访问）下是 undefined，会一律提示「复制失败」。见 lib/clipboard.ts
+    const ok = await copyText(m.content);
+    showToast(ok ? '已复制' : '复制失败', ok ? 'success' : 'error');
   };
 
   const delMsg = async (m: AgentMessage) => {
@@ -403,8 +421,11 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
           底部间距交给 main 的 pb-[calc(80px+env(safe-area-inset-bottom))] 让位底栏。 */}
       <div className="flex-none z-30 px-3 sm:px-6 pb-2 safe-left safe-right">
         <div
-          className="mx-auto max-w-2xl rounded-card border border-bronze/15 px-3 py-2.5 shadow-card-elevated"
-          style={{ background: 'var(--editor-bar-bg)', backdropFilter: 'blur(20px) saturate(140%)' }}
+          className="vd-composer mx-auto max-w-2xl rounded-card px-3 py-2.5"
+          style={{
+            background: 'var(--agent-panel-bg)',
+            border: '1px solid var(--agent-panel-border)',
+          }}
         >
           {/* 待发图片条：选图后先停在这里，等文字输完一起发送 */}
           {picked.length > 0 && (
@@ -481,29 +502,34 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
                   send();
                 }
               }}
-              placeholder={streaming ? 'Agent 正在回复…' : '和 Agent 说点什么…（Enter 发送 / Shift+Enter 换行）'}
+              /* 窄屏放不下「（Enter 发送 / Shift+Enter 换行）」，整句折成两行
+                 撑高输入框、盖住发送键（用户实拍）。窄屏只留前半句，
+                 回车即发送是手机上唯一可能的操作，不需要提示。 */
+              placeholder={
+                streaming ? 'Agent 正在回复…' : narrow ? '和 Agent 说点什么…' : '和 Agent 说点什么…（Enter 发送 / Shift+Enter 换行）'
+              }
               disabled={streaming}
-              className="flex-1 min-w-0 bg-transparent resize-none font-serif text-reading text-paper placeholder:text-bronze-deep outline-none py-1.5"
-              style={{ lineHeight: 1.6, maxHeight: 140 }}
+              className="vd-composer-input flex-1 min-w-0 resize-none font-serif text-reading outline-none py-1"
+              style={{ lineHeight: 1.6, maxHeight: 140, color: 'var(--text-paper)', caretColor: 'var(--caret)' }}
             />
             {streaming ? (
               <button
                 onClick={stop}
                 className="w-9 h-9 flex-none flex items-center justify-center rounded-full transition-all"
-                style={{ background: 'var(--wine)' }}
+                style={{ background: 'var(--agent-send-bg)' }}
                 aria-label="停止生成"
               >
-                <Square size={13} strokeWidth={2} className="text-moon" />
+                <Square size={13} strokeWidth={2} style={{ color: 'var(--agent-send-fg)' }} />
               </button>
             ) : (
               <button
                 onClick={send}
                 disabled={!input.trim() && picked.length === 0}
                 className="w-9 h-9 flex-none flex items-center justify-center rounded-full transition-all disabled:opacity-30"
-                style={{ background: 'var(--wine)' }}
+                style={{ background: 'var(--agent-send-bg)' }}
                 aria-label="发送"
               >
-                <Send size={15} strokeWidth={1.6} className="text-moon" />
+                <Send size={15} strokeWidth={1.6} style={{ color: 'var(--agent-send-fg)' }} />
               </button>
             )}
           </div>
@@ -589,9 +615,12 @@ function MsgActions({
       <span className="font-mono text-[10px] tracking-wider" style={{ color: timeColor }}>
         {time}
       </span>
+      {/* 操作按钮：p-2.5 撑出 32×32 的命中区，-m-2.5 把外边距原样还回去 ——
+          命中区从 12×12 变成 32×32（手机可点区域下限是 44，这里受限于
+          三个按钮并排的密集排布取折中），而占位与视觉完全不变。 */}
       <button
         onClick={onCopy}
-        className="transition-colors"
+        className="-m-2.5 p-2.5 transition-colors"
         style={{ color: hover ? 'var(--candle)' : 'var(--text-bronze)' }}
         aria-label="复制"
         title="复制"
@@ -601,7 +630,7 @@ function MsgActions({
       {onRegen && (
         <button
           onClick={onRegen}
-          className="transition-colors"
+          className="-m-2.5 p-2.5 transition-colors"
           style={{ color: hover ? 'var(--candle)' : 'var(--text-bronze)' }}
           aria-label="重新生成"
           title="重新生成"
@@ -611,7 +640,7 @@ function MsgActions({
       )}
       <button
         onClick={onDelete}
-        className="transition-colors"
+        className="-m-2.5 p-2.5 transition-colors"
         style={{ color: hover ? 'var(--wine-bright)' : 'var(--text-bronze)' }}
         aria-label="删除"
         title="删除"

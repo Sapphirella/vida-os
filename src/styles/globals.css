@@ -141,6 +141,9 @@
   --agent-head-fg: var(--headline);
   --agent-head-dim: var(--text-bronze);
   --agent-head-chip-bg: rgb(var(--agent-accent-rgb) / 0.18);
+  /* 发送键：夜间保持深酒红底（图标 #BAA6AD 对比度 3.2:1） */
+  --agent-send-bg: var(--wine);
+  --agent-send-fg: var(--moon);
   --agent-panel-border: rgba(125, 72, 76, 0.4);
   --agent-accent-soft: rgb(var(--agent-accent-rgb) / 0.18);
   --agent-accent-line: rgb(var(--agent-accent-rgb) / 0.42);
@@ -281,6 +284,12 @@
   --agent-head-chip-bg: rgb(255 248 234 / 0.22);
   /* 描边：跟着卡头转深，日间的 --card-border 是玫瑰粉不能用 */
   --agent-panel-border: rgba(87, 85, 39, 0.38);
+  /* 发送键底色：日间跟着模块走橄榄（早前是全局 --wine 的玫瑰粉，
+     在一片绿的输入区里是个突兀的粉点）。夜间沿用 --wine 不动 —— 深酒红底
+     上 #BAA6AD 图标的对比度是 3.2:1，换成 --agent-accent 的 #A8767D
+     会掉到 1.65:1，图标糊掉。 */
+  --agent-send-bg: #575527;
+  --agent-send-fg: #ddd3c9;
   /* 弱化文字：全局 --text-ash 是暗砖红 #8F5B57，压在米白卡面上仍读得出粉。
      Agent 页换成中性橄榄（#FAF7EE 上约 4.9:1）。 */
   --agent-muted: #6F6A3C;
@@ -1288,4 +1297,51 @@ input, textarea, [contenteditable] {
   .vd-star-big {
     opacity: 0.62;
   }
+}
+/* ============================================================
+ *  软键盘适配（v4.5.6）
+ *  现象：手机上在 Agent 输入框打字，底栏被一起顶到键盘上方，
+ *        聊天输入区与键盘之间还留着 80px 死白。
+ *  处理：键盘可见时底栏 translateY(100%) 滑出，内容区把为底栏预留的
+ *        80px 还回去。信号由 src/lib/keyboard.ts 写到 <html data-kbd>。
+ * ============================================================ */
+
+/* 底栏：滑出而不是 display:none —— 和评论区已有的 commentInputFocused
+   隐藏走同一套 transform 过渡，滑出/滑入手感一致，不会突然消失。 */
+html[data-kbd='open'] .vd-tabbar {
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+/* 内容区：为底栏预留的 80px 在键盘弹出时没有意义，直接还回给内容。
+   选择器特异性 (0,2,1) 高于 Tailwind 的 pb-[calc(...)] (0,1,0)，不必 !important。 */
+html[data-kbd='open'] .vd-content-pad {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ============================================================
+ *  Agent 聊天页输入区
+ * ============================================================ */
+
+/* 显式抹掉内核可能画在 textarea 上的描边 / 聚焦框。
+   部分移动内核（厂商 WebView、夸克等）会给聚焦的 textarea 补一圈默认边框，
+   叠在本来无边框的输入区里就像多画了一个框（用户实拍）。 */
+.vd-composer-input,
+.vd-composer-input:focus,
+.vd-composer-input:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+.vd-composer-input::placeholder {
+  color: var(--agent-muted);
+  opacity: 1; /* Firefox 默认给 placeholder 加 0.54 的 opacity，会更淡 */
+}
+.vd-composer-input:disabled::placeholder {
+  color: var(--agent-muted);
 }

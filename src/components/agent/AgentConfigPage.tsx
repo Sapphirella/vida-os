@@ -31,6 +31,7 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { hasApiConfig, fetchModels, DOC_MAX_BYTES, sessionToTxt } from '@/lib/agentEngine';
 import { saveText, errMsg, relativeTime, clsx } from '@/lib/utils';
+import { copyText } from '@/lib/clipboard';
 import type { AgentDoc, AgentMemory } from '@/types';
 
 /* ============================================================
@@ -710,11 +711,10 @@ export function AgentConfigPage({ onBack }: { onBack: () => void }) {
                           <div className="flex justify-end gap-1.5 mt-2.5">
                             <MiniBtn
                               label="复制记忆"
-                              onClick={() =>
-                                void navigator.clipboard
-                                  .writeText(m.content)
-                                  .then(() => showToast('已复制', 'success'))
-                              }
+                              onClick={async () => {
+                                const ok = await copyText(m.content);
+                                showToast(ok ? '已复制' : '复制失败', ok ? 'success' : 'error');
+                              }}
                             >
                               <Copy size={13} strokeWidth={1.5} />
                             </MiniBtn>
