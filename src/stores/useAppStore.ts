@@ -26,7 +26,7 @@ import type {
 } from '@/types';
 import { defaultState, loadState, saveState, normalizeState } from '@/lib/db';
 import { debounce, uid, now } from '@/lib/utils';
-import { bookCharCount, buildChapters, AGENT_BOOK_ID } from '@/lib/library';
+import { bookCharCount, buildChapters, parseBook, retargetChapters, AGENT_BOOK_ID } from '@/lib/library';
 
 // ============================================================
 // 持久化（防抖）
@@ -122,8 +122,8 @@ interface Actions {
   setBookContent: (id: string, content: string) => void;
   /** 重新解析全书目录（导入新正文后用） */
   rebuildBookChapters: (id: string) => void;
-  /** 在指定块之前插入一条新章节（目录页「+」用） */
-  addBookChapter: (id: string, ch: { title: string; from: number }) => void;
+  /** 在指定块之前插入一条新章节（目录页「+」用）；该块已有章节开头时返回 false */
+  addBookChapter: (id: string, ch: { title: string; from: number }) => boolean;
   /** 只改章节标题，不动正文与边界 */
   renameBookChapter: (id: string, chapterId: string, title: string) => void;
   /** 从目录里撤掉一条章节（正文保留 —— 见 BookChapter 注释） */
@@ -723,18 +723,18 @@ export const useAppStore = create<Store>((set, get) => ({
   },
   addBookChapter: (id, ch) => {
     const t = now();
+    let created = false;
     set((s) => ({
       books: s.books.map((b) => {
         if (b.id !== id) return b;
+        const blocks = parseBook(b.content, b.format);
+        if (!blocks.length) return b;
+        const from = Math.max(0, Math.min(ch.from, blocks.length - 1));
         const old = b.chapters ?? [];
-        // 目录为空时全书视作一个块区间，直接从 0 开章
-        const maxTo = old.length ? Math.max(...old.map((c) => c.to)) : 0;
-        const from = Math.max(0, Math.min(ch.from, maxTo));
-        // 新章节插在 from 之前：原 from 及其后的所有章节边界整体右移一位，
-        // 新章节自己占住 [from, from]（先不统计字数，目录里 0 字也是准的）
-        const shifted = old.map((c) =>
-          c.from >= from ? { ...c, from: c.from + 1, to: c.to + 1 } : c,
-        );
+        // 这一块已经是一条章节的开头了：不再叠一条。
+        // 叠上去会得到两条 from 相同的章节，chapterIndexOfBlock 永远只认后面那条，
+        // 前一条就成了目录里点不开、也高亮不到的死条目。
+        if (old.some((c) => c.from === from)) return b;
         const next: BookChapter = {
           id: uid('chp_'),
           title: ch.title.trim() || '新章节',
@@ -744,10 +744,14 @@ export const useAppStore = create<Store>((set, get) => ({
           createdAt: t,
           updatedAt: t,
         };
-        return { ...b, chapters: [...shifted, next].sort((a, c) => a.from - c.from), updatedAt: t };
+        // ⚠️ 只追加一条「起点」，区间与字数全部由 retargetChapters 按正文重算。
+        // 绝不能把已有章节的 from/to 整体 +1 —— 正文一块都没动，见 library.ts 的注释。
+        created = true;
+        return { ...b, chapters: retargetChapters([...old, next], blocks), updatedAt: t };
       }),
     }));
     persist(get());
+    return created;
   },
   renameBookChapter: (id, chapterId, title) => {
     set((s) => ({
@@ -767,11 +771,15 @@ export const useAppStore = create<Store>((set, get) => ({
   },
   removeBookChapter: (id, chapterId) => {
     set((s) => ({
-      books: s.books.map((b) =>
-        b.id === id
-          ? { ...b, chapters: (b.chapters ?? []).filter((c) => c.id !== chapterId), updatedAt: now() }
-          : b,
-      ),
+      books: s.books.map((b) => {
+        if (b.id !== id) return b;
+        const old = b.chapters ?? [];
+        const left = old.filter((c) => c.id !== chapterId);
+        if (left.length === old.length) return b;
+        // 撤掉一条目录条目 = 它占的正文并回上一章，所以区间要重算：
+        // 只 filter 不重算的话，被撤那一章的正文会落在所有章节之外（谁都不认领）。
+        return { ...b, chapters: retargetChapters(left, parseBook(b.content, b.format)), updatedAt: now() };
+      }),
     }));
     persist(get());
   },

@@ -141,6 +141,17 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
   };
 }
 
+/**
+ * 收集「state 里引用到的所有 files 表文件 id」。
+ *
+ * ⚠️ 改数据模型时**必须回到这里登记新字段** —— 本函数有四个调用方，
+ * 漏一项的后果不只是备份不完整：
+ *   ① 导出 JSON、② WebDAV 云备份、③ 本地文件夹快照 —— 漏了就只备份结构不备份文件；
+ *   ④ 设置里的「清除缓存」拿本函数的**反集**当孤儿回收 —— 漏了就是**静默删掉用户的数据**
+ *      （v4.6.1 修过一次：`tracks[].fileId` 从 v3.0 起就没登记，导致清除缓存把用户
+ *      导入的音乐全部删掉，曲目还留在列表里但永远放不出声）。
+ * 新增任何带 fileId / imageId / 正文 `fileRef:` 的模块时，先在下面加一行再写功能。
+ */
 export function collectFileIds(state: AppState): Set<string> {
   const ids = new Set<string>();
   // 正文里的 ![x](fileRef:<id>) 也算引用，否则内嵌图片不会被导出/备份
@@ -164,6 +175,16 @@ export function collectFileIds(state: AppState): Set<string> {
   (state.notes?.inspiration ?? []).forEach((n) => {
     (n.imageIds ?? []).forEach((id) => ids.add(id));
     scanText(n.content);
+  });
+  // 音乐（v3.0 起就在，但这里一直漏了它）：曲目本身只存 fileId，音频 blob 在 files 表里。
+  // 漏掉的后果有两层，都是实测过的：
+  //   ① 三条备份路径（导出 JSON / WebDAV / 本地快照）只备份歌单、不备份音频 ——
+  //      换机或清库后恢复，每首歌都在列表里，点播放却永远没声音，且原文件不可恢复；
+  //   ② 设置里的「清除缓存」正是拿本函数的**反集**当孤儿回收 ——
+  //      实测塞一首 1KB 假音频 + 一张相册图 + 一个真孤儿，点确认后提示
+  //      「已清理 2 个无引用图片，释放 5.0 KB」，音频 blob 从库里消失、曲目还留在列表中。
+  (state.tracks ?? []).forEach((t) => {
+    if (t.fileId) ids.add(t.fileId);
   });
   // 相册（v4.5）：图集图片组 + 星标集条目里的图都要收，
   // 否则三条备份路径只备份相册结构不备份照片

@@ -69,7 +69,10 @@ export function ReaderPage() {
   const [curBlock, setCurBlock] = useState(0);
   const [flashId, setFlashId] = useState<string | null>(null);
 
-  const marks = book?.marks ?? [];
+  // book.marks 缺失时要兜一个空数组 —— 但不能每次渲染都新建一个字面量：
+  // 那会让下面「还原 + 重套标注」的 useLayoutEffect 每渲染一次就跑一遍
+  // （滚动改变 curBlock 也会触发渲染），在长文上白白重扫全部块。
+  const marks = useMemo(() => book?.marks ?? [], [book?.marks]);
   const chapters = useMemo(() => book?.chapters ?? [], [book?.chapters]);
   const curChapter = chapterIndexOfBlock(chapters, curBlock);
 
@@ -296,9 +299,9 @@ export function ReaderPage() {
           hint={`将从你当前读到的位置（第 ${curBlock + 1} 段）开始新的一章。`}
           placeholder="章节标题"
           onDone={(title) => {
-            addBookChapter(book.id, { title, from: curBlock });
+            const ok = addBookChapter(book.id, { title, from: curBlock });
             useUIStore.getState().closeModal();
-            showToast('已新建章节', 'success');
+            showToast(ok ? '已新建章节' : '这一段已经是章节开头了', ok ? 'success' : 'info');
           }}
         />
       ),

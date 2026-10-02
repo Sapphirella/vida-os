@@ -243,17 +243,52 @@ export function buildChapters(
     return { id: hit?.id ?? uid('chp_'), createdAt: hit?.createdAt ?? createdAt };
   };
 
-  return marks.map((m, i) => {
-    const from = m.from;
-    const to = (marks[i + 1]?.from ?? blocks.length) - 1;
+  return retargetChapters(
+    marks.map((m) => {
+      const { id, createdAt } = takeId(m.title, m.from, now);
+      return { id, title: m.title, from: m.from, createdAt, updatedAt: now };
+    }),
+    blocks,
+  );
+}
+
+/** 只描述「章节从哪一块开始」的最小信息；to 与 charCount 一律由正文推出来 */
+export type ChapterSkeleton = Pick<BookChapter, 'id' | 'title' | 'from' | 'createdAt' | 'updatedAt'>;
+
+/**
+ * 按「起点集合」重算每条章节的 `to` 与字数。
+ *
+ * ⚠️ 目录是正文的**投影**：`from` 是块索引，`to` 只由**下一条章节的起点**决定，
+ * 与「什么时候建的、按什么顺序建的」毫无关系。所以增删一条章节只改 `from` 的集合，
+ * **绝不能加减块索引**——正文一块都没动。
+ *
+ * 这条纪律来自一个实测缺陷（v4.6.1 修）：`addBookChapter` 早先把已有章节的
+ * from/to 整体 +1（误以为「插一条章节」= 「插一块正文」），而 `removeBookChapter`
+ * 又没有减回去。结果「新建章节 → 再删掉」之后，后面每条章节永久晚一块：
+ * 实测一本 3 章 9 块的书，章首 `from` 从 [0,3,7] 变成 [0,4,8] ——
+ * 目录点击跳到下一段、正文里「正在读」也高亮错章，而且每操作一轮就再偏一块。
+ * 另一个后果是区间重叠：新章节 to=7 与上一章 to=7 同时声称拥有第 7 块。
+ */
+export function retargetChapters(skeletons: ChapterSkeleton[], blocks: BookBlock[]): BookChapter[] {
+  if (!blocks.length) return [];
+  const last = blocks.length - 1;
+  const seen = new Set<number>();
+  const ordered = [...skeletons]
+    .filter((c) => Number.isFinite(c.from) && c.from >= 0 && c.from <= last)
+    .sort((a, b) => a.from - b.from)
+    .filter((c) => {
+      // 同一块上只留一条（先来的赢）：两条 from 相同的章节里，
+      // chapterIndexOfBlock 只会认后面那条，前一条就成了看不见的死条目
+      if (seen.has(c.from)) return false;
+      seen.add(c.from);
+      return true;
+    });
+  return ordered.map((c, i) => {
+    const to = (ordered[i + 1]?.from ?? blocks.length) - 1;
     // 章节字数不含标题行本身，目录里显示的就是「这一章有多少字」
-    let chars = 0;
-    for (let k = from; k <= to; k++) {
-      if (k === from) continue; // from 块是标题块
-      chars += pureLen(blocks[k].text);
-    }
-    const { id, createdAt } = takeId(m.title, from, now);
-    return { id, title: m.title, from, to, charCount: chars, createdAt, updatedAt: now };
+    let charCount = 0;
+    for (let k = c.from + 1; k <= to; k++) charCount += pureLen(blocks[k].text ?? '');
+    return { ...c, to, charCount };
   });
 }
 
