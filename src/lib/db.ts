@@ -1,8 +1,9 @@
 // VidaOS 数据持久化 - Dexie 封装
 import Dexie, { type Table } from 'dexie';
-import type { AppState, MediaFile, TabKey, Album } from '@/types';
+import type { AppState, LibraryBook, MediaFile, TabKey, Album } from '@/types';
 import { isTabKey } from '@/types';
 import { DEFAULT_BACKGROUND_PRESET } from './backgrounds';
+import { AGENT_BOOK_ID, bookCharCount, buildChapters } from './library';
 
 class VidaDB extends Dexie {
   state!: Table<{ id: string; data: AppState }, string>;
@@ -84,14 +85,29 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
     },
     // 馆藏（v4.4）：碎片流已移除，旧数据里的 fragments 字段**故意不迁移**
     // （用户确认彻底删除）；逐本兜底 marks / charCount，防止历史数据缺字段炸渲染
-    books: (r.books ?? []).map((b) => ({
-      ...b,
-      marks: b.marks ?? [],
-      charCount: b.charCount ?? b.content?.length ?? 0,
-      format: b.format === 'md' ? 'md' : 'txt',
-      pinned: b.pinned ?? false,
-      tags: b.tags ?? [],
-    })),
+    books: (() => {
+      const raw = (r.books ?? []).map((b) => ({
+        ...b,
+        marks: b.marks ?? [],
+        charCount: b.charCount ?? b.content?.length ?? 0,
+        format: b.format === 'md' ? ('md' as const) : ('txt' as const),
+        pinned: b.pinned ?? false,
+        tags: b.tags ?? [],
+      }));
+      // 目录：老书在 v4.6 之前根本没有 chapters，这里直接按正文解析一次，
+      // 用户打开书架就立刻能看到章节，不用手动重建。
+      const withChapters = raw.map((b) => ({
+        ...b,
+        chapters: b.chapters?.length ? b.chapters : buildChapters(b.content ?? '', b.format, b.title),
+      }));
+      // Agent 专属书：书架上固定有一本，任何情况下都保证它存在（与星标集同范式）。
+      // 先剥掉来路不明的 agentBook 标记（老备份 / 手工编辑过的 JSON 可能带错 id），
+      // 再按标准 id 补一本 —— 保证全局**有且只有一本**、且 deleteBook 能认出来。
+      const rest = withChapters.filter((b) => !b.agentBook);
+      return rest.some((b) => b.id === AGENT_BOOK_ID)
+        ? rest
+        : [AGENT_BOOK(), ...rest];
+    })(),
     // 相册（v4.5）：旧数据没有时补默认星标集；任何情况下都保证星标集存在
     albums: (() => {
       const raw = r.albums ?? [];
@@ -152,6 +168,50 @@ const STARRED_ALBUM: Album = {
   updatedAt: 0,
 };
 
+/**
+ * Agent 专属书：书架上固定存在的一本，Agent 把用户喜欢的回答写进它的章节里。
+ *
+ * 三条约定（用户明确要求，改动前先读这段）：
+ *   - 固定存在：normalizeState / defaultState 都会补它，误删后重启也回来；
+ *   - 不可删除：useAppStore.deleteBook 对 AGENT_BOOK_ID 直接 return；
+ *   - 不默认置顶：pinned 留空（false），跟着「最近阅读」排在书架普通位置。
+ * 另外设置里关掉 Agent 开关时，书架会把这本书一起隐藏（见 LibraryPage）。
+ */
+const AGENT_BOOK_SEED = `# Agent
+
+这本书专门留给 Agent 写。你在聊天里遇到喜欢的回答，说一句「把这段存进书里」，
+它就会在这里**新建一个章节**；已经写进去的内容想改，它也能接着改。
+
+它和你导入的书一样，可以划线、高亮、写批注。
+
+## 写入方式
+
+- **新建章节**：直接说「把上面那段存成一章，标题叫〈xxx〉」
+- **追加到已有章节**：说「把这段加到〈已有标题〉那章后面」
+- **修改**：说「把书里〈原文〉改成〈新文〉」，会先给你一份改动清单，你确认了才落盘
+
+Agent 没有任何删除能力 —— 章节删不删、写错了怎么改，都由你自己在目录页决定。
+
+内容只存在本机，也随 JSON / WebDAV / 快照备份一起走。`;
+
+export function AGENT_BOOK(): LibraryBook {
+  return {
+    id: AGENT_BOOK_ID,
+    title: 'Agent',
+    format: 'md',
+    content: AGENT_BOOK_SEED,
+    charCount: bookCharCount(AGENT_BOOK_SEED),
+    marks: [],
+    chapters: buildChapters(AGENT_BOOK_SEED, 'md', 'Agent'),
+    agentBook: true,
+    // 不置顶：跟其它书一起按最近阅读排序
+    pinned: false,
+    tags: [],
+    createdAt: 0,
+    updatedAt: 0,
+  };
+}
+
 export function defaultState(): AppState {
   return {
     version: 3,
@@ -176,8 +236,8 @@ export function defaultState(): AppState {
       book: [],
     },
     tracks: [],
-    // 馆藏（v4.4）：碎片流已整体移除，这一格换成书架
-    books: [],
+    // 馆藏（v4.4）：碎片流已整体移除，这一格换成书架；固定带一本 Agent 专属书
+    books: [AGENT_BOOK()],
     // 相册（v4.5）：预置星标集，其余图集由用户新建
     albums: [STARRED_ALBUM],
     albumGroups: [],

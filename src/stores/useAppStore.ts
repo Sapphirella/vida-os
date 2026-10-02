@@ -16,6 +16,7 @@ import type {
   TabKey,
   LibraryBook,
   BookMark,
+  BookChapter,
   Album,
   AlbumGroup,
   AlbumStar,
@@ -25,6 +26,7 @@ import type {
 } from '@/types';
 import { defaultState, loadState, saveState, normalizeState } from '@/lib/db';
 import { debounce, uid, now } from '@/lib/utils';
+import { bookCharCount, buildChapters, AGENT_BOOK_ID } from '@/lib/library';
 
 // ============================================================
 // 持久化（防抖）
@@ -116,6 +118,16 @@ interface Actions {
   addBook: (b: { title: string; format: 'txt' | 'md'; content: string; charCount: number }) => string;
   updateBook: (id: string, patch: Partial<LibraryBook>) => void;
   deleteBook: (id: string) => void;
+  /** 改写正文（Agent 写入 / 查找替换落盘后调用）：同步重算字数与目录 */
+  setBookContent: (id: string, content: string) => void;
+  /** 重新解析全书目录（导入新正文后用） */
+  rebuildBookChapters: (id: string) => void;
+  /** 在指定块之前插入一条新章节（目录页「+」用） */
+  addBookChapter: (id: string, ch: { title: string; from: number }) => void;
+  /** 只改章节标题，不动正文与边界 */
+  renameBookChapter: (id: string, chapterId: string, title: string) => void;
+  /** 从目录里撤掉一条章节（正文保留 —— 见 BookChapter 注释） */
+  removeBookChapter: (id: string, chapterId: string) => void;
   /** 划线 / 高亮：写入本书 marks 并返回新标注 id */
   addBookMark: (bookId: string, mark: Omit<BookMark, 'id' | 'createdAt'>) => string;
   deleteBookMark: (bookId: string, markId: string) => void;
@@ -657,6 +669,8 @@ export const useAppStore = create<Store>((set, get) => ({
           content: b.content,
           charCount: b.charCount,
           marks: [],
+          // 导入时就解析目录：用户点开书就能看到章节，不必先进设置手动拆一次
+          chapters: buildChapters(b.content, b.format, b.title, { now: t }),
           createdAt: t,
           updatedAt: t,
         },
@@ -675,7 +689,90 @@ export const useAppStore = create<Store>((set, get) => ({
     persist(get());
   },
   deleteBook: (id) => {
+    // Agent 专属书不可删：用户要求它固定存在。没有这一层的话，
+    // 只要有一条旧备份里带了 agentBook:false（或字段缺失），这里就会把它删掉。
+    if (id === AGENT_BOOK_ID) return;
     set((s) => ({ books: s.books.filter((b) => b.id !== id) }));
+    persist(get());
+  },
+  setBookContent: (id, content) => {
+    set((s) => ({
+      books: s.books.map((b) => {
+        if (b.id !== id) return b;
+        return {
+          ...b,
+          content,
+          charCount: bookCharCount(content),
+          // 正文变了，目录必须跟着重算，否则 Agent 写完新章节目录里根本看不到
+          chapters: buildChapters(content, b.format, b.title, { existing: b.chapters, now: now() }),
+          updatedAt: now(),
+        };
+      }),
+    }));
+    persist(get());
+  },
+  rebuildBookChapters: (id) => {
+    set((s) => ({
+      books: s.books.map((b) =>
+        b.id === id
+          ? { ...b, chapters: buildChapters(b.content, b.format, b.title, { existing: b.chapters, now: now() }), updatedAt: now() }
+          : b,
+      ),
+    }));
+    persist(get());
+  },
+  addBookChapter: (id, ch) => {
+    const t = now();
+    set((s) => ({
+      books: s.books.map((b) => {
+        if (b.id !== id) return b;
+        const old = b.chapters ?? [];
+        // 目录为空时全书视作一个块区间，直接从 0 开章
+        const maxTo = old.length ? Math.max(...old.map((c) => c.to)) : 0;
+        const from = Math.max(0, Math.min(ch.from, maxTo));
+        // 新章节插在 from 之前：原 from 及其后的所有章节边界整体右移一位，
+        // 新章节自己占住 [from, from]（先不统计字数，目录里 0 字也是准的）
+        const shifted = old.map((c) =>
+          c.from >= from ? { ...c, from: c.from + 1, to: c.to + 1 } : c,
+        );
+        const next: BookChapter = {
+          id: uid('chp_'),
+          title: ch.title.trim() || '新章节',
+          from,
+          to: from,
+          charCount: 0,
+          createdAt: t,
+          updatedAt: t,
+        };
+        return { ...b, chapters: [...shifted, next].sort((a, c) => a.from - c.from), updatedAt: t };
+      }),
+    }));
+    persist(get());
+  },
+  renameBookChapter: (id, chapterId, title) => {
+    set((s) => ({
+      books: s.books.map((b) =>
+        b.id === id
+          ? {
+              ...b,
+              chapters: (b.chapters ?? []).map((c) =>
+                c.id === chapterId ? { ...c, title: title.trim() || c.title, updatedAt: now() } : c,
+              ),
+              updatedAt: now(),
+            }
+          : b,
+      ),
+    }));
+    persist(get());
+  },
+  removeBookChapter: (id, chapterId) => {
+    set((s) => ({
+      books: s.books.map((b) =>
+        b.id === id
+          ? { ...b, chapters: (b.chapters ?? []).filter((c) => c.id !== chapterId), updatedAt: now() }
+          : b,
+      ),
+    }));
     persist(get());
   },
   addBookMark: (bookId, mark) => {

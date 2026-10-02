@@ -118,6 +118,31 @@ export interface BookMark {
  * 馆藏 · 一本书（用户从本地导入的 txt / md 文本）
  * 正文直接存进主数据（state）：单本建议 ≤1 万字，再长渲染与标注都会卡。
  */
+/**
+ * 馆藏 · 一个章节
+ *
+ * ⚠️ 章节**只是正文的目录条目，正文本身仍完整存在书里**。
+ * 这样设计有两个硬理由：
+ *   1. 划线锚点是「块索引」（见 lib/library.ts），删掉正文会让后面所有块索引位移，
+ *      整本书的标注全部错位；
+ *   2. Agent 没有删除能力（代码层面就没有 delete 路径），
+ *      所以「删章节」在语义上就只能是「从目录里撤掉这一条」。
+ * 用户在目录页删除章节时只是移除条目，正文一个字都不会少。
+ */
+export interface BookChapter {
+  id: string;
+  /** 章节标题（自动解析时取标题行原文；手动新建时用户输入） */
+  title: string;
+  /** 起始块索引（含） */
+  from: number;
+  /** 结束块索引（含） */
+  to: number;
+  /** 本章净字数（不含标题行） */
+  charCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface LibraryBook {  id: string;
   title: string;
   /** 来源格式，决定阅读器是否按 Markdown 渲染 */
@@ -136,6 +161,17 @@ export interface LibraryBook {  id: string;
   tags?: string[];
   /** 本书的划线 / 高亮（阅读器右上角「书签」面板的数据源） */
   marks: BookMark[];
+  /**
+   * 本书的目录（章节）。导入时由 splitChapters 自动解析，也可手动增删改。
+   * 未解析出任何标题时仍会有一条兜底章节（标题 = 书名），目录页不会空白。
+   */
+  chapters?: BookChapter[];
+  /**
+   * 标记为「Agent 专属书」：书架上固定存在、不可删除、不默认置顶；
+   * 设置里关掉 Agent 开关时在书架隐藏。
+   * 走 db.ts 的兜底创建（与星标集同范式），换设备导入备份也会被补回来。
+   */
+  agentBook?: boolean;
   createdAt: number;
   updatedAt: number;
 }

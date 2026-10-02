@@ -9,8 +9,8 @@
 import { marked } from 'marked';
 import type { Token, TokensList } from 'marked';
 import { sanitizeHtml } from './markdown';
-import { plainText } from './utils';
-import type { BookMark } from '@/types';
+import { plainText, uid } from './utils';
+import type { BookChapter, BookMark } from '@/types';
 
 /** 单本建议上限：再长渲染与标注都会明显卡顿（导入时会提示） */
 export const RECOMMENDED_MAX_CHARS = 10000;
@@ -28,6 +28,12 @@ export interface BookBlock {
   /** 该块渲染后的纯文本（用于跨块选择的截断与校验） */
   text: string;
   kind: BlockKind;
+  /**
+   * 该块若是一行「章节标题」，这里放标题纯文本 —— buildChapters 靠它切目录。
+   * 在切块阶段就定好（而不是事后回正文里搜），是因为 txt 的代码块 / md 的围栏代码
+   * 里也可能有 `#` 或「第X章」，事后按行找会误判；块级判定天然不会命中。
+   */
+  heading?: string;
 }
 
 /** 选区在某本书里对应的锚点（跨块选择会产出多条） */
@@ -92,6 +98,43 @@ function kindOfMarkdownToken(token: Token): BlockKind {
   }
 }
 
+/**
+ * txt 章节标题行识别
+ *
+ * 保守优先：只认明确的中文章回 / 阿拉伯序号 / 英文 Chapter。
+ * 二级兜底（单行短段）风险更高 —— 诗、短句、对话都可能被误判 ——
+ * 但误判的后果只是目录里多一条可以删掉的条目，**正文永远不动**，所以可以放宽。
+ */
+const CHAPTER_HEADING = new RegExp(
+  [
+    // 第 3 章 / 第三章 / 第十二回 / 第 5 节（含中文数字与阿拉伯数字）
+    '^第\\s*[0-9０-９一二三四五六七八九十百千万零两]+\\s*[章回节卷部篇集话幕折]',
+    // Chapter 12 / CHAPTER XII
+    '^chapter\\s+[0-9ivxlc]+',
+    // 12、标题 / 12. 标题（列表序数当章节）
+    '^[0-9]{1,3}\\s*[、.．]\\s*\\S',
+    // 序 / 前言 / 楔子 / 尾声 …
+    '^(序章|序言|序幕|自序|楔子|引子|引言|前言|后记|尾声|终章|终局|后序|附录|番外)',
+  ].join('|'),
+  'i',
+);
+
+/** 句子结尾标点：出现即认为这段是正文而非标题 */
+const SENTENCE_TAIL = /[。！？…；：，,.!?;:]$/;
+
+/** 一段是否可当作章节标题：单行、够短、不像正文 */
+function isShorthandHeading(para: string): boolean {
+  if (/\n/.test(para.trim())) return false;
+  const t = para.trim();
+  return t.length > 0 && t.length <= 24 && !SENTENCE_TAIL.test(t);
+}
+
+function headingOfText(para: string): string | undefined {
+  const t = para.trim();
+  if (!t) return undefined;
+  return CHAPTER_HEADING.test(t) || isShorthandHeading(t) ? t : undefined;
+}
+
 /** txt：按空行切段；段内换行原样保留（渲染时用 white-space: pre-wrap，textContent 与原文一致） */
 function blocksFromText(content: string): BookBlock[] {
   return content
@@ -100,7 +143,7 @@ function blocksFromText(content: string): BookBlock[] {
     .filter((s) => s.trim().length > 0)
     .map((s, i) => {
       const html = escapeHtml(s);
-      return { index: i, html, text: s, kind: 'p' as const };
+      return { index: i, html, text: s, kind: 'p' as const, heading: headingOfText(s) };
     });
 }
 
@@ -122,11 +165,19 @@ function blocksFromMarkdown(content: string): BookBlock[] {
       html = sanitizeHtml(escapeHtml((token as { raw?: string }).raw ?? ''));
     }
     if (!html.trim()) continue;
+    const rendered = htmlToText(html);
+    // md 里 1~3 级标题算章节起点；4~6 级是标题下的细分，再切会把目录切得过碎
+    const depth = (token as { depth?: number }).depth ?? 1;
+    const isHeading = token.type === 'heading' && depth <= 3;
+    // 标题文本优先取渲染后的 textContent；htmlToText 在无 DOM 环境（SSR / 单测）会返回空串，
+    // 这时退回 token.text（marked 的行内原文），否则章节标题会整段消失。
+    const inlineText = ((token as { text?: string }).text ?? '').trim();
     out.push({
       index: out.length,
       html,
-      text: htmlToText(html),
+      text: rendered || inlineText,
       kind: kindOfMarkdownToken(token),
+      ...(isHeading ? { heading: rendered.trim() || inlineText || undefined } : {}),
     });
   }
   return out;
@@ -135,6 +186,91 @@ function blocksFromMarkdown(content: string): BookBlock[] {
 export function parseBook(content: string, format: 'txt' | 'md'): BookBlock[] {
   if (!content?.trim()) return [];
   return format === 'md' ? blocksFromMarkdown(content) : blocksFromText(content);
+}
+
+// ============================================================
+// 章节（目录）
+// ============================================================
+
+/** Agent 专属书的固定 id —— 换设备 / 导入备份后靠这个 id 认回来 */
+export const AGENT_BOOK_ID = 'book-agent';
+
+/** 纯字数（不含空白），章节统计用 */
+function pureLen(s: string): number {
+  return s.replace(/\s/g, '').length;
+}
+
+/**
+ * 从正文解析目录。
+ *
+ * 规则：
+ *   - 标题块（blocks[i].heading）当作章节起点；
+ *   - 第一个标题之前若有正文，单独归成一条「开篇」，标题用书名 —— 否则书的前几段会无家可归；
+ *   - 一个标题都没解析出来时，返回一条覆盖全书、标题为书名的兜底章节，
+ *     这样目录页永远不会空白，用户也能直接从这里手动拆第一章。
+ *
+ * `existing` 传入上一版目录：按「标题 + 起点」匹配上就沿用原 id 与创建时间，
+ * 避免用户每读一次书、每被 Agent 写一次，全书章节 id 就抖一轮。
+ */
+export function buildChapters(
+  content: string,
+  format: 'txt' | 'md',
+  bookTitle: string,
+  opts?: { existing?: BookChapter[]; now?: number },
+): BookChapter[] {
+  const blocks = parseBook(content, format);
+  if (!blocks.length) return [];
+  const now = opts?.now ?? Date.now();
+  const prev = opts?.existing ?? [];
+
+  const starts: number[] = [];
+  blocks.forEach((b, i) => {
+    if (b.heading) starts.push(i);
+  });
+
+  // 标题之前的正文：并进一条「开篇」
+  const marks: { from: number; title: string }[] = [];
+  if (starts.length === 0 || starts[0] > 0) {
+    marks.push({ from: 0, title: bookTitle || '开篇' });
+  }
+  for (const i of starts) {
+    marks.push({ from: i, title: blocks[i].heading || bookTitle || '未命名' });
+  }
+
+  const takeId = (title: string, from: number, createdAt: number) => {
+    const hit = prev.find((c) => c.title === title && c.from === from)
+      ?? prev.find((c) => c.title === title);
+    return { id: hit?.id ?? uid('chp_'), createdAt: hit?.createdAt ?? createdAt };
+  };
+
+  return marks.map((m, i) => {
+    const from = m.from;
+    const to = (marks[i + 1]?.from ?? blocks.length) - 1;
+    // 章节字数不含标题行本身，目录里显示的就是「这一章有多少字」
+    let chars = 0;
+    for (let k = from; k <= to; k++) {
+      if (k === from) continue; // from 块是标题块
+      chars += pureLen(blocks[k].text);
+    }
+    const { id, createdAt } = takeId(m.title, from, now);
+    return { id, title: m.title, from, to, charCount: chars, createdAt, updatedAt: now };
+  });
+}
+
+/** 某一块落在第几章（0 起；没有目录时返回 0） */
+export function chapterIndexOfBlock(chapters: BookChapter[] | undefined, blockIndex: number): number {
+  if (!chapters?.length) return 0;
+  for (let i = chapters.length - 1; i >= 0; i--) {
+    if (blockIndex >= chapters[i].from) return i;
+  }
+  return 0;
+}
+
+/** 目录页顶部汇总：本章序号文案 + 全书总字数 */
+export function chapterCountText(chapters: BookChapter[] | undefined): string {
+  const n = chapters?.length ?? 0;
+  if (!n) return '暂无章节';
+  return n === 1 ? '1 章' : `${n} 章`;
 }
 
 // ============================================================
