@@ -21,6 +21,12 @@ interface FavoriteEntry {
   createdAt: number;
 }
 
+/** 收藏类型 → 显示名。目前只有文章与动态两种（灵感用的是自己的「星标」，不在这里）。 */
+const TYPE_LABEL: Record<Favorite['refType'], string> = {
+  article: '文章',
+  moment: '动态',
+};
+
 export function FavoritesPage() {
   const navigate = useNavigate();
   const favorites = useAppStore((s) => s.favorites);
@@ -30,6 +36,7 @@ export function FavoritesPage() {
   const updateArticle = useAppStore((s) => s.updateArticle);
   const updateMoment = useAppStore((s) => s.updateMoment);
   const showToast = useUIStore((s) => s.showToast);
+  const setFocusRequest = useUIStore((s) => s.setFocusRequest);
 
   // ── 查找 / 替换：作用于收藏引用的底层文档（替换写回 store） ──
   const findTargets = useMemo(() => {
@@ -99,6 +106,31 @@ export function FavoritesPage() {
     }
   }
 
+  /**
+   * 点开一条收藏。
+   *
+   * 文章有独立详情页（`/space/article/:id`），天然是精确位置；
+   * 动态没有独立页面，只能跳到 `/moments` —— 光 navigate 会停在列表顶部/上次位置，
+   * 用户反馈「点了却找不到那一条」。所以要带一个 focusRequest，
+   * 由动态页的 `useGlobalFocus` 按 id 把那张卡片滚进视野并高亮（v4.7.5 修）。
+   */
+  const openFavorite = (g: FavoriteEntry) => {
+    if (g.type === 'article') {
+      navigate(`/space/article/${g.refId}`);
+      return;
+    }
+    setFocusRequest({
+      kind: 'moment',
+      id: g.refId,
+      query: '',
+      ignoreCase: true,
+      index: 0,
+      inTitle: false,
+      ts: Date.now(),
+    });
+    navigate('/moments');
+  };
+
   return (
     <div className="px-4 sm:px-6 view-enter">
       <div className="max-w-3xl mx-auto pb-6">
@@ -128,14 +160,10 @@ export function FavoritesPage() {
               {grouped.map((g) => {
                 const Icon =
                   g.type === 'article' ? BookOpen : MessageCircle;
-                const path =
-                  g.type === 'article'
-                    ? `/space/article/${g.refId}`
-                    : '/moments';
                 return (
                   <li key={g.favId} {...find.findCardProps(g.refId)}>
                     <Card
-                      onClick={() => navigate(path)}
+                      onClick={() => openFavorite(g)}
                       className="p-4 group hover:scale-[1.005] transition-transform"
                     >
                       <div className="flex items-start gap-3">
@@ -165,8 +193,15 @@ export function FavoritesPage() {
                               }}
                             />
                           )}
-                          <p className="font-mono text-[10px] text-bronze-deep mt-2">
-                            {relativeTime(g.createdAt)}
+                          <p className="flex items-center gap-2 mt-2">
+                            {/* 类型标签：一眼看出这条收藏是文章还是动态
+                                （两种类型在列表里长得很像，光看图标不好区分） */}
+                            <span className="tag" style={{ fontSize: 9, padding: '2px 8px' }}>
+                              {TYPE_LABEL[g.refType]}
+                            </span>
+                            <span className="font-mono text-[10px] text-bronze-deep">
+                              {relativeTime(g.createdAt)}
+                            </span>
                           </p>
                         </div>
                         <button

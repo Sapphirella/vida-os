@@ -113,12 +113,19 @@ export function useGlobalFocus(
         if (root) {
           const q = (fr.query || '').trim();
           if (!q) {
-            // 无查询文本（如从主页「当日产出」按 id 跳转）：直接滚动到目标，不依赖正文文本匹配。
+            // 无查询文本（如从主页「当日产出」/ 收藏夹 / 反向链接按 id 跳转）：
+            // 直接滚动到目标，不依赖正文文本匹配。
             // 文章是长文，滚到开头；动态/灵感卡片居中最自然。
             root.scrollIntoView({
               block: fr.kind === 'article' ? 'start' : 'center',
               behavior: 'smooth',
             });
+            // 再给卡片描一圈会呼吸的边：只滚不闪的话，长列表里用户仍然不确定是哪一条
+            // （v4.7.5 加；只描边不改背景 —— 改背景会把整段正文染色）
+            if (fr.kind !== 'article') {
+              root.classList.add('vd-focus-card');
+              setTimeout(() => root.classList.remove('vd-focus-card'), 3200);
+            }
           } else {
             focusNthQuery(root, fr.query, fr.index, fr.ignoreCase);
           }

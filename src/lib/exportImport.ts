@@ -159,12 +159,12 @@ export function collectFileIds(state: AppState): Set<string> {
     for (const m of text.matchAll(/fileRef:([A-Za-z0-9_-]+)/g)) ids.add(m[1]);
   };
   state.articles.forEach((a) => {
-    a.imageIds.forEach((id) => ids.add(id));
+    (a.imageIds ?? []).forEach((id) => ids.add(id));
     if (a.coverId) ids.add(a.coverId);
     scanText(a.content);
   });
   state.moments.forEach((m) => {
-    m.imageIds.forEach((id) => ids.add(id));
+    (m.imageIds ?? []).forEach((id) => ids.add(id));
     scanText(m.content);
   });
   // 灵感便签的图片同样是「state 里引用了」的文件，必须一起收：
@@ -570,7 +570,7 @@ export async function exportPDF(
           <h3 style="font-size:24px;color:#1B1A1F;margin:0 0 8px;font-weight:500;">${escapeHTML(a.title)}</h3>
           <p style="color:#947D75;font-size:11px;margin:0 0 16px;letter-spacing:0.05em;">${formatDate(a.createdAt, 'YYYY · MM · DD')}${a.tags.length ? ' · ' + a.tags.map((t) => '#' + t).join(' ') : ''}</p>
           <div style="font-size:16px;">${resolveInline(renderMarkdown(a.content))}</div>
-          ${imagesOf([a.coverId, ...a.imageIds])}
+          ${imagesOf([a.coverId, ...(a.imageIds ?? [])])}
         </article>
       `;
     });
@@ -583,7 +583,7 @@ export async function exportPDF(
         <div style="margin:24px 0;padding-left:16px;border-left:2px solid #6A080E;">
           <p style="color:#947D75;font-size:11px;margin:0 0 6px;letter-spacing:0.05em;">${formatDate(m.createdAt, 'YYYY · MM · DD HH:mm')}</p>
           <div style="font-size:16px;">${resolveInline(renderMarkdown(m.content))}</div>
-          ${imagesOf(m.imageIds)}
+          ${imagesOf(m.imageIds ?? [])}
           ${(m.comments ?? []).map((c) => `<p style="margin:6px 0 0 12px;font-size:12px;color:#7A675F;">— ${escapeHTML(c.content).replace(/\n/g, '<br />')}</p>`).join('')}
         </div>
       `;

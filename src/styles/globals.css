@@ -509,6 +509,22 @@ textarea, input, [contenteditable] {
        （近黑微紫，压在紫红渐变上比原先的灰好看）。 */
   --field-bg: #1f131d;
   --agent-composer-bg: #1f131d;
+
+  /* ---- Agent 模块（v4.7.5 重配）----
+     暗夜那套 Agent 配色是「暖炭灰面板 + 玫瑰木强调」，猩红此前直接继承它，
+     压在紫红渐变上就发灰、卡头的淡灰粉也跟主题不搭（用户反馈）。
+     这里按猩红自己的色系重配：**深紫玻璃面板 + 更亮的玫瑰强调**。
+     注意面板要比 --card-bg 略亮一档，否则上面那块 #1f131d 的输入框就沉进去看不出来了。 */
+  --agent-accent: #C48BA0;                 /* 玫瑰：比暗夜的 #A8767D 亮一档 */
+  --agent-accent-rgb: 196 139 160;         /* soft / line / chip 都由它派生 */
+  --agent-panel-bg: rgba(46, 31, 54, 0.82);
+  --agent-panel-head: rgba(122, 54, 88, 0.62);   /* 卡头：深玫瑰紫，不再是炭灰上的淡粉 */
+  --agent-head-fg: #F7E4ED;                /* 卡头上的字：亮粉白 */
+  --agent-head-dim: rgba(247, 228, 237, 0.74);
+  --agent-head-chip-bg: rgba(255, 255, 255, 0.16);
+  --agent-panel-border: rgba(255, 190, 210, 0.22);  /* 与 --card-border 同族 */
+  --agent-muted: #B49AA8;                  /* 弱化文字：紫灰玫瑰（对比度见第 12 节教训 34） */
+  --field-border: rgba(255, 190, 210, 0.20);
   --liquid-edge-hi: rgba(255, 222, 238, 0.6);    /* 边缘亮环（折射高光） */
   --liquid-edge-mid: rgba(255, 180, 210, 0.18);  /* 边缘晕 */
   --liquid-edge-dim: rgba(255, 165, 195, 0.06);  /* 边缘暗段 */
@@ -1131,6 +1147,23 @@ mark.vd-focus-flash {
   50% { box-shadow: 0 0 0 6px var(--candle); }
 }
 /* 标题命中时的临时高亮 */
+/* 「按 id 跳到某条卡片」时的高亮：描一圈会呼吸的边。
+   为什么不用 .vd-focus-title 那套（改 background）—— 卡片根节点是正文块，
+   染背景会把整段文字底色一起换掉，看起来像选中。 */
+.vd-focus-card {
+  border-radius: var(--radius-card);
+  animation: vd-focus-ring 1s ease-in-out 3;
+}
+@keyframes vd-focus-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(var(--amber-rgb) / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgb(var(--amber-rgb) / 0.4);
+  }
+}
+
 .vd-focus-title {
   border-radius: 6px;
   background: var(--mark-bg);

@@ -70,6 +70,20 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
       book: [...(r.categories?.book ?? d.categories.book ?? [])],
     },
     tracks: (r.tracks ?? []).filter((t) => !(t as { builtin?: unknown }).builtin),
+    // v4.7.5：文章 / 动态的数组字段逐条兜底。
+    // 起因：Agent 的 [[写:文章]] / [[写:动态]] 以前只写 title/content/tags，
+    // 少了 imageIds —— 动态页渲染 `m.imageIds.filter(...)` 直接抛 TypeError 整页崩，
+    // 导出/备份里的 `m.imageIds.forEach(...)` 也一样。已有数据也可能是这个形状，
+    // 所以在这里修一次（导入 JSON / WebDAV / 快照三条路径都会过这里）。
+    articles: (r.articles ?? []).map((a) => ({
+      ...a,
+      imageIds: a.imageIds ?? [],
+      tags: a.tags ?? [],
+    })),
+    moments: (r.moments ?? []).map((m) => ({
+      ...m,
+      imageIds: m.imageIds ?? [],
+    })),
     // 信箱功能已移除（v4 数据模型）：清理指向已删除信件的收藏
     favorites: (r.favorites ?? []).filter((f) => (f.refType as string) !== 'letter'),
     notes: {

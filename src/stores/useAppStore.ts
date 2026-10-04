@@ -283,7 +283,19 @@ export const useAppStore = create<Store>((set, get) => ({
   addArticle: (article) => {
     const id = uid('art_');
     set((s) => ({
-      articles: [{ ...article, id, createdAt: now(), updatedAt: now() }, ...s.articles],
+      articles: [
+        {
+          ...article,
+          id,
+          // 数组字段兜底：Agent 的 [[写:文章|…]] 只给 title/content/tags，
+          // 少了 imageIds 会让动态页渲染与导出/备份一起炸（v4.7.5 修）
+          imageIds: article.imageIds ?? [],
+          tags: article.tags ?? [],
+          createdAt: now(),
+          updatedAt: now(),
+        },
+        ...s.articles,
+      ],
     }));
     persist(get());
     return id;
@@ -308,7 +320,16 @@ export const useAppStore = create<Store>((set, get) => ({
   addMoment: (moment) => {
     const id = uid('mom_');
     set((s) => ({
-      moments: [{ ...moment, id, createdAt: moment.createdAt ?? now() }, ...s.moments],
+      moments: [
+        {
+          ...moment,
+          id,
+          // 同上：Agent 的 [[写:动态|…]] 不带 imageIds，缺了会让动态页直接崩
+          imageIds: moment.imageIds ?? [],
+          createdAt: moment.createdAt ?? now(),
+        },
+        ...s.moments,
+      ],
     }));
     persist(get());
     return id;

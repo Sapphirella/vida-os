@@ -194,7 +194,9 @@ export function MomentsPage() {
                     const showComments = openComments[m.id] ?? false;
                     // 已用 fileRef: 插进正文的图片不在这里（文末配图）重复显示 —— 与文章阅读页一致
                     const inlineIds = new Set(collectInlineImageIds(m.content));
-                    const galleryIds = m.imageIds.filter((id) => !inlineIds.has(id));
+                    // ?? []：Agent 写的动态历史上可能没有 imageIds，
+                    // 一个坏字段不该让整页走错误边界（v4.7.5）
+                    const galleryIds = (m.imageIds ?? []).filter((id) => !inlineIds.has(id));
                     return (
                       <li key={m.id} className="relative">
                         {/* 时间线节点 */}
