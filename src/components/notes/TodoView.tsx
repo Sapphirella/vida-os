@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { CategoryChips } from './CategoryChips';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { clsx } from '@/lib/utils';
 import type { TodoNote } from '@/types';
 
 export function TodoView() {
@@ -19,7 +20,9 @@ export function TodoView() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [composing, setComposing] = useState<{ content: string; category: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showCompleted, setShowCompleted] = useState(true);
+  // 放 UI store：分页切走会卸载本组件，局部 state 会被重置（v4.7.7 修）
+  const showCompleted = useUIStore((s) => s.showCompletedTodos);
+  const setShowCompleted = useUIStore((s) => s.setShowCompletedTodos);
   // 排序模式：进入后禁长按复制 + 缩短长按判定，按住行即可拖动排序
   const [sortMode, setSortMode] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
@@ -252,7 +255,7 @@ export function TodoView() {
             {sortMode ? '完成' : '排序'}
           </button>
           <button
-            onClick={() => setShowCompleted((s) => !s)}
+            onClick={() => setShowCompleted(!showCompleted)}
             className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase hover:text-bronze transition-colors"
           >
             {showCompleted ? '▾ 隐藏已完成' : '▴ 显示已完成'}
@@ -285,13 +288,16 @@ export function TodoView() {
               </button>
               <button
                 onClick={() => {
-                  if (composing.content.trim()) {
-                    addTodo(composing.content.trim(), composing.category);
-                    setComposing(null);
-                    showToast('已添加', 'success');
+                  // 空内容时以前什么都不做 → 现在明确说一声（v4.7.7）
+                  if (!composing.content.trim()) {
+                    showToast('请先写点什么', 'error');
+                    return;
                   }
+                  addTodo(composing.content.trim(), composing.category);
+                  setComposing(null);
+                  showToast('已添加', 'success');
                 }}
-                className="btn-primary"
+                className={clsx('btn-primary', !composing.content.trim() && 'opacity-40')}
                 style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
               >
                 添加

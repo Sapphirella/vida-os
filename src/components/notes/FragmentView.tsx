@@ -16,7 +16,8 @@ import { Card } from '@/components/common/Card';
 import { CalendarNav } from '@/components/common/CalendarNav';
 import { TimePicker } from '@/components/common/TimePicker';
 import { EmptyState } from '@/components/common/EmptyState';
-import { useAppStore } from '@/stores/useAppStore';
+import { isFutureCapsule, useAppStore } from '@/stores/useAppStore';
+import { TimeCapsules } from '@/components/notes/TimeCapsules';
 import { useUIStore } from '@/stores/useUIStore';
 import { chineseWeekday, clsx, formatDate, todayKey } from '@/lib/utils';
 import type { FragmentEntry } from '@/types';
@@ -71,6 +72,16 @@ export function FragmentView() {
     [fragments, selected],
   );
 
+  /**
+   * 时间胶囊：所有带 capsule 标记的碎片（含已开封的 —— 见 TimeCapsules 的注释）。
+   * 与时间线不同，它**不跟随选中日期**：它是「所有种下的 / 待开封的」总览。
+   */
+  const capsules = useMemo(() => fragments.filter((f) => f.capsule), [fragments]);
+
+  /** 输入区里挑的那个时刻是不是「种到未来」（提示与 toast 都用它） */
+  const composingAt = (composing ? stampOf(selected, composing.at) : undefined) ?? 0;
+  const willBeCapsule = composing ? !(isToday && !composing.touched) && isFutureCapsule(composingAt) : false;
+
   const days = useMemo(() => {
     const first = new Date(view.year, view.month, 1);
     const total = new Date(view.year, view.month + 1, 0).getDate();
@@ -111,14 +122,14 @@ export function FragmentView() {
     });
   };
 
-  /** "HH:MM" + 日期 → 时间戳（本地时区） */
-  const stampOf = (date: string, hhmm: string): number | undefined => {
+  /** "HH:MM" + 日期 → 时间戳（本地时区）。写成函数声明以便在定义之前使用 */
+  function stampOf(date: string, hhmm: string): number | undefined {
     const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
     if (!m) return undefined;
     const d = new Date(`${date}T00:00:00`);
     d.setHours(Number(m[1]), Number(m[2]), 0, 0);
     return d.getTime();
-  };
+  }
 
   const submitCompose = (draft: { content: string; tag: string; at: string; touched: boolean }) => {
     const text = draft.content.trim();
@@ -126,9 +137,18 @@ export function FragmentView() {
     // 今天且没动过时间 → 不传 at，让 store 用真正的 now()；
     // 其余情况（补记到历史某天 / 手动改过时间）都用输入框里那个时刻。
     const at = isToday && !draft.touched ? undefined : stampOf(selected, draft.at);
+    // 补记到未来 → 时间胶囊（store 里按同一个规则打标记）
+    const capsule = at !== undefined && isFutureCapsule(at);
     addFragment(text, draft.tag.trim() || undefined, selected, at);
     setComposing(null);
-    showToast(isToday ? '已记下此刻' : `已补记到 ${selected}`, 'success');
+    showToast(
+      capsule
+        ? '🌱 种下一颗时间胶囊'
+        : isToday
+          ? '已记下此刻'
+          : `已补记到 ${selected}`,
+      'success',
+    );
   };
 
   return (
@@ -266,11 +286,21 @@ export function FragmentView() {
           </div>
 
           <p className="mt-2 font-mono text-[10px] tracking-wider text-bronze-deep">
-            {isToday
-              ? composing.touched
-                ? `记到今天 ${composing.at}`
-                : '记到此刻'
-              : `补记到 ${formatDate(new Date(selected), 'M')} 月 ${formatDate(new Date(selected), 'D')} 日`}
+            {willBeCapsule ? (
+              <span className="text-amber">
+                🌱 会种成一颗时间胶囊 ·{' '}
+                {formatDate(new Date(composingAt), 'M')} 月 {formatDate(new Date(composingAt), 'D')}{' '}
+                日 {formatDate(new Date(composingAt), 'HH:mm')} 开启
+              </span>
+            ) : isToday ? (
+              composing.touched ? (
+                `记到今天 ${composing.at}`
+              ) : (
+                '记到此刻'
+              )
+            ) : (
+              `补记到 ${formatDate(new Date(selected), 'M')} 月 ${formatDate(new Date(selected), 'D')} 日`
+            )}
           </p>
 
           <div className="flex gap-2 mt-3">
@@ -289,10 +319,19 @@ export function FragmentView() {
               <X size={13} strokeWidth={1.8} /> 取消
             </button>
             <button
-              onClick={() => submitCompose(composing)}
-              disabled={!composing.content.trim()}
+              onClick={() => {
+                // 空内容时点「记下」要说明原因（Enter 走 submitCompose，保持静默 —— 键盘操作不用解释）
+                if (!composing.content.trim()) {
+                  showToast('请先写点什么', 'error');
+                  return;
+                }
+                submitCompose(composing);
+              }}
               style={{ padding: '9px 16px' }}
-              className="btn-primary flex-1 min-w-0 justify-center whitespace-nowrap disabled:opacity-40"
+              className={clsx(
+                'btn-primary flex-1 min-w-0 justify-center whitespace-nowrap',
+                !composing.content.trim() && 'opacity-40',
+              )}
             >
               <Check size={13} strokeWidth={2} /> 记下
             </button>
@@ -356,6 +395,23 @@ export function FragmentView() {
             />
           ))}
         </ol>
+      )}
+
+      {/* 时间胶囊栏目：时间线下方，只在种过胶囊时出现 */}
+      {capsules.length > 0 && (
+        <TimeCapsules
+          items={capsules}
+          onDelete={async (f) => {
+            const ok = await useUIStore
+              .getState()
+              .confirmDialog(
+                `删除这颗时间胶囊？\n\n内容是：${f.content.slice(0, 40)}${f.content.length > 40 ? '…' : ''}\n删了就找不回来了。`,
+              );
+            if (!ok) return;
+            deleteFragment(f.id);
+            showToast('已删除这颗胶囊', 'info');
+          }}
+        />
       )}
 
       {/* 加号：与灵感/日程/待办同一个位置与样式（bottom-24 避开固定底栏） */}

@@ -283,7 +283,7 @@ export function exportMarkdown(state: AppState, scope: ExportScopes = ['articles
           .sort((a, b) => a.createdAt - b.createdAt)
           .forEach((f) => {
             lines.push(
-              `- [${formatDate(f.createdAt, 'HH:mm')}]${f.tag ? ` [${f.tag}]` : ''} ${f.content}`,
+              `- [${formatDate(f.createdAt, 'HH:mm')}]${f.capsule ? ' [时间胶囊]' : ''}${f.tag ? ` [${f.tag}]` : ''} ${f.content}`,
             );
           });
       }
@@ -604,7 +604,7 @@ export async function exportPDF(
         .get(d)!
         .sort((a, b) => a.createdAt - b.createdAt)
         .forEach((f) => {
-          html += `<div style="margin:6px 0;padding-left:14px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:11px;">${formatDate(f.createdAt, 'HH:mm')}${f.tag ? ` · ${escapeHTML(f.tag)}` : ''}</span><div style="font-size:16px;margin-top:1px;">${escapeHTML(f.content).replace(/\n/g, '<br />')}</div></div>`;
+          html += `<div style="margin:6px 0;padding-left:14px;border-left:1px solid #947D75;"><span style="color:#947D75;font-size:11px;">${formatDate(f.createdAt, 'HH:mm')}${f.capsule ? ' · 时间胶囊' : ''}${f.tag ? ` · ${escapeHTML(f.tag)}` : ''}</span><div style="font-size:16px;margin-top:1px;">${escapeHTML(f.content).replace(/\n/g, '<br />')}</div></div>`;
         });
     }
   }

@@ -31,7 +31,14 @@ interface UIStore {
 
   // 笔记内 tab
   notesTab: 'fragment' | 'inspiration' | 'schedule' | 'todo';
+  /**
+   * 待办是否显示已完成（v4.7.7 从 TodoView 的局部 state 搬过来）。
+   * 便签页的分页是条件渲染：切到「日程」会把 TodoView 整个卸载，局部 state 随之丢失 ——
+   * 用户点的「隐藏已完成」于是被重置（用户反馈）。放进 UI store 就跨分页保持了。
+   */
+  showCompletedTodos: boolean;
   setNotesTab: (tab: 'fragment' | 'inspiration' | 'schedule' | 'todo') => void;
+  setShowCompletedTodos: (v: boolean) => void;
 
   // Agent 当前打开的会话（临时 UI 状态，不持久化）
   agentSessionId: string | null;
@@ -110,6 +117,8 @@ export const useUIStore = create<UIStore>((set) => ({
   // v4.7.3：便签默认落在「碎片」（导航第一格，也是「最快记一笔」的入口）
   notesTab: 'fragment',
   setNotesTab: (tab) => set({ notesTab: tab }),
+  showCompletedTodos: true,
+  setShowCompletedTodos: (v) => set({ showCompletedTodos: v }),
 
   agentSessionId: null,
   setAgentSessionId: (id) => set({ agentSessionId: id }),

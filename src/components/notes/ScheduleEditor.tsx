@@ -1,6 +1,7 @@
 // 日程编辑表单（便签页与首页日程卡共用）
 import { useState } from 'react';
 import { Clock } from 'lucide-react';
+import { clsx } from '@/lib/utils';
 import { todayKey } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { TimePicker } from '@/components/common/TimePicker';
@@ -24,6 +25,36 @@ export function ScheduleEditor({ initial, inline, onCancel, onSave }: ScheduleEd
   const [time, setTime] = useState(initial.time || '');
   const [category, setCategory] = useState(initial.category || '生活');
   const showModal = useUIStore((s) => s.showModal);
+  const showToast = useUIStore((s) => s.showToast);
+
+  /** 能不能保存（按钮据此变暗 —— 但**不禁用**，点了要说明原因） */
+  const canSave = Boolean(title.trim() && date);
+
+  /**
+   * 保存。
+   *
+   * ⚠️ v4.7.7 修：以前是 `if (title.trim() && date) onSave(...)` —— 标题为空时点了
+   * **什么都不发生**（既不保存也不提示）。用户报「手机端无法点击保存，过一会儿又可以了」，
+   * 十有八九就是踩了这个：静默失败跟按钮坏了没法区分。
+   * 现在：按钮变暗 + 点了用 toast 说清缺什么。
+   */
+  const submit = () => {
+    if (!title.trim()) {
+      showToast('请先填写日程标题', 'error');
+      return;
+    }
+    if (!date) {
+      showToast('请先选择日期', 'error');
+      return;
+    }
+    onSave({
+      title: title.trim(),
+      note: note.trim(),
+      date,
+      time,
+      category: category.trim() || '生活',
+    });
+  };
 
   /**
    * 时间选择：走应用内的 TimePicker 弹窗（与碎片页同一个组件），
@@ -78,24 +109,18 @@ export function ScheduleEditor({ initial, inline, onCancel, onSave }: ScheduleEd
           placeholder="分类"
           className="px-2 py-1 text-xs bg-bronze/10 rounded text-paper outline-none w-20"
         />
-        <div className="ml-auto flex gap-2">
-          <button onClick={onCancel} className="btn-text">
+        {/* 操作区：**手机上单独占一整行**（v4.7.7）。
+            以前放在 meta 那行的末尾（ml-auto），窄屏 + 软键盘弹起时位置会飘，
+            点不到就只能干瞪眼；现在固定为表单最后一行、右对齐，位置可预期。
+            顺带把点按目标调大（9px 内边距 ≈ 40px 高）。 */}
+        <div className="flex gap-2 ml-auto max-sm:w-full max-sm:justify-end max-sm:mt-1">
+          <button onClick={onCancel} className="btn-text" style={{ padding: '9px 16px' }}>
             取消
           </button>
           <button
-            onClick={() => {
-              if (title.trim() && date) {
-                onSave({
-                  title: title.trim(),
-                  note: note.trim(),
-                  date,
-                  time,
-                  category: category.trim() || '生活',
-                });
-              }
-            }}
-            className="btn-primary"
-            style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
+            onClick={submit}
+            className={clsx('btn-primary', !canSave && 'opacity-40')}
+            style={{ padding: '9px 16px', fontSize: '0.8125rem' }}
           >
             保存
           </button>

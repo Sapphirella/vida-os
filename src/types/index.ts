@@ -117,6 +117,18 @@ export interface FragmentEntry {
   date: string;
   /** 可选标签（单字符串；不要塞进 categories.* 系统，碎片不长生命周期） */
   tag?: string;
+  /**
+   * 时间胶囊（v4.7.7）：补记到**未来**的碎片。
+   *
+   * 为什么需要一个显式标记，而不是每次靠 `createdAt > now` 现算：
+   *   - 现算的话，等那天真的来了，它就变回普通碎片 —— 可用户要的是
+   *     「等未来的这天来临，内容仍然在时间胶囊栏目里」（胶囊是永久身份，不是倒计时状态）；
+   *   - 也顺便记下「什么时候种下的」（plantedAt），那是 createdAt 表达不了的。
+   * 可选字段：旧数据没有它就是普通碎片，不需要迁移。
+   */
+  capsule?: boolean;
+  /** 种下这颗胶囊的真实时间（只有 capsule 为真时有意义） */
+  plantedAt?: number;
 }
 
 export interface Track {

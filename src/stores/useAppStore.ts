@@ -232,6 +232,34 @@ function snapshot(s: Store): AppState {
   };
 }
 
+/**
+ * 「补记到未来」的判定（v4.7.7）——碎片页种时间胶囊用它。
+ *
+ * 为什么要 5 分钟缓冲：时间选择器是按分钟挑的，取整可能落在几十秒之后
+ * （比如 14:30:45 时挑到 14:31）。没有缓冲的话，每次「记到此刻」都会被误判成胶囊。
+ * 真正「种到未来」至少是「今天稍晚 / 明天以后」，5 分钟的余量足够区分。
+ */
+export const CAPSULE_AHEAD_MS = 5 * 60 * 1000;
+
+/**
+ * 把「记录上用到的分类」登记进对应的标签桶（v4.7.7）。
+ *
+ * 起因（用户反馈）：新建日程时手填一个标签栏里还没有的分类，存完之后标签栏里找不到它 ——
+ * 因为在便签里分类是「桶（categories.*）决定标签栏、记录只存字符串」两套东西。
+ * 规则改成：**记录上出现的分类，标签栏里必须有**。放在 store 里做，
+ * 灵感/日程/待办三条写入路径（含 Agent 写入、导入）都自动覆盖，不依赖某个编辑器记得调。
+ */
+function ensureCategory(cats: Categories, which: keyof Categories, name?: string): Categories {
+  const n = (name ?? '').trim();
+  if (!n || cats[which].includes(n)) return cats;
+  return { ...cats, [which]: [...cats[which], n] };
+}
+
+/** 这个时间戳算不算「种到未来」（见 CAPSULE_AHEAD_MS 的说明） */
+export function isFutureCapsule(at: number, now = Date.now()): boolean {
+  return at > now + CAPSULE_AHEAD_MS;
+}
+
 // 防抖持久化：写入「纯数据」快照（绝不能把 action 函数交给 IndexedDB）
 const persist = debounce((s: Store) => {
   saveState(snapshot(s));
@@ -442,6 +470,7 @@ export const useAppStore = create<Store>((set, get) => ({
   addInspiration: (content, category = '随想', imageIds = []) => {
     const id = uid('ins_');
     set((s) => ({
+      categories: ensureCategory(s.categories, 'inspiration', category),
       notes: {
         ...s.notes,
         inspiration: [
@@ -455,6 +484,7 @@ export const useAppStore = create<Store>((set, get) => ({
   },
   updateInspiration: (id, patch) => {
     set((s) => ({
+      categories: ensureCategory(s.categories, 'inspiration', patch.category),
       notes: {
         ...s.notes,
         inspiration: s.notes.inspiration.map((n) =>
@@ -538,6 +568,8 @@ export const useAppStore = create<Store>((set, get) => ({
   addSchedule: (item) => {
     const id = uid('sch_');
     set((s) => ({
+      // 新分类自动进日程标签栏（用户明确要求，v4.7.7）
+      categories: ensureCategory(s.categories, 'schedule', item.category),
       notes: {
         ...s.notes,
         schedule: [
@@ -551,6 +583,7 @@ export const useAppStore = create<Store>((set, get) => ({
   },
   updateSchedule: (id, patch) => {
     set((s) => ({
+      categories: ensureCategory(s.categories, 'schedule', patch.category),
       notes: {
         ...s.notes,
         schedule: s.notes.schedule.map((n) =>
@@ -585,6 +618,7 @@ export const useAppStore = create<Store>((set, get) => ({
   addTodo: (content, category = '生活') => {
     const id = uid('td_');
     set((s) => ({
+      categories: ensureCategory(s.categories, 'todo', category),
       notes: {
         ...s.notes,
         todo: [
@@ -598,6 +632,7 @@ export const useAppStore = create<Store>((set, get) => ({
   },
   updateTodo: (id, patch) => {
     set((s) => ({
+      categories: ensureCategory(s.categories, 'todo', patch.category),
       notes: {
         ...s.notes,
         todo: s.notes.todo.map((n) => (n.id === id ? { ...n, ...patch } : n)),
@@ -654,6 +689,10 @@ export const useAppStore = create<Store>((set, get) => ({
   addFragment: (content, tag, date, at) => {
     const id = uid('frag_');
     const t = now();
+    // at 是「补记时用户挑的具体时刻」；不传就是此刻
+    const created = at ?? t;
+    // 补记到未来 = 种一颗时间胶囊（v4.7.7）
+    const isCapsule = isFutureCapsule(created, t);
     set((s) => ({
       notes: {
         ...s.notes,
@@ -662,11 +701,11 @@ export const useAppStore = create<Store>((set, get) => ({
           {
             id,
             content: content.trim(),
-            // at 是「补记时用户挑的具体时刻」；不传就是此刻
-            createdAt: at ?? t,
+            createdAt: created,
             // 不传 date 就默认今天（本地日历日）；传了则用调用方给的日期（补录）
             date: date || todayKey(),
             ...(tag ? { tag } : {}),
+            ...(isCapsule ? { capsule: true, plantedAt: t } : {}),
           },
         ],
       },

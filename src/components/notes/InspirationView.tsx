@@ -197,13 +197,16 @@ export function InspirationView() {
               </button>
               <button
                 onClick={() => {
-                  if (composing.content.trim()) {
-                    addInspiration(composing.content.trim(), composing.category || '随想', composing.imageIds);
-                    showToast('已记录', 'success');
-                    setComposing(null);
+                  // 空内容时以前什么都不做（跟「按钮坏了」没区别）→ 现在明确说一声（v4.7.7）
+                  if (!composing.content.trim()) {
+                    showToast('请先写点什么', 'error');
+                    return;
                   }
+                  addInspiration(composing.content.trim(), composing.category || '随想', composing.imageIds);
+                  showToast('已记录', 'success');
+                  setComposing(null);
                 }}
-                className="btn-primary"
+                className={clsx('btn-primary', !composing.content.trim() && 'opacity-40')}
                 style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
               >
                 保存
