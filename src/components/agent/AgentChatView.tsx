@@ -457,7 +457,9 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
         <div
           className="vd-composer mx-auto max-w-2xl rounded-card px-3 py-2.5"
           style={{
-            background: 'var(--agent-panel-bg)',
+            // 输入区走专用变量：猩红书房下只有这一块（和配置页的输入框）变深色，
+            // 面板/卡片仍用 --agent-panel-bg
+            background: 'var(--agent-composer-bg)',
             border: '1px solid var(--agent-panel-border)',
           }}
         >

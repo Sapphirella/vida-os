@@ -136,6 +136,10 @@
   --agent-accent: #A8767D;
   --agent-accent-rgb: 168 118 125;
   --agent-panel-bg: rgba(50, 48, 43, 0.85);
+  /* 「输入框 / 输入区」底色。默认跟面板同色（暗夜与日间行为不变），
+     猩红书房单独覆盖成近黑微紫 —— 见 v4.7.4 的说明。
+     之所以要单独一个变量：用户只要求改「输入框」的底色，不动 Agent 的面板/卡片。 */
+  --agent-composer-bg: var(--agent-panel-bg);
   --agent-panel-head: rgb(var(--agent-accent-rgb) / 0.18);
   /* 卡头文字/图标底色：夜间沿用原色，日间由 data-theme='day' 覆盖成反色 */
   --agent-head-fg: var(--headline);
@@ -496,12 +500,15 @@ textarea, input, [contenteditable] {
   --card-border: rgba(255, 190, 210, 0.22);
   --card-glow: rgba(255, 190, 210, 0.12);
   /* 液态高光色 */
-  /* Agent 模块的底色（v4.7.3 用户指定）：原来猩红没覆盖这两个变量，于是继承了暗夜的
-     暖炭灰（--agent-panel-bg rgba(50,48,43,.85) / --field-bg rgba(23,26,27,.5)），
-     压在猩红的紫红渐变上发灰、不好看。改成用户给的 #181419（近黑微紫）。
-     覆盖的是「面板 + 输入框」两类表面，范围仅限 Agent 模块（这两个变量只有它用）。 */
-  --agent-panel-bg: #181419;
-  --field-bg: #181419;
+  /* Agent 的「输入框」底色（v4.7.3 引入 / v4.7.4 收窄范围并按用户新色值调整）：
+     ⚠️ **只改输入框，不动面板/卡片**。v4.7.3 曾经把 --agent-panel-bg 也一起覆盖了，
+     结果 Agent 的卡片、会话面板全变成同一块深色 —— 用户要的只是输入框那一条。
+     所以：
+       --agent-panel-bg 不再覆盖 → 面板/卡片回到原来的暖炭灰（与暗夜一致）；
+       --field-bg / --agent-composer-bg → 输入框与聊天输入区，用用户给的 #1f131d
+       （近黑微紫，压在紫红渐变上比原先的灰好看）。 */
+  --field-bg: #1f131d;
+  --agent-composer-bg: #1f131d;
   --liquid-edge-hi: rgba(255, 222, 238, 0.6);    /* 边缘亮环（折射高光） */
   --liquid-edge-mid: rgba(255, 180, 210, 0.18);  /* 边缘晕 */
   --liquid-edge-dim: rgba(255, 165, 195, 0.06);  /* 边缘暗段 */
