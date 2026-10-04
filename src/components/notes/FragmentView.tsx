@@ -269,7 +269,7 @@ export function FragmentView() {
             {isToday
               ? composing.touched
                 ? `记到今天 ${composing.at}`
-                : '记到此刻（不动时间就是现在）'
+                : '记到此刻'
               : `补记到 ${formatDate(new Date(selected), 'M')} 月 ${formatDate(new Date(selected), 'D')} 日`}
           </p>
 
@@ -362,7 +362,7 @@ export function FragmentView() {
       {!composing && (
         <button
           onClick={() => setComposing({ content: '', tag: '', at: formatDate(new Date(), 'HH:mm'), touched: false })}
-          className="fixed right-5 bottom-24 z-30 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+          className="vd-fab fixed right-5 bottom-24 z-30 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
           style={{ background: 'var(--wine)', boxShadow: '0 4px 20px rgba(106, 8, 14, 0.5)' }}
           aria-label="记一条碎片"
         >

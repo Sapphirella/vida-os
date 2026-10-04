@@ -257,7 +257,7 @@ export function InspirationView() {
       {!composing && (
         <button
           onClick={handleAdd}
-          className="fixed right-5 bottom-24 z-30 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+          className="vd-fab fixed right-5 bottom-24 z-30 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
           style={{
             background: 'var(--wine)',
             boxShadow: '0 4px 20px rgba(106, 8, 14, 0.5)',

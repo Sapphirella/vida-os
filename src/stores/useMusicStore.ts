@@ -16,7 +16,7 @@ export const PLAY_MODES: { key: PlayMode; label: string; hint: string }[] = [
   { key: 'sequence', label: '顺序播放', hint: '按列表顺序播放，放完最后一首回到第一首' },
   { key: 'shuffle', label: '随机播放', hint: '每首结束随机挑一首，尽量不重复刚放完这首' },
   { key: 'repeat-one', label: '单曲循环', hint: '这一首反复播放，直到你换歌或暂停' },
-  { key: 'stop-after', label: '播完暂停', hint: '放到最后一首就停下，不回头重播' },
+  { key: 'stop-after', label: '播完暂停', hint: '这首放完就停，不自动接着播下一首' },
 ];
 
 interface MusicStore {
@@ -162,15 +162,18 @@ export const useMusicStore = create<MusicStore>((set, get) => {
         return;
       }
 
-      // sequence / stop-after 同样按顺序往下走，
-      // 区别只在最后一首之后：sequence 回到开头，stop-after 停下。
-      if (idx === -1) {
-        set({ isPlaying: false, progress: 0 });
+      // 「播完暂停」：**播完本首就停**，跟它在列表第几个无关（v4.7.3 按用户澄清改）
+      //   之前的实现是「只到最后一首才停」，用户要的是「这首放完就不要自动往下播」；
+      //   手动点下一首/上一首仍然照常播（那是用户自己的动作），但那一首放完也一样停。
+      // 进度留 100%：让用户看到「确实放完了」而不是回到 0%。
+      if (mode === 'stop-after') {
+        set({ isPlaying: false, progress: 1 });
         return;
       }
-      if (mode === 'stop-after' && idx === tracks.length - 1) {
-        // 停在末尾：进度留 100%，让用户看到「确实放完了」而不是回到 0%
-        set({ isPlaying: false, progress: 1 });
+
+      // 只剩 sequence：按顺序往下走，最后一首之后回到开头
+      if (idx === -1) {
+        set({ isPlaying: false, progress: 0 });
         return;
       }
       const next = tracks[(idx + 1) % tracks.length];

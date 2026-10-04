@@ -496,6 +496,12 @@ textarea, input, [contenteditable] {
   --card-border: rgba(255, 190, 210, 0.22);
   --card-glow: rgba(255, 190, 210, 0.12);
   /* 液态高光色 */
+  /* Agent 模块的底色（v4.7.3 用户指定）：原来猩红没覆盖这两个变量，于是继承了暗夜的
+     暖炭灰（--agent-panel-bg rgba(50,48,43,.85) / --field-bg rgba(23,26,27,.5)），
+     压在猩红的紫红渐变上发灰、不好看。改成用户给的 #181419（近黑微紫）。
+     覆盖的是「面板 + 输入框」两类表面，范围仅限 Agent 模块（这两个变量只有它用）。 */
+  --agent-panel-bg: #181419;
+  --field-bg: #181419;
   --liquid-edge-hi: rgba(255, 222, 238, 0.6);    /* 边缘亮环（折射高光） */
   --liquid-edge-mid: rgba(255, 180, 210, 0.18);  /* 边缘晕 */
   --liquid-edge-dim: rgba(255, 165, 195, 0.06);  /* 边缘暗段 */
@@ -1330,11 +1336,22 @@ input, textarea, [contenteditable] {
  *        80px 还回去。信号由 src/lib/keyboard.ts 写到 <html data-kbd>。
  * ============================================================ */
 
-/* 底栏：滑出而不是 display:none —— 和评论区已有的 commentInputFocused
-   隐藏走同一套 transform 过渡，滑出/滑入手感一致，不会突然消失。 */
+/* 底栏：键盘弹出时**直接不显示**。
+   v4.7.3 改（原来是 transform: translateY(100%)）：translate 只把底栏往下挪它自身的高度
+   （56px），可有些内核在键盘弹出时会**把整个布局连同 fixed 元素一起上推一个键盘的高度**
+   （iOS 与 interactive-widget=resizes-content 都是这样）—— 挪 56px 根本不够，
+   底栏仍然露在键盘上方（用户反馈：手机端灵感页打字时底栏被顶到键盘上面）。
+   display:none 把它从渲染里摘掉，内核怎么推都不会露出来。
+   代价是没有滑出动画；对这种「被顶起来挡住输入」的场景，正确性优先。
+   评论区的 commentInputFocused 仍走 translate —— 那不是键盘场景，保留原来的过渡手感。 */
 html[data-kbd='open'] .vd-tabbar {
-  transform: translateY(100%);
-  pointer-events: none;
+  display: none;
+}
+
+/* 悬浮加号同理：键盘弹出时它会（部分内核下）被顶到键盘上方，正好压在输入区旁边。
+   打字时本来也不需要它，直接藏起来。 */
+html[data-kbd='open'] .vd-fab {
+  display: none;
 }
 
 /* 内容区：为底栏预留的 80px 在键盘弹出时没有意义，直接还回给内容。

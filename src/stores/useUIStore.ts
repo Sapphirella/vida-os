@@ -107,7 +107,8 @@ export const useUIStore = create<UIStore>((set) => ({
   currentTab: 'desk',
   setTab: (tab) => set({ currentTab: tab }),
 
-  notesTab: 'inspiration',
+  // v4.7.3：便签默认落在「碎片」（导航第一格，也是「最快记一笔」的入口）
+  notesTab: 'fragment',
   setNotesTab: (tab) => set({ notesTab: tab }),
 
   agentSessionId: null,

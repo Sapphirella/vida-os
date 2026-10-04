@@ -34,6 +34,7 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile } from '@/lib/db';
 import { MediaImage } from '@/components/common/MediaImage';
+import { TimePicker } from '@/components/common/TimePicker';
 
 interface MarkdownEditorProps {
   open: boolean;
@@ -83,8 +84,31 @@ export function MarkdownEditor({
   const [tagInput, setTagInput] = useState('');
   // 动态的发布时间：新建时默认当前时间，可往前调
   const [createdAt, setCreatedAt] = useState<number>(initialCreatedAt ?? Date.now());
-  /** 动态发布时间输入框的 ref：保存时直接从输入框读取最终值，不受 onChange 中间态影响 */
+  /** 动态发布日期输入框的 ref：保存时直接从输入框读取最终值，不受 onChange 中间态影响 */
   const dtRef = useRef<HTMLInputElement>(null);
+  /**
+   * 动态的「时分」选择：应用内 TimePicker 弹窗。
+   * 只改时分 —— 日期以日期输入框为准（它可能已被用户改过但还没进 state，所以优先读 DOM）。
+   */
+  const openMomentTimePicker = () => {
+    let draft = formatDate(createdAt, 'HH:mm');
+    showModal({
+      title: '选择时间',
+      content: (
+        <TimePicker
+          value={draft}
+          onChange={(v) => {
+            draft = v;
+          }}
+        />
+      ),
+      onConfirm: () => {
+        const dateStr = dtRef.current?.value || formatDate(createdAt, 'YYYY-MM-DD');
+        const t = new Date(`${dateStr}T${draft}:00`).getTime();
+        if (!Number.isNaN(t)) setCreatedAt(t);
+      },
+    });
+  };
   /** 拖拽排序中的源下标（桌面 HTML5 拖拽） */
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [mode_, setMode] = useState<'edit' | 'preview'>('edit');
@@ -110,6 +134,7 @@ export function MarkdownEditor({
   );
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const showToast = useUIStore((s) => s.showToast);
+  const showModal = useUIStore((s) => s.showModal);
   const setLightbox = useUIStore((s) => s.setLightbox);
   /** 是否触屏设备（触摸上使用长按拖拽、插入不抢键盘）；
    *  宽屏触屏（iPad）也走移动端交互，统一按指针类型划分 */
@@ -234,11 +259,12 @@ export function MarkdownEditor({
       showToast('请填写内容', 'error');
       return;
     }
-    // 动态时间：以输入框当前显示的值为准（onChange 解析成功的中间态可能被跳过，
-    // 保存时直接读 DOM 最终值最可靠；解析失败才回退到 state）
+    // 动态时间：**日期**以输入框当前显示的值为准（非受控输入，保存时读 DOM 最可靠），
+    // **时分**来自 state（由 TimePicker 弹窗写入）。两者拼成本地时间戳，
+    // 解析失败才回退到 state 里的完整时间。
     let finalCreatedAt = createdAt;
     if (mode === 'moment' && dtRef.current?.value) {
-      const t = new Date(dtRef.current.value).getTime();
+      const t = new Date(`${dtRef.current.value}T${formatDate(createdAt, 'HH:mm')}:00`).getTime();
       if (!Number.isNaN(t)) finalCreatedAt = t;
     }
     // 备选区图片 ≠ 插入：只有正文里用 fileRef 引用的图才在文章里展示。
@@ -347,22 +373,30 @@ export function MarkdownEditor({
           </p>
         </div>
         {mode === 'moment' && (
-          <label className="flex items-center gap-1.5 mr-1" title="发布/记录时间">
+          <div className="flex items-center gap-1.5 mr-1" title="发布/记录时间">
             <Clock size={13} strokeWidth={1.5} className="text-bronze-deep flex-none" />
-            {/* 非受控：逐段修改日期时中间态不会被 React 拉回旧值，
-                只有最终完整时间被解析成功才写入状态，一次就能保存成功 */}
+            {/* 日期：仍是原生 input（它的系统弹窗自带取消/确定，没有 select 那种问题），
+                保持**非受控** —— 逐段修改日期时中间态不会被 React 拉回旧值，
+                保存时直接读 DOM 最终值最可靠。 */}
             <input
               ref={dtRef}
-              type="datetime-local"
-              defaultValue={formatDate(createdAt, 'YYYY-MM-DDTHH:mm')}
-              onChange={(e) => {
-                const t = new Date(e.target.value).getTime();
-                if (!Number.isNaN(t)) setCreatedAt(t);
-              }}
+              type="date"
+              defaultValue={formatDate(createdAt, 'YYYY-MM-DD')}
               className="editor-dt px-2 py-1 rounded-pill text-[11px] font-mono text-paper outline-none"
               style={{ background: 'var(--editor-input-bg)' }}
             />
-          </label>
+            {/* 时间：走应用内弹窗（与碎片页同一个 TimePicker），
+                不用原生 datetime-local —— 它的系统弹窗样式不可控、跟主题也不一致 */}
+            <button
+              onClick={openMomentTimePicker}
+              className="px-2 py-1 rounded-pill text-[11px] font-mono text-paper hover:brightness-110 transition-[filter] outline-none"
+              style={{ background: 'var(--editor-input-bg)' }}
+              aria-label="选择时间"
+              title="选择时间"
+            >
+              {formatDate(createdAt, 'HH:mm')}
+            </button>
+          </div>
         )}
         {favoriteId && (
           <button
