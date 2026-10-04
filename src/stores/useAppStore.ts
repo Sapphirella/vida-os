@@ -73,6 +73,14 @@ interface Actions {
   // 文章
   addArticle: (article: Omit<Article, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateArticle: (id: string, patch: Partial<Article>) => void;
+  /**
+   * 重命名文章标签：所有用到它的文章一起改。
+   * 标签是**从文章派生**的（没有独立注册表），所以改名只能改文章；
+   * 目标名已存在于同一篇时自动去重。返回被改动的文章数。
+   */
+  renameArticleTag: (from: string, to: string) => number;
+  /** 删除文章标签：从所有文章上摘掉（同样因为是派生数据）。返回被改动的文章数 */
+  deleteArticleTag: (tag: string) => number;
   deleteArticle: (id: string) => void;
 
   // 动态
@@ -307,6 +315,36 @@ export const useAppStore = create<Store>((set, get) => ({
       ),
     }));
     persist(get());
+  },
+  renameArticleTag: (from, to) => {
+    const next = to.trim();
+    if (!next || next === from) return 0;
+    let hit = 0;
+    set((s) => ({
+      articles: s.articles.map((a) => {
+        if (!a.tags?.includes(from)) return a;
+        hit += 1;
+        return {
+          ...a,
+          tags: [...new Set(a.tags.map((t) => (t === from ? next : t)))],
+          updatedAt: now(),
+        };
+      }),
+    }));
+    if (hit) persist(get());
+    return hit;
+  },
+  deleteArticleTag: (tag) => {
+    let hit = 0;
+    set((s) => ({
+      articles: s.articles.map((a) => {
+        if (!a.tags?.includes(tag)) return a;
+        hit += 1;
+        return { ...a, tags: a.tags.filter((t) => t !== tag), updatedAt: now() };
+      }),
+    }));
+    if (hit) persist(get());
+    return hit;
   },
   deleteArticle: (id) => {
     set((s) => ({

@@ -40,6 +40,14 @@ export function MusicPlayerCard() {
   const showModal = useUIStore((s) => s.showModal);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 播不出来的原因（文件缺失 / 被浏览器拦下）：弹一次 toast 就清掉。
+  // 以前这种情况只 console.error，用户看到的是「放着放着自己停了」，无从下手。
+  useEffect(() => {
+    if (!music.playError) return;
+    showToast(music.playError, 'error');
+    music.clearPlayError();
+  }, [music.playError, music.clearPlayError, showToast]);
+
   const currentTrack = tracks.find((t) => t.id === music.currentTrackId) || tracks[0];
   const modeMeta = PLAY_MODES.find((m) => m.key === music.playMode) ?? PLAY_MODES[0];
   const ModeIcon = MODE_ICON[modeMeta.key];
@@ -357,20 +365,30 @@ function TrackListPanel({
   );
 }
 
-/** 异步读取音频文件大小（显示在列表副行） */
+/**
+ * 列表副行：音频文件大小；**文件不在了就直接标出来**。
+ *
+ * 为什么要标：这类「曲目还在、文件没了」的歌正是「随机播放点到它就停住」的元凶
+ * （v4.6.1 之前的「清除缓存」会把音乐 blob 当孤儿删掉，见 PROJECT_MEMORY §8.3）。
+ * 标出来用户才知道该重新导入哪几首，而不是以为播放器坏了。
+ */
 function TrackSize({ fileId }: { fileId: string }) {
-  const [size, setSize] = useState<string | null>(null);
+  const [state, setState] = useState<{ size: string } | 'missing' | null>(null);
   useEffect(() => {
     let alive = true;
+    setState(null);
     getFile(fileId)
       .then((f) => {
-        if (alive && f) setSize(humanSize(f.size));
+        if (alive) setState(f ? { size: humanSize(f.size) } : 'missing');
       })
-      .catch(() => {});
+      .catch(() => {
+        if (alive) setState('missing');
+      });
     return () => {
       alive = false;
     };
   }, [fileId]);
-  if (!size) return <span className="mx-1 text-bronze-deep/60">·</span>;
-  return <span className="ml-1">· {size}</span>;
+  if (state === 'missing') return <span className="ml-1 text-wine-light">· 文件缺失</span>;
+  if (!state) return <span className="mx-1 text-bronze-deep/60">·</span>;
+  return <span className="ml-1">· {state.size}</span>;
 }

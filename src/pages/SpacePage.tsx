@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Plus, BookOpen, FolderPlus, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, BookOpen, FolderPlus, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
@@ -10,6 +10,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { plainText, excerpt, relativeTime } from '@/lib/utils';
 import { usePageFind } from '@/components/search/usePageFind';
 import { PageFindBar } from '@/components/search/PageFindBar';
+import { ArticleTags, type ArticleTag } from '@/components/space/ArticleTags';
 
 export function SpacePage() {
   const navigate = useNavigate();
@@ -17,12 +18,42 @@ export function SpacePage() {
   const collections = useAppStore((s) => s.collections);
   const addCollection = useAppStore((s) => s.addCollection);
   const updateArticle = useAppStore((s) => s.updateArticle);
+  const renameArticleTag = useAppStore((s) => s.renameArticleTag);
+  const deleteArticleTag = useAppStore((s) => s.deleteArticleTag);
   const openEditor = useUIStore((s) => s.openEditor);
   const showToast = useUIStore((s) => s.showToast);
 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  /** 当前用于筛选文章的标签（null = 全部） */
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+
+  /**
+   * 标签列表 = 所有文章 tags 的并集（带使用次数），按用得多的排前面。
+   * **刻意不做「标签注册表」**：列表完全由文章派生，所以不会出现
+   * 「注册表里有、没有任何文章在用」的幽灵标签（灵感/日程/待办那套分类桶就有这个毛病）。
+   */
+  const tagList = useMemo<ArticleTag[]>(() => {
+    const m = new Map<string, number>();
+    for (const a of articles) {
+      for (const t of a.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((x, y) => y.count - x.count || x.name.localeCompare(y.name));
+  }, [articles]);
+
+  // 正在筛选的标签没了吗（被删掉 / 改名了 / 最后一篇用它的文章删了）→ 自动退出筛选，
+  // 否则会卡在一个不存在的标签上：列表空白、也没有入口清掉
+  useEffect(() => {
+    if (activeTag && !tagList.some((t) => t.name === activeTag)) setActiveTag(null);
+  }, [activeTag, tagList]);
+
+  const shownArticles = useMemo(
+    () => (activeTag ? articles.filter((a) => (a.tags ?? []).includes(activeTag)) : articles),
+    [articles, activeTag],
+  );
 
   // ── 查找 / 替换（作用于文章标题 + 正文，替换写回 store） ──
   const findTargets = useMemo(
@@ -151,12 +182,57 @@ export function SpacePage() {
           </section>
         )}
 
+        {/* 标签（合集与文章之间）：点一下筛选下面的文章 */}
+        {tagList.length > 0 && (
+          <section className="mb-6">
+            <div className="flex items-center gap-3 mb-3 px-1">
+              <span className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
+                tags · {tagList.length}
+              </span>
+              <div className="flex-1 h-px bg-bronze/10" />
+            </div>
+            <ArticleTags
+              tags={tagList}
+              active={activeTag}
+              onSelect={setActiveTag}
+              onRename={(from, to) => {
+                const n = renameArticleTag(from, to);
+                // 正在按它筛选时跟着改名，别把筛选条件变成失效的旧名字
+                setActiveTag((cur) => (cur === from ? to.trim() : cur));
+                showToast(`已把 #${from} 改成 #${to.trim()}（${n} 篇）`, 'success');
+              }}
+              onDelete={async (tag) => {
+                const n = tagList.find((t) => t.name === tag)?.count ?? 0;
+                const ok = await useUIStore
+                  .getState()
+                  .confirmDialog(
+                    `删除标签 #${tag}？\n\n会从 ${n} 篇文章上摘掉这个标签，文章本身不会被删除。`,
+                  );
+                if (!ok) return;
+                const done = deleteArticleTag(tag);
+                showToast(`已删除标签 #${tag}（${done} 篇）`, 'info');
+              }}
+            />
+          </section>
+        )}
+
         {/* 文章列表 */}
         <section>
           <div className="flex items-center gap-3 mb-3 px-1">
             <span className="font-mono text-[10px] tracking-[0.2em] text-bronze-deep uppercase">
-              articles
+              articles{activeTag ? ` · #${activeTag}` : ''}
             </span>
+            {activeTag && (
+              <button
+                onClick={() => setActiveTag(null)}
+                className="tag tag-wine"
+                style={{ fontSize: 9, padding: '2px 8px' }}
+                aria-label="清除标签筛选"
+              >
+                #{activeTag}
+                <X size={9} strokeWidth={2.4} />
+              </button>
+            )}
             <div className="flex-1 h-px bg-bronze/10" />
           </div>
           {articles.length === 0 ? (
@@ -174,7 +250,7 @@ export function SpacePage() {
             />
           ) : (
             <ul className="space-y-3" ref={find.listRef}>
-              {articles.map((a) => (
+              {shownArticles.map((a) => (
                 <li key={a.id} {...find.findCardProps(a.id)}>
                   <Card
                     onClick={() => navigate(`/space/article/${a.id}`)}
