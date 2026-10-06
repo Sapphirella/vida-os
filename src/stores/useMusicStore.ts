@@ -31,7 +31,14 @@ export type PlayMode = 'sequence' | 'shuffle' | 'repeat-one' | 'stop-after';
 export const PLAY_MODES: { key: PlayMode; label: string; hint: string }[] = [
   { key: 'sequence', label: '顺序播放', hint: '按列表顺序播放，放完最后一首回到第一首' },
   { key: 'shuffle', label: '随机播放', hint: '每首结束随机挑一首，尽量不重复刚放完这首' },
-  { key: 'repeat-one', label: '单曲循环', hint: '这一首反复播放，直到你换歌或暂停' },
+  {
+    key: 'repeat-one',
+    label: '单曲循环',
+    // 说清「点下一首会换歌」：有的音乐软件在单曲循环下点下一首是把本曲从头重来，
+    // 这里**刻意**不是（用户明确表示喜欢这个逻辑，见 PROJECT_MEMORY §4-12）——
+    // 那类软件的行为会让人以为「下一首按钮坏了」。别改成前者，也别把这句话删了。
+    hint: '这一首反复播放；点「下一首」会真的换到下一首继续循环（不是本曲从头重来）',
+  },
   { key: 'stop-after', label: '播完暂停', hint: '这首放完就停，不自动接着播下一首' },
 ];
 

@@ -115,6 +115,18 @@ export function SettingsPage() {
               按钮点一下循环切换四种模式——它只决定「一首自然放完之后怎么办」，
               上一首 / 下一首永远按你导入的列表顺序走。音量在左侧。
             </p>
+            <p className="text-paper mt-1">
+              特别说明 <span className="text-candle">单曲循环</span>：
+              它只让<span className="text-candle">当前这首</span>反复播；
+              你点「下一首」，会<span className="text-candle">真的换到下一首</span>
+              （然后由那一首继续循环），而不是把本曲从头重来。
+              有些音乐软件是后者，这里是<span className="text-candle">有意</span>采用前者
+              —— 点了下一首就该换歌才对。
+            </p>
+            <p className="text-paper mt-1">
+              歌单可以拖动排序：歌单面板右上角点「排序」→ 按住歌名上下拖动 →
+              「取消」还原、「完成」保存。自动续播与上一首 / 下一首都按这个顺序走。
+            </p>
           </section>
 
           <section>
