@@ -31,14 +31,42 @@ export const db = new VidaDB();
 
 const STATE_KEY = 'root';
 
-export async function loadState(): Promise<AppState | null> {
+/**
+ * 启动读取的结果。
+ *
+ * ⚠️ **「没有数据」和「读失败」必须分开**（v4.7.12 修）：以前两种情况都返回 null，
+ * 而启动流程见到 null 就会把**默认状态写回 IndexedDB** —— 一次偶发的 IndexedDB 读失败、
+ * 或一个迁移不了的旧数据形状，都会把用户真实数据**永久擦掉**（静默、无提示）。
+ * 现在失败返回 ok:false，上层据此进入「只读临时页面」，**绝不写回**。
+ */
+export type LoadStateResult =
+  | { ok: true; state: AppState | null }
+  | { ok: false; error: string };
+
+export async function loadState(): Promise<LoadStateResult> {
+  let row: { id: string; data: AppState } | undefined;
   try {
-    const row = await db.state.get(STATE_KEY);
-    if (!row?.data) return null;
-    return normalizeState(row.data);
+    row = await db.state.get(STATE_KEY);
   } catch (err) {
-    console.error('[VidaOS] loadState failed', err);
-    return null;
+    console.error('[VidaOS] loadState 读取失败', err);
+    return { ok: false, error: `读取本地数据失败：${err instanceof Error ? err.message : String(err)}` };
+  }
+  if (!row?.data) return { ok: true, state: null };
+  try {
+    return { ok: true, state: normalizeState(row.data) };
+  } catch (err) {
+    // 数据在、但归一化炸了（多半是没见过的旧形状）。**绝不能当成「没有数据」**：
+    // 先把原始数据另存一份到 meta（救援副本），再让上层停下来报错。
+    console.error('[VidaOS] normalizeState 迁移失败', err);
+    try {
+      await db.meta.put({ id: 'recovery_backup', value: { at: Date.now(), raw: row.data } });
+    } catch {
+      /* 连副本都存不下也没关系，原始数据仍在 state 表里 */
+    }
+    return {
+      ok: false,
+      error: `本地数据无法迁移（可能来自更新的版本）：${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 
@@ -160,11 +188,14 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
   };
 }
 
-export async function saveState(state: AppState): Promise<void> {
+export async function saveState(state: AppState): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await db.state.put({ id: STATE_KEY, data: state });
+    return { ok: true };
   } catch (err) {
+    // 静默失败＝用户以为存住了、其实没存（关掉页面就丢）。返回给上层去提示。
     console.error('[VidaOS] saveState failed', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

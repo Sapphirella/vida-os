@@ -305,6 +305,16 @@ export function SettingsPage() {
               本页下方的<span className="text-candle">清除缓存</span>只删除正文里已经不再引用的图片文件
               （例如编辑时留下的废弃图），文章、动态、灵感、相册、收藏夹等数据一律不动。
             </p>
+            <p className="text-paper mt-1">
+              <span className="text-candle">关于备份的几句要紧话</span>：
+              ・<span className="text-candle">要完整备份就用 JSON 或本地文件夹快照</span>；
+              Markdown / TXT / PDF 是「给人读的导出」，不含馆藏书籍、相册、Agent 会话与音乐，不能当备份。
+              ・备份文件里<span className="text-candle">不含</span>你的 WebDAV 密码与模型 API Key
+              （那两样只存在本机），所以换设备恢复后需要重新填一次；反过来，导入任何备份都
+              <span className="text-candle">不会改动</span>本机已保存的这两样。
+              ・恢复时如果个别媒体文件写回失败，界面会明确告诉你失败个数，
+              <span className="text-candle">不会把「只恢复了一半」说成成功</span>；再恢复一次通常就能补齐。
+            </p>
           </section>
         </div>
       ),

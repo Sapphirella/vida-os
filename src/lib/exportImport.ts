@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { AppState } from '@/types';
 import { listFiles, getFile } from './db';
-import { origFileId } from './media';
+import { origFileId, ORIG_SUFFIX } from './media';
 import { blobToBase64, plainText, formatDate } from './utils';
 import { renderMarkdown } from './markdown';
 
@@ -36,6 +36,19 @@ export async function exportJSON(state: AppState, scope: ExportScopes = ['all'])
         dataUrl: await blobToBase64(f.blob),
       })),
   );
+
+  // 体积预检（v4.7.12）：整份备份是**一个 JSON 字符串**，而 base64 会放大 33%，
+  // V8 单字符串上限约 512MiB —— 超了就只会看到一句「导出失败」。这里提前说清原因与出路。
+  const bytes = fileData.reduce((n, f) => n + (f.size || 0), 0);
+  const estChars = Math.ceil((bytes * 4) / 3) * 1.08 + 512 * 1024;
+  const LIMIT = 470 * 1024 * 1024;
+  if (estChars > LIMIT) {
+    const mb = (n: number) => (n / 1024 / 1024).toFixed(0);
+    throw new Error(
+      `媒体总量约 ${mb(bytes)}MB，base64 后会超过浏览器单个文件的体积上限（约 470MB）。` +
+        '请改用「备份到本地文件夹」（按文件原样写入，不受此限），或分范围多次导出。',
+    );
+  }
 
   const bundle: ExportBundle = {
     meta: {
@@ -97,9 +110,14 @@ export function scopeSlug(scope: ExportScopes | ExportScope): string {
 export function scopedState(state: AppState, scope: ExportScopes | ExportScope): AppState {
   const has = normalizeScopes(scope);
   // ⚠️ 凭据一律不外带，而且必须在下面那个「全选直接返回 state」的短路之前处理 ——
-  // 否则全量导出（最常用的那条路径）会原样带上 settings.webdav 里的明文密码/口令
-  // （v4.7.11 修；webdav.ts 的 pickState 早就剥掉了，只有这条导出路径漏了）
-  const safe: AppState = { ...state, settings: { ...state.settings, webdav: undefined } };
+  // 否则全量导出（最常用的那条路径）会原样带上本机凭据（v4.7.11 修 settings.webdav，
+  // v4.7.12 补上 agentConfig.apiKey：那份短路返回的是原始 state，只剥 settings 不够）。
+  // 这两样本机凭据不进任何导出/备份文件（webdav.ts 的 pickState 同样剥掉了）。
+  const safe: AppState = {
+    ...state,
+    settings: { ...state.settings, webdav: undefined },
+    agentConfig: { ...state.agentConfig, apiKey: '' },
+  };
   if (has.size === ALL_SCOPE_KEYS.length) return safe;
 
   // 收藏夹导出：除收藏记录本身，也带上被收藏的内容，否则导出的收藏夹是空壳
@@ -141,8 +159,9 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
     albumGroups: has.has('album') ? state.albumGroups : [],
     albumStars: has.has('album') ? state.albumStars : [],
     agentSessions: has.has('agent') ? state.agentSessions : [],
+    // 非全量时也走 safe（已经剥了 apiKey，两处逻辑不要各写一份）
     agentConfig: has.has('agent')
-      ? { ...state.agentConfig, apiKey: '' }
+      ? safe.agentConfig
       : { baseUrl: '', apiKey: '', model: '', persona: '' },
     agentDocs: has.has('agent') ? state.agentDocs : [],
     agentMemories: has.has('agent') ? state.agentMemories : [],
@@ -229,9 +248,32 @@ export function collectFileIds(state: AppState): Set<string> {
   // 所以必须在这里显式收进来，否则两条后果都会发生：
   //   ① 三条备份路径（导出 JSON / WebDAV / 本地快照）不带原图，换机后原图永久丢失；
   //   ② 「清除缓存」拿本函数的反集当孤儿回收，会把原图当垃圾删掉（哪怕用户特意开开关存了它）。
-  // 不存在兄弟文件时多一个 id 也无害：导出侧 getFile 取不到会跳过，回收侧只是白留一个不存在的 id。
+  // ⚠️ 这里加的是**可能不存在**的兄弟 id（大多数图根本没开「存原图」，也不是每张图都够大）。
+  // 对「保留名单」与「导出取文件」两件事都无害：前者多留一个不存在的 id，后者 getFile 取不到就跳过。
+  // 但**调用方不能把它当成「本机应该有的文件」**——WebDAV 的缺失检查就栽在这：
+  // 它把 collectFileIds 里的每个 id 都当成「必须有」，于是每个用户（只要有头像/图片/音乐）
+  // 都会因为一堆不存在的 __orig 被判「本机缺少 N 个媒体文件」而**永远无法云备份**（v4.7.12 修）。
+  // 判据：**以 ORIG_SUFFIX 结尾 = 可选兄弟，缺了不算问题**；其余 id 是正文/记录真正引用的，缺了才是问题。
   for (const id of [...ids]) ids.add(origFileId(id));
   return ids;
+}
+
+/** 这个 id 是不是「可选的 __orig 兄弟」（不存在属于正常情况） */
+export function isOptionalSibling(id: string): boolean {
+  return id.endsWith(ORIG_SUFFIX);
+}
+
+/**
+ * 剥掉**本机私有凭据**后的状态副本 —— 任何「会被写出去 / 存到别处」的备份都要先过这一层。
+ * 目前包括：settings.webdav（URL/账号/密码/口令）与 agentConfig.apiKey。
+ * 用在导出 JSON、云端备份（webdav.ts 的 pickState 自己也有等价逻辑）、本地文件夹快照。
+ */
+export function stripLocalSecrets(state: AppState): AppState {
+  return {
+    ...state,
+    settings: { ...state.settings, webdav: undefined },
+    agentConfig: { ...state.agentConfig, apiKey: '' },
+  };
 }
 
 // ============================================================
@@ -772,52 +814,103 @@ function escapeHTML(s: string): string {
 // 导入
 // ============================================================
 
-export async function parseJSONImport(text: string): Promise<{ state: AppState; files: ExportBundle['files'] }> {
-  const bundle: ExportBundle = JSON.parse(text);
-  if (!bundle.state || !bundle.meta) {
+/**
+ * 解析一份 JSON 备份。
+ *
+ * 认两种形状（v4.7.12）：
+ *   ① 导出文件：`{ meta, state, files:[{id,mime,name,size,dataUrl}] }`
+ *   ② **云端备份文件**：`{ app, kind:'webdav-backup', state, files:{ id:{mime,name,size,data} } }`
+ *      —— 以前只认 ①，于是用户从坚果云把 `vidaos-backup.json` 下载下来想导入时，
+ *      会被告知「不是有效的 VidaOS 备份文件」（同一个应用产出的两份东西互不认账）。
+ * 校验：`state` 必须是对象（`state: 1` / `state: null` 之类一律拒绝，
+ * 否则「覆盖」导入会把库重置成默认值 —— 那属于静默破坏）。
+ */
+export async function parseJSONImport(
+  text: string,
+): Promise<{ state: AppState; files: ExportBundle['files'] }> {
+  let bundle: Partial<ExportBundle> & {
+    app?: string;
+    kind?: string;
+    files?: ExportBundle['files'] | Record<string, { mime: string; name: string; size: number; data: string }>;
+  };
+  try {
+    bundle = JSON.parse(text);
+  } catch {
+    throw new Error('文件不是合法的 JSON（可能下载不完整或已损坏）');
+  }
+  const state = bundle.state;
+  if (!state || typeof state !== 'object' || Array.isArray(state)) {
+    throw new Error('不是有效的 VidaOS 备份文件：里面没有可识别的数据');
+  }
+  // ② 云端格式：files 是「id → {mime,name,size,data(原始 base64)}」的字典
+  if (bundle.kind === 'webdav-backup' || (bundle.app === 'VidaOS' && bundle.files && !Array.isArray(bundle.files))) {
+    const dict = (bundle.files ?? {}) as Record<string, { mime: string; name: string; size: number; data: string }>;
+    const files: ExportBundle['files'] = Object.entries(dict).map(([id, f]) => ({
+      id,
+      mime: f.mime,
+      name: f.name,
+      size: f.size,
+      // dataUrl 统一成 data: URL 形状（下游 base64ToBlob 期待这个）
+      dataUrl: `data:${f.mime || 'application/octet-stream'};base64,${f.data}`,
+    }));
+    return { state: state as AppState, files };
+  }
+  if (!bundle.meta) {
     throw new Error('不是有效的 VidaOS 备份文件');
   }
-  // 恢复 fileId 引用：因为 state 已包含 fileId，直接用
-  return { state: bundle.state, files: bundle.files || [] };
+  return { state: state as AppState, files: (bundle.files as ExportBundle['files']) || [] };
 }
 
 export async function parseMarkdownImport(text: string): Promise<Partial<AppState>> {
-  // 简单解析：每段以 # 开头的为标题，下面到下一个 # 为内容
-  const articles: any[] = [];
-  const lines = text.split('\n');
-  let current: { title?: string; content: string[] } | null = null;
-
+  // 认两种结构（v4.7.12）：
+  //   ① **本应用导出的 Markdown**：首行 `# VidaOS 导出`，分区是 `## 空间文章`，
+  //      每篇文章标题是 `### 标题`。以前只按 `# ` 切，于是「把自己的导出再导进来」
+  //      会塌成一篇叫「VidaOS 导出」的文章（正文全塞在里面）。
+  //   ② 外来 Markdown：沿用「`# 标题` 分篇」的老行为。
+  // 说明：这是**文本迁移**功能，不是备份（MD 不含馆藏/相册/Agent/音乐），
+  // 正文里自带 `###` 小标题时仍会被切开 —— 完整还原请用 JSON 或文件夹快照。
+  const lines = text.split(String.fromCharCode(10));
+  const own = /^#\s*VidaOS 导出\s*$/.test((lines[0] ?? '').trim());
+  const articles: Array<{ title: string; content: string }> = [];
+  let title: string | null = null;
+  let buf: string[] = [];
+  const flush = () => {
+    if (title) articles.push({ title, content: buf.join(String.fromCharCode(10)).trim() });
+    title = null;
+    buf = [];
+  };
   for (const line of lines) {
-    if (line.startsWith('# ')) {
-      if (current && current.title) {
-        articles.push({
-          id: `imported_${Date.now()}_${articles.length}`,
-          title: current.title,
-          content: current.content.join('\n'),
-          tags: [],
-          imageIds: [],
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
+    if (own) {
+      if (/^###\s+/.test(line)) {
+        flush();
+        title = line.replace(/^###\s+/, '').trim();
+        continue;
       }
-      current = { title: line.slice(2).trim(), content: [] };
-    } else if (current) {
-      current.content.push(line);
+      // `#` 是文件头、`##` 是分区标题：都不是文章，跳过
+      if (/^#{1,2}\s+/.test(line)) continue;
+      if (title) buf.push(line);
+      continue;
     }
+    if (/^#\s+/.test(line)) {
+      flush();
+      title = line.replace(/^#\s+/, '').trim();
+      continue;
+    }
+    if (title) buf.push(line);
   }
-  if (current && current.title) {
-    articles.push({
-      id: `imported_${Date.now()}_${articles.length}`,
-      title: current.title,
-      content: current.content.join('\n'),
+  flush();
+  const now = Date.now();
+  return {
+    articles: articles.map((a, i) => ({
+      id: `imported_${now}_${i}`,
+      title: a.title,
+      content: a.content,
       tags: [],
       imageIds: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-  }
-
-  return { articles };
+      createdAt: now,
+      updatedAt: now,
+    })) as AppState['articles'],
+  };
 }
 
 export async function parseTXTImport(text: string): Promise<Partial<AppState>> {

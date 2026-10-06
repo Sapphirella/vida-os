@@ -202,6 +202,12 @@ interface Actions {
 // 运行时标记：是否已完成首次从 IndexedDB 载入（不持久化，不入 AppState）
 interface RuntimeFlags {
   hydrated: boolean;
+  /**
+   * 启动时读本地数据失败的原因（非空 = 进入了「只读救援」状态）。
+   * 此时**禁止任何写回**（见 persist），因为内存里是默认状态，写回去就擦掉了真实数据。 */
+  hydrateError: string | null;
+  /** 最近一次写盘失败的原因（提示用；写成功后自动清空） */
+  saveError: string | null;
 }
 
 type Store = AppState & Actions & RuntimeFlags;
@@ -264,21 +270,46 @@ export function isFutureCapsule(at: number, now = Date.now()): boolean {
 
 // 防抖持久化：写入「纯数据」快照（绝不能把 action 函数交给 IndexedDB）
 const persist = debounce((s: Store) => {
-  saveState(snapshot(s));
+  // 启动时没能读到本地数据（读失败 / 迁移失败）→ **一个字都不许写**。
+  // 否则会把内存里的默认状态覆盖到真实数据上，等于静默擦除用户全部内容（v4.7.12 修）。
+  if (s.hydrateError) return;
+  void saveState(snapshot(s)).then((r) => {
+    if (!r.ok && !useAppStore.getState().saveError) {
+      useAppStore.setState({ saveError: `保存到本机失败：${r.error}` });
+    } else if (r.ok && useAppStore.getState().saveError) {
+      useAppStore.setState({ saveError: null });
+    }
+  });
 }, 400);
+
+/** 立刻落盘（不等 400ms 防抖）—— 破坏性操作前用，避免「清空了但没存进去」 */
+export async function flushPersist(): Promise<void> {
+  const s = useAppStore.getState();
+  if (s.hydrateError) return;
+  const r = await saveState(snapshot(s));
+  if (!r.ok) useAppStore.setState({ saveError: `保存到本机失败：${r.error}` });
+}
 
 export const useAppStore = create<Store>((set, get) => ({
   ...defaultState(),
   hydrated: false,
+  hydrateError: null,
+  saveError: null,
 
   hydrate: async () => {
-    const loaded = await loadState();
-    if (loaded) {
-      set({ ...defaultState(), ...loaded, version: 3, hydrated: true });
-    } else {
-      set({ hydrated: true });
-      persist(get());
+    const res = await loadState();
+    if (res.ok) {
+      if (res.state) {
+        set({ ...defaultState(), ...res.state, version: 3, hydrated: true, hydrateError: null });
+      } else {
+        // 真的是「第一次使用」：写入默认状态
+        set({ hydrated: true, hydrateError: null });
+        persist(get());
+      }
+      return;
     }
+    // 读/迁移失败：给一个能用的空壳界面，但**标记为错误态**（persist 会因此拒绝写回）
+    set({ hydrated: true, hydrateError: res.error });
   },
 
   resetAll: async () => {
@@ -1215,10 +1246,50 @@ export const useAppStore = create<Store>((set, get) => ({
 
   // 导入（incoming 允许是 Partial：Markdown/TXT 导入只带 articles）
   importState: (incoming, mode) => {
+    // 兜底：null/非对象一律拒绝（以前会走 normalizeState 变成默认值 → 覆盖模式下等于清库）
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+      console.warn('[VidaOS] importState 收到无效数据，已忽略');
+      return;
+    }
+    /**
+     * 导入的**本机凭据**一律不从文件里取（v4.7.12）。
+     *
+     * 备份文件里故意不带 `settings.webdav`（含密码/口令）与 `agentConfig.apiKey` ——
+     * 那两样是本机秘密，不该随备份流传。于是「用文件里的值」就等于「用空值覆盖」：
+     * 覆盖模式此前会把用户已配置的云备份与 API Key 一起清掉（合并模式早就有保护，
+     * 覆盖模式漏了）。这里统一兜住：无论哪种模式，凭据与本机 UI 偏好都保持本机现值。
+     */
+    const keepLocalSecrets = (
+      next: AppState,
+      cur: { profile: AppState['profile']; settings: AppState['settings']; agentConfig: AppState['agentConfig'] },
+    ): AppState => {
+      // 非全量导出会给未选范围填「空壳」（profile / agentConfig）。空壳绝不能覆盖本机 ——
+      // 否则「只导出文章 → 导入」会把昵称签名清空、头像与背景引用丢掉（随后被清除缓存当孤儿删掉），
+      // 或把本机已配好的模型/人格清空。判据：空壳 = 既没有内容标识、也没有连接信息。
+      const shellProfile = !next.profile?.name && !next.profile?.signature;
+      const shellAgent = !next.agentConfig?.baseUrl && !next.agentConfig?.model && !next.agentConfig?.persona;
+      return {
+        ...next,
+        profile: shellProfile ? cur.profile : { ...cur.profile, ...next.profile },
+        settings: {
+          ...next.settings,
+          // 云配置只认本机（备份里没有它的合法来源）
+          webdav: cur.settings.webdav,
+          // 上一台设备的「最后所在分栏」没必要带过来
+          lastTab: cur.settings.lastTab ?? next.settings.lastTab,
+        },
+        agentConfig: {
+          ...(shellAgent ? cur.agentConfig : { ...cur.agentConfig, ...next.agentConfig }),
+          // API Key 只认本机
+          apiKey: cur.agentConfig.apiKey,
+        },
+      };
+    };
+
     if (mode === 'overwrite') {
       // 外部来源一律先归一化：旧备份缺 starred / imageIds 等字段，
       // 原样灌进 store 会让「便签 · 灵感」渲染即崩（v4.3.3 修，见 db.ts normalizeState）
-      set({ ...normalizeState(incoming), hydrated: true });
+      set({ ...keepLocalSecrets(normalizeState(incoming), get()), hydrated: true });
     } else {
       // 合并：保留现有数据，追加 incoming 中不存在的新项
       const cur = get();
@@ -1268,21 +1339,15 @@ export const useAppStore = create<Store>((set, get) => ({
         albumGroups: mergeById(cur.albumGroups, incoming.albumGroups),
         albumStars: mergeById(cur.albumStars, incoming.albumStars),
         agentSessions: mergeById(cur.agentSessions, incoming.agentSessions),
-        // 备份不带 API Key：合并时若 incoming 为空 key，保留本机已有的 key
-        agentConfig: {
-          ...cur.agentConfig,
-          ...(incoming.agentConfig ?? {}),
-          apiKey: incoming.agentConfig?.apiKey
-            ? incoming.agentConfig.apiKey
-            : cur.agentConfig.apiKey,
-        },
+        // agentConfig 由下面统一的 keepLocalSecrets 收口（空壳不覆盖、API Key 只认本机）
+        agentConfig: { ...cur.agentConfig, ...(incoming.agentConfig ?? {}) },
         agentDocs: mergeById(cur.agentDocs, incoming.agentDocs),
         agentMemories: mergeById(cur.agentMemories, incoming.agentMemories),
         settings: cur.settings,
       };
       // merged 是从 cur（完整）构造出来的，再过一次归一化即可补齐 incoming 里
       // 旧条目的缺字段 —— 注意不能直接归一化 incoming：那会用默认资料覆盖现有数据
-      set(normalizeState(merged));
+      set(keepLocalSecrets(normalizeState(merged), cur));
     }
     persist(get());
   },

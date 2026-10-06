@@ -59,7 +59,8 @@ export function ImageLightbox() {
       showToast('这张图的文件已不在本机（可能被清理过），无法保存', 'error');
       return;
     }
-    const ext = (f.mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+    // mime 可能缺失（手改过的备份/极旧的记录）→ 别让它把「保存图片」整条打挂
+    const ext = ((f.mime || 'image/jpeg').split('/')[1] || 'jpg').replace('jpeg', 'jpg');
     const name = f.name || `vidaos-${fileId}.${ext}`;
     // 手机：系统分享（可存相册）；电脑：<a download> 直接下载
     if (isTouch && typeof navigator.share === 'function' && navigator.canShare) {

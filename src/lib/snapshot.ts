@@ -11,7 +11,7 @@
 //   - 每份快照是一个文件夹：manifest.json + data.json.gz + files/<fileId>
 // ============================================================
 import { db, putFile } from './db';
-import { collectFileIds } from './exportImport';
+import { collectFileIds, stripLocalSecrets } from './exportImport';
 import type { AppState } from '@/types';
 
 export const MAX_SNAPSHOTS = 10;
@@ -124,12 +124,37 @@ export async function listSnapshotNames(root: DirHandle): Promise<string[]> {
   return names.sort();
 }
 
-/** 只清理本应用写下的快照目录，手动导出的文件不受影响 */
+/**
+ * 只清理本应用写下的快照目录，手动导出的文件不受影响。
+ *
+ * v4.7.12：**先把「没有 data.json.gz 的半成品目录」清掉**（上次写到一半中断留下的），
+ * 它们本来就读不出来，却会占用 MAX_SNAPSHOTS 的名额 —— 极端情况下会把一份有效快照挤掉。
+ */
 async function pruneSnapshots(root: DirHandle): Promise<string[]> {
   const names = await listSnapshotNames(root);
   const removed: string[] = [];
-  while (names.length - removed.length > MAX_SNAPSHOTS) {
-    const oldest = names[removed.length];
+  const usable: string[] = [];
+  for (const name of names) {
+    let ok = false;
+    try {
+      const dir = await root.getDirectoryHandle(name);
+      await dir.getFileHandle('data.json.gz');
+      ok = true;
+    } catch {
+      ok = false;
+    }
+    if (ok) usable.push(name);
+    else {
+      try {
+        await root.removeEntry(name, { recursive: true });
+        removed.push(name);
+      } catch {
+        usable.push(name);   // 删不掉就当它有效，免得误判导致超额
+      }
+    }
+  }
+  while (usable.length > MAX_SNAPSHOTS) {
+    const oldest = usable.shift()!;
     await root.removeEntry(oldest, { recursive: true });
     removed.push(oldest);
   }
@@ -167,23 +192,36 @@ export async function saveSnapshotTo(
   const name = await uniqueSnapshotName(root);
   const dir = await root.getDirectoryHandle(name, { create: true });
 
-  const payload = JSON.stringify({ app: 'VidaOS', kind: 'snapshot', createdAt: Date.now(), state });
+  // ⚠️ 快照也会被拷到 U 盘/网盘，同样不能带本机凭据（云账号密码、API Key）——
+  // 与 JSON 导出、WebDAV 备份保持同一条规矩（v4.7.12）
+  const payload = JSON.stringify({
+    app: 'VidaOS',
+    kind: 'snapshot',
+    createdAt: Date.now(),
+    state: stripLocalSecrets(state),
+  });
   const gz = await gzip(payload);
   await writeFile(dir, 'data.json.gz', gz);
 
-  // 媒体文件：原始 Blob 直存，不做 base64
+  // 媒体文件：原始 Blob 直存，不做 base64。
+  // 同时写一份**媒体清单**（id → mime/name/size）—— 文件名就是 id、没有扩展名，
+  // 光看文件读不出原始类型与名字；以前恢复后所有图都变成 `application/octet-stream`、
+  // 名字变成 id，灯箱「保存图片」会存出 `img_xxx.octet-stream`（v4.7.12 修）。
   let fileCount = 0;
   let bytes = gz.size;
   const used = collectFileIds(state);
   if (used.size > 0) {
     const filesDir = await dir.getDirectoryHandle('files', { create: true });
+    const media: Record<string, { mime: string; name: string; size: number }> = {};
     for (const id of used) {
       const f = await db.files.get(id);
       if (!f) continue;
       await writeFile(filesDir, id, f.blob);
+      media[id] = { mime: f.mime, name: f.name, size: f.size };
       fileCount += 1;
       bytes += f.blob.size;
     }
+    await writeFile(dir, 'media.json', JSON.stringify(media));
   }
 
   const counts = {
@@ -247,32 +285,58 @@ export async function deleteSnapshot(name: string): Promise<void> {
   await root.removeEntry(name, { recursive: true });
 }
 
-/** 从快照读回 AppState，并把其中的媒体文件写回 IndexedDB */
-export async function restoreSnapshotTo(root: DirHandle, name: string): Promise<AppState> {
+/**
+ * 从快照读回 AppState，并把其中的媒体文件写回 IndexedDB。
+ * @returns state 与本次恢复的统计（失败数要如实报给用户，别把「恢复了一半」说成成功）
+ */
+export async function restoreSnapshotTo(
+  root: DirHandle,
+  name: string,
+): Promise<{ state: AppState; files: number; failed: number }> {
   const dir = await root.getDirectoryHandle(name);
   const dataFile = await (await dir.getFileHandle('data.json.gz')).getFile();
   const parsed = JSON.parse(await gunzip(dataFile)) as { state: AppState };
 
+  // 媒体清单（可能不存在：旧版快照）
+  let media: Record<string, { mime: string; name: string; size: number }> = {};
+  try {
+    const mf = await (await dir.getFileHandle('media.json')).getFile();
+    media = JSON.parse(await mf.text()) as typeof media;
+  } catch {
+    /* 旧快照没有清单：按老办法（名字=id、类型靠 File.type） */
+  }
+
+  let restored = 0;
+  let failed = 0;
   try {
     const filesDir = await dir.getDirectoryHandle('files');
     for await (const [fname, h] of filesDir.entries()) {
       if (h.kind !== 'file') continue;
-      const file = await h.getFile();
-      await putFile({
-        id: fname,
-        blob: file,
-        mime: file.type || 'application/octet-stream',
-        name: fname,
-        size: file.size,
-      });
+      try {
+        const file = await h.getFile();
+        const meta = media[fname];
+        await putFile({
+          id: fname,
+          blob: file,
+          mime: meta?.mime || file.type || 'application/octet-stream',
+          name: meta?.name || fname,
+          size: file.size,
+        });
+        restored += 1;
+      } catch {
+        // 单个文件失败（配额/坏文件）不能中断整批，但**必须计数**：恢复半个库要告诉用户
+        failed += 1;
+      }
     }
   } catch {
     // 没有 files 目录＝这份快照只含文本
   }
-  return parsed.state;
+  return { state: parsed.state, files: restored, failed };
 }
 
-export async function restoreSnapshot(name: string): Promise<AppState> {
+export async function restoreSnapshot(
+  name: string,
+): Promise<{ state: AppState; files: number; failed: number }> {
   const root = await getSavedFolder();
   if (!root) throw new Error('还没有选择备份文件夹');
   await ensureWritable(root);

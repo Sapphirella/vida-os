@@ -23,6 +23,7 @@ import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile, db } from '@/lib/db';
+import { flushPersist } from '@/stores/useAppStore';
 import { base64ToBlob, saveBlob, saveText, clsx, errMsg } from '@/lib/utils';
 import {
   exportJSON,
@@ -158,6 +159,8 @@ export function DataPage() {
   /** 云端历史（点「查看云端历史」时拉取；null = 还没查过） */
   const [davVersions, setDavVersions] = useState<DavBackupEntry[] | null>(null);
   const [davVersionsBusy, setDavVersionsBusy] = useState(false);
+  /** 本次要恢复的是云端哪一份（null = 最新那份）；弹口令时需要它才不会恢复错份 */
+  const davRestoreTargetRef = useRef<string | undefined>(undefined);
 
   const doSaveDavConfig = () => {
     if (!davUrl.trim() || !davUser.trim() || !davPass.trim()) {
@@ -177,10 +180,23 @@ export function DataPage() {
         url: davUrl.trim(),
         username: davUser.trim(),
         password: davPass.trim(),
-        ...(davEnc ? { encrypted: true, passphrase: davPassPhrase.trim() } : {}),
+        ...(davEnc
+          ? { encrypted: true, passphrase: davPassPhrase.trim() }
+          : // ⚠️ 关掉加密时**保留已保存的口令**（v4.7.12）：口令是解开**此前已上传**那些
+            // 加密备份的唯一钥匙，删了就永久解不开了。关掉只代表「以后不再加密上传」。
+            davCfg?.passphrase
+            ? { passphrase: davCfg.passphrase }
+            : {}),
       },
     });
-    showToast('WebDAV 配置已保存', 'success');
+    showToast(
+      davEnc
+        ? 'WebDAV 配置已保存（开启加密）'
+        : davCfg?.passphrase
+          ? 'WebDAV 配置已保存 · 已停止加密上传（本机仍保留口令，可继续取回旧的加密备份）'
+          : 'WebDAV 配置已保存',
+      'success',
+    );
   };
 
   const doDavBackup = async () => {
@@ -245,6 +261,7 @@ export function DataPage() {
       showToast('请先填写并保存 WebDAV 配置', 'error');
       return;
     }
+    davRestoreTargetRef.current = onlyName;
     setDavRestoring(true);
     try {
       const info = await downloadFromWebDav(cfg, pass, onlyName);
@@ -258,6 +275,7 @@ export function DataPage() {
       // v4.7.11：媒体也要一起写回。此前只灌 state，图片/音频/头像只剩悬空 id ——
       // 换台设备或清过缓存后「恢复了但图片全没了」，而且下一次同步还会把云端那份覆盖掉。
       let files = 0;
+      let failed = 0;
       for (const [id, f] of Object.entries(info.files ?? {})) {
         try {
           // 注意：webdav 存的是**原始 base64**，而 base64ToBlob 期待 data: URL，
@@ -266,21 +284,33 @@ export function DataPage() {
           await putFile({ id, blob, mime: f.mime, name: f.name, size: blob.size });
           files += 1;
         } catch {
-          // 单个文件坏了不中断整体恢复
+          // 单个文件坏了不中断整体恢复，但要计数（恢复一半不能报成成功）
+          failed += 1;
         }
       }
       importState(info.state, 'overwrite');
-      showToast(
-        files > 0 ? `已从云端恢复（含 ${files} 个媒体文件）` : '已从云端恢复',
-        'success',
-      );
+      davRestoreTargetRef.current = undefined;
+      if (failed > 0) {
+        showToast(
+          `已从云端恢复，但有 ${failed} 个媒体文件写回失败（成功 ${files} 个）。可再恢复一次，或检查存储空间`,
+          'error',
+        );
+      } else {
+        const which = info.name && info.name !== 'vidaos-backup.json' ? '（历史份）' : '';
+        showToast(
+          files > 0 ? `已从云端恢复${which}（含 ${files} 个媒体文件）` : `已从云端恢复${which}`,
+          'success',
+        );
+      }
     } catch (e) {
       if (e instanceof NeedPassphraseError) {
         showModal({
           title: '输入加密口令',
           content: '云端备份已加密，请输入备份时设置的口令才能取回。若口令丢失，该备份将无法解密。',
           inputMode: { placeholder: '加密口令' },
-          onInputConfirm: (v) => void doDavRestore(v),
+          // ⚠️ 必须把「要恢复哪一份」带上：否则用户点了某一份历史、输完口令之后，
+          // 实际恢复的是**最新那份**（v4.7.12 修）
+          onInputConfirm: (v) => void doDavRestore(v, davRestoreTargetRef.current),
         });
       } else {
         showToast(`云端恢复失败：${errMsg(e)}`, 'error');
@@ -349,8 +379,19 @@ export function DataPage() {
     if (!(await useUIStore.getState().confirmDialog(`用这份快照覆盖当前全部数据？\n\n${name}\n\n当前数据将被替换（建议先手动导出一份 JSON 再恢复）。`))) return;
     try {
       const restored = await restoreSnapshot(name);
-      importState(restored, 'overwrite');
-      showToast('已从快照恢复', 'success');
+      importState(restored.state, 'overwrite');
+      // 恢复了一半不能报成成功（v4.7.12）：如实说出成功/失败的文件数
+      if (restored.failed > 0) {
+        showToast(
+          `已从快照恢复，但有 ${restored.failed} 个媒体文件没写回（成功 ${restored.files} 个）。可再恢复一次，或检查存储空间`,
+          'error',
+        );
+      } else {
+        showToast(
+          restored.files > 0 ? `已从快照恢复（含 ${restored.files} 个媒体文件）` : '已从快照恢复',
+          'success',
+        );
+      }
       await refreshSnapshots();
     } catch (e) {
       showToast(`恢复失败：${errMsg(e)}`, 'error');
@@ -461,17 +502,25 @@ export function DataPage() {
       let parsed: any;
       if (file.name.endsWith('.json')) {
         parsed = await parseJSONImport(text);
-        // 恢复 file
-        for (const f of parsed.files) {
-          const blob = base64ToBlob(f.dataUrl);
-          await putFile({
-            id: f.id,
-            blob,
-            mime: f.mime,
-            name: f.name,
-            size: f.size,
-          });
-        }
+        /**
+         * 媒体要等用户选完「合并/覆盖」再写（v4.7.12）：
+         * 以前是先写文件再弹选择框 —— 用户点「取消」也会把这些媒体塞进库（留下孤儿），
+         * 而且循环里没有逐条 try/catch，**一个坏条目会让整份备份都导不进来**。
+         */
+        const writeFiles = async () => {
+          let ok = 0;
+          let bad = 0;
+          for (const f of parsed.files) {
+            try {
+              const blob = base64ToBlob(f.dataUrl);
+              await putFile({ id: f.id, blob, mime: f.mime, name: f.name, size: f.size });
+              ok += 1;
+            } catch {
+              bad += 1;   // 单条坏了不阻断，最后如实报数
+            }
+          }
+          return { ok, bad };
+        };
         showModal({
           title: '选择导入方式',
           content: (
@@ -486,10 +535,19 @@ export function DataPage() {
                 </button>
                 <button
                   className="btn-primary"
-                  onClick={() => {
+                  onClick={async () => {
+                    // 先记下合并前的数量，报「实际新增了多少」而不是文件里有多少（v4.7.12）
+                    const before = useAppStore.getState();
+                    const beforeIds = new Set(before.articles.map((a) => a.id));
+                    const { ok, bad } = await writeFiles();
                     importState(parsed.state, 'merge');
                     useUIStore.getState().closeModal();
-                    showToast(`已合并 ${parsed.state.articles.length} 篇文章`, 'success');
+                    const added = useAppStore.getState().articles.filter((a) => !beforeIds.has(a.id)).length;
+                    showToast(
+                      `已合并：新增 ${added} 篇文章${parsed.state.articles.length !== added ? `（文件里有 ${parsed.state.articles.length} 篇，其余已存在）` : ''}` +
+                        (bad ? ` · ${bad} 个媒体文件损坏已跳过` : ok ? ` · 写入 ${ok} 个媒体文件` : ''),
+                      bad ? 'error' : 'success',
+                    );
                   }}
                 >
                   合并
@@ -499,9 +557,15 @@ export function DataPage() {
                   style={{ background: 'var(--wine-deep)' }}
                   onClick={async () => {
                     if (await useUIStore.getState().confirmDialog('覆盖将清空所有现有数据，确认？')) {
+                      const { ok, bad } = await writeFiles();
                       importState(parsed.state, 'overwrite');
                       useUIStore.getState().closeModal();
-                      showToast('已覆盖', 'success');
+                      // 先落盘再提示：清空/覆盖这种破坏性操作不能让「400ms 防抖」留窗口
+                      await flushPersist();
+                      showToast(
+                        `已覆盖${ok ? `，含 ${ok} 个媒体文件` : ''}${bad ? ` · ${bad} 个媒体文件损坏已跳过` : ''}`,
+                        bad ? 'error' : 'success',
+                      );
                     }
                   }}
                 >
@@ -797,7 +861,14 @@ export function DataPage() {
         {/* 导出 */}
         <Card className="p-5">
           <h3 className="font-serif text-headline text-lg mb-1">导出</h3>
-          <p className="text-bronze text-xs mb-4">下载一份你的数据</p>
+          <p className="text-bronze text-xs mb-2">下载一份你的数据</p>
+          {/* 说清楚哪种才是「备份」（v4.7.12）：MD/TXT/PDF 只是可读导出，缺一大半模块 */}
+          <p className="text-bronze-deep text-[11px] leading-relaxed mb-4">
+            <span className="text-candle">完整备份请用 JSON</span>（或数据页下方的本地文件夹快照）：
+            JSON 含全部模块与媒体文件，可原样恢复。Markdown / TXT / PDF 是<span className="text-candle">给人读的导出</span>——
+            只含文章、动态、灵感、日程、待办、收藏夹等文本，<span className="text-candle">不含</span>
+            馆藏书籍、相册图片、Agent 会话、音乐，不能当作备份。
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <ExportBtn
               icon={<FileJson size={16} />}
@@ -962,8 +1033,12 @@ export function DataPage() {
             onClick={async () => {
               if (await useUIStore.getState().confirmDialog('这将清空所有数据，无法恢复。确认？')) {
                 if (await useUIStore.getState().confirmDialog('再次确认：所有数据将被永久删除。')) {
+                  // 顺序要紧（v4.7.12）：先重置 + **立刻落盘**，再删媒体。
+                  // 原来是「resetAll()（写盘走 400ms 防抖）→ 立即清空文件表」，
+                  // 若在这 400ms 内关掉页面，库里会留下**旧状态 + 没有文件**的组合。
                   useAppStore.getState().resetAll();
-                  db.files.clear();
+                  await flushPersist();
+                  await db.files.clear();
                   showToast('已重置', 'success');
                 }
               }

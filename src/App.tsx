@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { TopBar } from '@/components/layout/TopBar';
+import { StorageAlert } from '@/components/layout/StorageAlert';
 import { BottomTabBar } from '@/components/layout/BottomTabBar';
 import { Background } from '@/components/layout/Background';
 import { EditorOverlay } from '@/components/editor/EditorOverlay';
@@ -83,6 +84,8 @@ function App() {
     <div className="relative app-shell flex flex-col overflow-hidden">
       <Background />
       <TopBar />
+      {/* 存储异常横幅：读不到本地数据 / 写盘失败时必须让用户看见（见组件注释） */}
+      <StorageAlert />
 
       <main className="flex-1 min-h-0 flex flex-col pt-[calc(56px+env(safe-area-inset-top))]">
         {/* 布局链说明（改这两行前请先读 PROJECT_MEMORY 第 4 节之 20) 与第 12 节教训 17）：

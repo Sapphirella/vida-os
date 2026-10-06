@@ -25,7 +25,7 @@
 // 本模块可无缝复用。
 // ============================================================
 import { db } from './db';
-import { collectFileIds } from './exportImport';
+import { collectFileIds, isOptionalSibling } from './exportImport';
 import type { AppState, WebDavConfig } from '@/types';
 
 /** 云端「最新一份」的固定文件名（同步时覆盖写入；明文 JSON） */
@@ -430,7 +430,10 @@ export async function syncToWebDav(
         for (const id of collectFileIds(state)) {
           const f = await db.files.get(id);
           if (!f) {
-            missing.push(id);
+            // ⚠️ `__orig` 兄弟是**可选**的：只有开过「存原图」且原图够大才会存在。
+            // 把它当「缺失」会让几乎所有用户（有头像/图片/音乐即有）永远无法云备份 ——
+            // v4.7.11 就是这么把云备份整条链路弄坏的（v4.7.12 修）。
+            if (!isOptionalSibling(id)) missing.push(id);
             continue;
           }
           files[id] = {
@@ -445,27 +448,27 @@ export async function syncToWebDav(
         // v4.7.11：本机缺文件（换了设备 / 清过缓存 / 从云端恢复时旧版本没带回媒体）。
         // 直接用这份「缺文件的」覆盖云端，会把云端唯一的好副本也毁掉 —— 这是不可逆的数据丢失，
         // 所以：先试着把云端已有的同名文件补回来；拿不到就**中止上传**，绝不覆盖。
+        let stillMissing: string[] = [];
+        let readError: string | undefined;
         try {
           const remote = await readRemoteFiles(cfg);
-          let kept = 0;
           for (const id of missing) {
             const r = remote[id];
-            if (r) {
-              files[id] = r;
-              kept += 1;
-            }
+            if (r) files[id] = r;
+            else stillMissing.push(id);
           }
-          if (kept === 0) {
-            throw new Error('云端备份里也没有这些文件');
-          }
-          missing.forEach((id) => {
-            if (!files[id]) missing.splice(missing.indexOf(id), 1);
-          });
         } catch (e) {
+          // 连云端列表都读不到：无法判断能否补齐 → 一律中止（宁可这次没备份，也不覆盖好副本）
+          stillMissing = missing;
+          readError = e instanceof Error ? e.message : '未知原因';
+        }
+        if (stillMissing.length) {
+          const reason = readError;
           throw new Error(
-            `本机缺少 ${missing.length} 个媒体文件，且无法从云端补齐（${
-              e instanceof Error ? e.message : '未知原因'
-            }）。为避免覆盖云端那份完整备份，本次上传已中止。请先在本机恢复文件（数据页 → 从云端恢复），再重试。`,
+            `本机缺少 ${stillMissing.length} 个媒体文件${
+              reason ? `，且无法从云端补齐（${reason}）` : '，云端备份里也没有它们'
+            }。为避免用「缺文件的备份」覆盖云端那份完整副本，本次上传已中止。` +
+              '请先在数据页用「云端恢复」把文件取回本机，再重新备份。',
           );
         }
         return files;
@@ -562,6 +565,21 @@ async function fetchBackupBlob(cfg: WebDavConfig, auth: string): Promise<Blob> {
     if (res.status === 404) continue;
     if (!res.ok) throw new Error(davError(res.status));
     return res.blob();
+  }
+  // 最新那份不在（v4.7.12）：可能是「改名成历史份成功了、随后 PUT 失败」留下的状态。
+  // 此时数据其实还在，只是叫历史名 —— 退到最新的那一份，别报「还没有备份文件」。
+  try {
+    const list = await listDavBackups(cfg);
+    const newest = list.find((x) => !x.isLegacy);
+    if (newest) {
+      const res = await fetch(base + encodeURIComponent(newest.name), {
+        method: 'GET',
+        headers: { Authorization: auth },
+      });
+      if (res.ok) return res.blob();
+    }
+  } catch {
+    /* 列表不可用就算了，按原来的报错走 */
   }
   throw new Error('云端还没有备份文件：请先执行一次「云备份」');
 }
