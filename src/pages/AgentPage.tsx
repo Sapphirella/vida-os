@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Archive, ArchiveRestore, Download, Trash2, ChevronDown, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Plus, Archive, ArchiveRestore, Download, Trash2, ChevronDown, Sparkles, SlidersHorizontal, Pencil } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { AgentChatView } from '@/components/agent/AgentChatView';
@@ -18,6 +18,21 @@ export function AgentPage() {
   const agentSessionId = useUIStore((s) => s.agentSessionId);
   const setAgentSessionId = useUIStore((s) => s.setAgentSessionId);
   const showToast = useUIStore((s) => s.showToast);
+  const showModal = useUIStore((s) => s.showModal);
+
+  /** 重命名会话：用应用内的输入弹窗（原生 prompt 在 iOS PWA 里不可用） */
+  const renameSession = (s: AgentSession) => {
+    showModal({
+      title: '重命名会话',
+      inputMode: { placeholder: '会话标题', initialValue: s.title },
+      onInputConfirm: (v) => {
+        const title = v.trim();
+        if (!title || title === s.title) return;
+        updateAgentSession(s.id, { title });
+        showToast('已重命名', 'success');
+      },
+    });
+  };
   const [showArchived, setShowArchived] = useState(false);
   /** v4.5.3：配置页作为 Agent 页的独立视图，不再藏在单条会话里 */
   const [configOpen, setConfigOpen] = useState(false);
@@ -111,12 +126,10 @@ export function AgentPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
+                        {/* 这里原来有一个「新」小标签（会话里还留着开场白就算新会话）。
+                            用户要求不要这个标志（v4.7.9）：它跟「有没有新消息」无关，
+                            挂在每条刚建过的会话上反而像噪音。 */}
                         <span className="font-serif text-title text-headline truncate">{s.title}</span>
-                        {s.messages.some((m) => m.greet) && (
-                          <span className="font-mono text-[9px] tracking-widest text-bronze-deep bg-bronze/10 px-1.5 py-0.5 rounded-pill flex-none">
-                            新
-                          </span>
-                        )}
                       </div>
                       <p className="font-serif text-xs text-bronze truncate mt-0.5">
                         {previewOf(s)}
@@ -126,6 +139,17 @@ export function AgentPage() {
                       <span className="font-mono text-[10px] text-bronze-deep">
                         {relativeTime(s.updatedAt)}
                       </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          renameSession(s);
+                        }}
+                        className="w-7 h-7 flex items-center justify-center text-bronze opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-candle transition-all"
+                        aria-label="重命名会话"
+                        title="重命名"
+                      >
+                        <Pencil size={14} strokeWidth={1.5} />
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

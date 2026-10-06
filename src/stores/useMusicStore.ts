@@ -78,6 +78,39 @@ export const useMusicStore = create<MusicStore>((set, get) => {
    * 只在第一次播放时创建，之后一直复用 —— 见文件头 ①。
    */
   let el: HTMLAudioElement | null = null;
+  /**
+   * 是否正在换源。
+   * 换源会让浏览器走一遍加载算法，那期间会带出一个 `pause` 事件 —— 那不是用户暂停，
+   * 不能拿它把 isPlaying 置假（否则「下一首刚开始播」就会被自己写成暂停）。
+   */
+  let swapping = false;
+
+  /** 元素是不是真的在出声 —— 状态回写的唯一依据（别用 promise 的成败去猜） */
+  const isPlayingNow = (a: HTMLAudioElement) => !a.paused && !a.ended;
+
+  /**
+   * 开始播放，并**按元素的真实状态**回写 isPlaying。
+   *
+   * ⚠️ 这里绝不能不看出声与否就 `catch { isPlaying:false }`（v4.7.9 修的就是这个 bug）：
+   * `play()` 的 promise 会因为「新一次加载打断了上一次播放」(AbortError) 之类的原因 reject，
+   * 但那时元素**往往已经在放了**。盲信 promise 的后果就是
+   * 「UI 显示暂停、声音还在响，而且找不到地方关掉」——用户报的正是这个。
+   */
+  const startPlayback = async (a: HTMLAudioElement) => {
+    try {
+      await a.play();
+      set({ isPlaying: true, playError: null });
+    } catch (err) {
+      if (isPlayingNow(a)) {
+        set({ isPlaying: true, playError: null });
+      } else {
+        set({ isPlaying: false, playError: '浏览器拦下了自动播放，点一下播放键继续' });
+        console.warn('Audio play rejected', err);
+      }
+    } finally {
+      swapping = false;
+    }
+  };
 
   const audio = (): HTMLAudioElement => {
     if (el) return el;
@@ -85,11 +118,26 @@ export const useMusicStore = create<MusicStore>((set, get) => {
     a.preload = 'metadata';
     a.addEventListener('timeupdate', () => {
       if (get().audioEl !== a) return;
-      set({ progress: a.currentTime / (a.duration || 1) });
+      // isPlaying 顺手从元素的实际状态同步：这是「状态说暂停、声音还在响」的自愈兜底 ——
+      // 只要还在出声，timeupdate 就会持续把状态纠回 true（v4.7.9）。
+      set({ progress: a.currentTime / (a.duration || 1), isPlaying: isPlayingNow(a) });
     });
     a.addEventListener('loadedmetadata', () => {
       if (get().audioEl !== a) return;
       set({ duration: a.duration });
+    });
+    // play / playing 一定意味着「元素在放」，可以直接采信（pause 才有换源歧义）
+    const markPlaying = () => {
+      if (get().audioEl !== a) return;
+      set({ isPlaying: true, playError: null });
+    };
+    a.addEventListener('play', markPlaying);
+    a.addEventListener('playing', markPlaying);
+    a.addEventListener('pause', () => {
+      if (get().audioEl !== a) return;
+      // 播完自然停下（ended=true）交给 onTrackEnded 决定；换源带出的 pause 直接忽略
+      if (a.ended || swapping) return;
+      set({ isPlaying: false });
     });
     a.addEventListener('ended', () => {
       // 续播决策必须交给 onTrackEnded：它要读 playMode 和完整曲目表。
@@ -99,10 +147,11 @@ export const useMusicStore = create<MusicStore>((set, get) => {
       else set({ isPlaying: false });
     });
     a.addEventListener('error', () => {
-      // 换源后加载/解码失败：这只发生在「正在播这首」的时候
-      if (get().audioEl === a && get().isPlaying) {
-        set({ isPlaying: false, playError: '这个音频放不出来（文件可能已损坏），换一首试试' });
-      }
+      // 还在出声 → 这是旧资源的报错（换源途中最常见），别动状态
+      if (get().audioEl !== a) return;
+      if (isPlayingNow(a)) return;
+      if (!get().currentTrackId) return;
+      set({ isPlaying: false, playError: '这个音频放不出来（文件可能已损坏），换一首试试' });
     });
     el = a;
     return a;
@@ -157,12 +206,7 @@ export const useMusicStore = create<MusicStore>((set, get) => {
       // 同一首曲目：从暂停处继续（播完了就从头），不重新取源
       if (track.id === state.currentTrackId && state.audioEl === a && a.src) {
         if (a.ended) a.currentTime = 0;
-        try {
-          await a.play();
-          set({ isPlaying: true, playError: null });
-        } catch {
-          set({ isPlaying: false, playError: '浏览器拦下了自动播放，点一下播放键继续' });
-        }
+        await startPlayback(a);
         return;
       }
 
@@ -180,9 +224,12 @@ export const useMusicStore = create<MusicStore>((set, get) => {
       }
 
       // 换源而不是新建元素：移动端的关键（见文件头 ①）
+      swapping = true;
       a.src = url;
       a.volume = get().volume;
-      if (a.currentTime) a.currentTime = 0;
+      // ⚠️ 这里**不要**再写 `a.currentTime = 0`：新资源的起点本来就是 0，
+      //    而在新资源还没选好之前写 currentTime 会打断加载，让随后的 play()
+      //    以 AbortError reject —— 那正是「显示暂停、声音还在响」的成因之一（v4.7.9）。
       set({
         audioEl: a,
         currentTrackId: track.id,
@@ -191,11 +238,7 @@ export const useMusicStore = create<MusicStore>((set, get) => {
         duration: 0,
         playError: null,
       });
-      try {
-        await a.play();
-      } catch {
-        set({ isPlaying: false, playError: '浏览器拦下了自动播放，点一下播放键继续' });
-      }
+      await startPlayback(a);
     },
 
     pause: () => {
@@ -240,12 +283,8 @@ export const useMusicStore = create<MusicStore>((set, get) => {
         const a = get().audioEl;
         if (a) {
           a.currentTime = 0;
-          try {
-            await a.play();
-            set({ isPlaying: true, progress: 0 });
-          } catch {
-            set({ isPlaying: false, progress: 0, playError: '浏览器拦下了自动播放，点一下播放键继续' });
-          }
+          await startPlayback(a);
+          set({ progress: 0 });
           return;
         }
         set({ isPlaying: false, progress: 0 });

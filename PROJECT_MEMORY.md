@@ -1,7 +1,12 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-10-04（**v4.7.8 = 图片画质**：默认预览图从 1600/q0.82 提到 **2560/q0.9**
+> 最后更新：2026-10-06（**v4.7.9 = 修「顺序播放放完显示暂停、声音还在响、关不掉」**
+> （v4.7.6 单例 audio 改造引入的状态脱节：`play()` 的 promise 被 AbortError 拒了，
+> 但元素其实在放，代码却把 isPlaying 写成 false）+ 会话栏去掉「新」标志、每个会话可重命名、
+> 歌单拖动排序（取消/完成）。见第 2、4(12/33)、8.3、12(38)、13 节。
+>
+> v4.7.8 = 图片画质**：默认预览图从 1600/q0.82 提到 **2560/q0.9**
 > （长边像素 ×2.56），并新增上传处的「**存原图**」开关 —— 开启后额外保存一份原始分辨率，
 > 只给灯箱/保存图片/备份用，正文与列表仍用轻量预览图。图片入库与删除各自收口到一个函数。
 > 见第 2、4(32)、8.3、12(37)、13 节。
@@ -76,7 +81,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | 本纪元迭代到 **v4.7.8**（2026-10-04）；`package.json` 仍写 v4.4.1（沿用旧约定，由用户发版时手动 bump） |
+ | **当前版本** | 本纪元迭代到 **v4.7.9**（2026-10-06）；`package.json` 仍写 v4.4.1（沿用旧约定，由用户发版时手动 bump） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -245,6 +250,35 @@
   Agent 段清掉命令式标记语法、按本轮实际功能逐条校准。
   五次提交：`b53f5b4` 音乐 → `6355b6c` 章节解析引擎 + Agent 书兜底 → `66e08a0` 目录页 +
   书架章节展示 → `573e5b3` 写书工具 → `3e34fb6` 标记格式防御 + Agent 书时间显示 → `616bda8` 设置页文档。
+- **v4.7.9（2026-10-06）** —— **修播放状态脱节（P1）+ 会话栏两处 + 歌单排序**：
+  ① **顺序播放「放完显示暂停、但下一首还在响，而且关不掉」**（用户报，v4.7.6 引入的回归）：
+  根因是**盲信 `play()` 的 promise**。单例元素换源时（`a.src = url`，且当时还有一句
+  `a.currentTime = 0` 会打断新资源的加载），`play()` 的 promise 会以 AbortError reject，
+  而元素其实**已经在播了** —— 代码在 `catch` 里把 `isPlaying` 写成 false，
+  于是 UI 显示「暂停」、声音照旧；播放键又按 `isPlaying` 决定该播还是该停，所以**停不下来**。
+  修法三件（都在 `useMusicStore`）：
+  - `startPlayback()`：catch 里**先看元素是否真的在出声**（`!paused && !ended`），在响就维持播放状态；
+  - 去掉换源时那句 `a.currentTime = 0`（新资源起点本就是 0，提前写会打断加载）；
+  - 让状态由**元素事件**驱动：`timeupdate` 顺带回写 `isPlaying = !paused && !ended`（自愈兜底）、
+    `play`/`playing` 直接采信、`pause` 在换源期间忽略（换源的加载算法会带出一个 pause 事件）、
+    `error` 在「还在出声」时忽略（那是旧资源的报错）。
+  另外播放键改成**以元素实际状态**决定暂停还是播放 —— 就算将来状态再错位，用户也一定关得掉音乐。
+  实测（无头 Chrome + 三首真实 WAV，媒体时钟正常推进）：点播放 → A 在播（进度 0.35/1.5）；
+  A 放完 → **B 在播且 isPlaying=true、UI 图标为暂停**；人为把 isPlaying 改假 → 一个 timeupdate
+  内自愈回 true；此时按播放键能真停下（`paused=true`）；再按恢复播放。
+  ② **会话栏去掉「新」标志**：原来「会话里还留着开场白」就挂个小标签，跟有没有新消息无关，
+  挂在刚建过的会话上纯属噪音（用户要求去掉）。
+  ③ **每个会话加重命名按钮**（铅笔，与归档键并排）：走应用内输入弹窗
+  （原生 prompt 在 iOS PWA 里不可用），实测改名写回 store。
+  ④ **歌单拖动排序**（用户要求：排序按钮 → 拖动 → 取消/完成，移动端禁长按复制与系统菜单）：
+  - 把待办那套调稳的拖拽引擎**抽成共享 hook `lib/useDragSort.ts`**（v4.7.9），
+    待办改为调用它（不再各存一份），音乐列表复用同一套；
+  - 排序模式挂 `ul.vd-sort-mode`（锁 touch-action、禁 user-select / -webkit-touch-callout），
+    hook 再提供 `onContextMenu` 拦掉安卓长按菜单；删除键在排序模式换成拖拽把手（防误删）；
+  - 进入排序时**快照顺序**，「取消」还原、「完成」保留（拖动是即时写回的）；
+  - store 新增 `reorderTracks(ids)`；播放顺序（上一首/下一首/自动续播）跟着歌单顺序走。
+  实测：拖最后一行到顶 → 顺序 A,B,C → **C,A,B**（指示线出现过）；取消 → 还原 A,B,C 并退出排序；
+  排序模式下 `user-select: none` / `touch-action: none` / contextmenu 被拦截。
 - **v4.7.8（2026-10-04）** —— **图片画质：默认提到 2560/q0.9 + 「存原图」开关**：
   起因：用户问「支持上传原图吗？文章/动态/灵感/馆藏的图都有点糊」。
   查下来**只支持一半**：`compressImage` 对 <500KB 的图原样放行，其余一律
@@ -688,6 +722,19 @@ Tab 路由 `/desk /diary /agent /data /settings`；子视图 `/notes /space /spa
 `firstPlayable(from, step)` 会绕列表一圈找第一首**文件还在**的歌，
 续播/上一首/下一首都走它；整轮都找不到才停，并把原因写进 `playError`
 （UI 读到就弹一次 toast 后清掉）。**「静默停下」是这次要修的病根，别改回去。**
+
+**⚠️ `isPlaying` 必须由「元素是否真的在出声」决定，不要由 `play()` 的 promise 决定（v4.7.9）**：
+单例元素换源（`a.src = url`）时，`play()` 的 promise 常以 **AbortError** reject，而元素其实已经在播 ——
+在 `catch` 里写 `isPlaying: false` 就会得到「UI 显示暂停、声音还在响、并且关不掉」的经典脱节
+（v4.7.6 的改造引入、v4.7.9 修掉）。现在的规矩：
+- 尝试播放统一走 `startPlayback()`：catch 里先判断 `!paused && !ended`，在响就维持播放；
+- 换源时**不要**顺手写 `a.currentTime = 0`（新资源起点本来就是 0；提前写会打断加载、
+  反而制造上面那个 AbortError）；
+- 状态由元素事件驱动：`timeupdate` 回写 `isPlaying = !paused && !ended`（自愈）、
+  `play`/`playing` 采信、`pause` **在换源窗口内忽略**（加载算法会带出一个 pause）、
+  `error` 在「还在出声」时忽略；
+- 播放键（`MusicPlayerCard.handlePlay`）以 `audioEl.paused` 为准判断该暂停还是该播放 ——
+  这是「关得掉音乐」的最后一道保险，别改回只看 `isPlaying`。
 
 **四种播放模式的语义（v4.7.3 校准，改之前先读这段）**：模式**只决定「一首自然放完之后
 自动怎么办」**，上一首/下一首永远按列表顺序、不受模式影响（手动跳歌是用户自己的动作）。
@@ -1147,6 +1194,20 @@ v3.1 曾做过可命名皮肤（含浅色卡片），用户试用后要求**完�
 - **`settings.keepOriginalImages`** 是用户偏好（会跟备份走），不是一次性选择 ——
   所以开关写进 settings 而不是组件 state（同第 4 节之 31 的判据）。
 
+### 33) 拖动排序是共享实现（v4.7.9，`src/lib/useDragSort.ts`）
+- **只有一份引擎**：待办 / 日程（长按拖拽）与音乐歌单（排序模式起手即拖）都用它。
+  以前只有待办内置一份，音乐要加排序时若再抄一遍，必然把「动态改 touch-action 会 pointercancel」
+  这类坑重踩一次（第 12 节教训 29/38）。
+- **参数化的两处差异**：`itemAttr`（行上标记 id 的属性名，`data-todo-id` / `data-track-id`）与
+  `allowFromButton`（待办行主体是 div，要跳过按钮；**音乐行主体本身就是按钮**，必须允许从按钮起手）。
+- **移动端三件事在 hook + CSS 里做完了**：`ul.vd-sort-mode` 锁 `touch-action` 并
+  禁 `user-select` / `-webkit-touch-callout`；hook 暴露 `onContextMenu`（拦安卓长按菜单）；
+  长按成立后改用原生 `touchmove(passive:false)` 驱动。
+  ⚠️ `-webkit-touch-callout` 只有 iOS Safari 认，**Chrome 解析时会丢掉这条声明**，
+  所以它验证不了、只能靠源码核对（不是没生效）。
+- **「取消」靠快照**：拖动是落位即写回 store，所以进入排序时先记下 `ids`，
+  取消时用 `reorderTracks(snapshot)` 还原。
+
 ---
 
 ## 5. 文件结构与职责
@@ -1414,6 +1475,13 @@ VidaOS/
 - **多设备同时编辑同一 WebDAV 备份会互相覆盖**，说明书弹窗已提醒单设备编辑。
 
 ### 8.3 已修复
+- **顺序播放「放完显示暂停、声音还在响、关不掉」**（v4.7.9）：v4.7.6 把每首 `new Audio()`
+  改成单例换源时引入。`a.src = url` 之后紧跟的那句 `a.currentTime = 0` 会打断新资源的加载，
+  使随后的 `play()` 以 AbortError reject —— 而元素其实已经在播；`catch` 里无条件写
+  `isPlaying: false` 就造成了「UI 说暂停、声音还在放」，而播放键又依赖 `isPlaying` 决定
+  该播还是该停，于是**用户停不掉音乐**。修法见第 4 节之 12（元素状态为准 + 事件驱动 + 播放键兜底）。
+  实测：真音频下 A 放完 B 继续播且状态一致；人为写错状态会在一个 timeupdate 内自愈；
+  错位状态下播放键仍能真正停下音乐。
 - **PNG 图片被存成 `image/jpeg` 的 mime**（v4.7.8）：灵感/相册/Agent 三处在 `putFile` 时
   把 mime 写死成 `'image/jpeg'`，而 PNG 输入产出的其实是 PNG blob。显示不受影响
   （`fileURL` 用 blob 自己的类型），但从灯箱「保存图片」时扩展名是错的（PNG 存成 .jpg）。
@@ -2012,9 +2080,40 @@ npm run build        # 出 dist/（gitignore，按惯例验完可删）
     `ids.add(origFileId(id))` 一行避免重演）。写「新增一类文件」时，第一件事就是去
     `collectFileIds` 补一行。
 
+38. **「UI 显示暂停，声音还在响」= 状态不是从元素读来的（v4.7.9）**：
+    这是我自己在 v4.7.6 引入的回归。当时为了「移动端自动播放要复用同一个元素」，
+    把每首 `new Audio()` 改成单例换源 —— 换源本身是对的，但换源会引出两个副作用我没处理：
+    ① `a.src = url` 紧跟的 `a.currentTime = 0` 会打断新资源加载，让随后的 `play()` 以 AbortError reject；
+    ② 我仍然用 `play()` 的 promise 成败去写 `isPlaying`，于是「promise 被拒了、但元素已经开始播」
+    这种状态被写成了暂停。
+    两条通用规矩：
+    - **「正在播放 / 正在加载 / 已完成」这类状态，要以节点的真实状态为准，不要以 API 返回的
+      promise 为准**。promise 只反映「这一次调用的结果」，很容易被后续操作打断（AbortError 是常态）；
+      元素上有 `paused` / `ended` / `currentTime` 可以读，那才是真相。
+    - **状态机要能自愈**：把「真实状态」在一个高频事件上顺带回写（这里用 `timeupdate`），
+      那么即使某条路径漏了写，最多一个事件周期就纠正回来。比逐条路径 `set()` 可靠得多。
+    另外一条产品层面的教训：**「关不掉」比「显示错了」严重得多**。所以关键开关的判定
+    （这里是播放键该暂停还是该播放）要绑到「物理事实」上（`audioEl.paused`），
+    而不是绑到可能出错的状态字段上 —— 状态错位时，用户至少还能把声音关掉。
+
 ---
 
 ## 13. 变更日志
+
+### [v4.7.9] - 2026-10-06 —— 修播放状态脱节 + 会话栏两处 + 歌单排序
+
+> 用户四件事：会话栏去「新」标志、会话加重命名、歌单拖动排序、顺序播放放完显示暂停（P1）。
+
+1. **播放状态脱节**（`useMusicStore` + `MusicPlayerCard`）：见第 4 节之 12 与第 8.3 节。
+   实测（真实 WAV）：A 放完 → B 在播、`isPlaying=true`、UI 图标为暂停；
+   人为写错状态 → timeupdate 内自愈；错位时播放键仍能停下音乐（`paused=true`）；再按恢复。
+2. **会话栏去掉「新」标志**（`AgentPage`）：实测行文本不再含该标志。
+3. **每个会话可重命名**：铅笔按钮 → 应用内输入弹窗 → 写回 store（实测标题变为「改名后的会话」）。
+4. **歌单拖动排序**：共享 `useDragSort`、排序模式 取消/完成、移动端禁长按复制与系统菜单。
+   实测：拖最后一行到顶 → `C,A,B`；取消 → 还原 `A,B,C` 并退出；`user-select: none`、
+   `touch-action: none`、contextmenu 被拦截。
+
+截图：`docs/fragments-v47/music-sort-mobile.png`、`agent-sessions-rename.png`。
 
 ### [v4.7.8] - 2026-10-04 —— 图片画质：默认 2560/q0.9 + 「存原图」开关
 

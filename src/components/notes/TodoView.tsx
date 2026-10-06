@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus, Check, Trash2, Edit2, GripVertical } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Tag } from '@/components/common/Tag';
@@ -7,6 +7,7 @@ import { CategoryChips } from './CategoryChips';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { clsx } from '@/lib/utils';
+import { useDragSort } from '@/lib/useDragSort';
 import type { TodoNote } from '@/types';
 
 export function TodoView() {
@@ -36,192 +37,15 @@ export function TodoView() {
 
   // ===== 长按拖动排序（参照 Nookery 排序模式）=====
   // 普通模式：250ms 长按判定；>10px 位移取消；拖动中行跟手 + 插入指示线；松手落位写回 store。
-  // 排序模式：列表已锁 touch-action（CSS），起手即拖、无中途属性变更（中途改 touch-action
-  // 会被浏览器判定为手势切换并触发 pointercancel，导致真机拖动中断）。
-  const dragState = useRef<{
-    id: string;
-    row: HTMLLIElement;
-    startY: number;
-    held: boolean;
-    timer: number;
-    lastY: number;
-    indicator: HTMLLIElement | null;
-  } | null>(null);
-  const pendingCleanup = useRef<(() => void) | null>(null);
-
-  const clearDrag = () => {
-    pendingCleanup.current?.();
-    pendingCleanup.current = null;
-    dragState.current = null;
-  };
-
-  // 组件卸载时清理拖拽产生的临时监听（防泄漏）
-  useEffect(() => {
-    return () => clearDrag();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /** 立即进入拖拽态（排序模式起手即拖；普通模式由 timer 触发） */
-  const startDrag = (ds: NonNullable<typeof dragState.current>) => {
-    ds.held = true;
-    ds.row.classList.add('vd-dragging');
-    // 不在此处动态设置 touch-action：手势中途变更会被浏览器判定为切换并触发
-    // pointercancel（真机拖动中断）。排序模式列表已由 CSS 整体锁定 touch-action；
-    // 普通模式长按成立后改用原生 touchmove（passive:false）接管，preventDefault 阻止滚动。
-  };
-
-  const onPointerDown = (e: React.PointerEvent<HTMLUListElement>) => {
-    const target = e.target as HTMLElement;
-    // 按钮 / 编辑态 / 非行元素不触发
-    if (target.closest('button')) return;
-    const row = target.closest('li[data-todo-id]') as HTMLLIElement | null;
-    if (!row) return;
-
-    const id = row.dataset.todoId!;
-    const startY = e.clientY;
-    let held = false;
-    let finished = false;
-
-    const placeIndicator = (y: number) => {
-      const root = listRef.current;
-      if (!root) return;
-      const ds = dragState.current;
-      if (!ds) return;
-      let target: HTMLLIElement | null = null;
-      root.querySelectorAll<HTMLLIElement>('li[data-todo-id]:not(.vd-dragging)').forEach((r) => {
-        const rect = r.getBoundingClientRect();
-        if (!target && y < rect.top + rect.height / 2) target = r;
-      });
-      let ind = ds.indicator;
-      if (!ind) {
-        ind = document.createElement('li');
-        ind.className = 'vd-sort-indicator';
-        ind.setAttribute('aria-hidden', 'true');
-        ind.style.pointerEvents = 'none';
-        ds.indicator = ind;
-      }
-      if (target) root.insertBefore(ind, target);
-      else root.appendChild(ind);
-    };
-
-    /** 拖拽行跟手 + 更新插入指示线（pointer / touch 共用） */
-    const applyDrag = (clientY: number) => {
-      const ds = dragState.current;
-      if (!ds || !ds.held || finished) return;
-      ds.lastY = clientY;
-      const dy = clientY - ds.startY;
-      // 行跟手 + 轻微放大抬起（scale 由 JS 与 translateY 组合，避免被 class 覆盖）
-      ds.row.style.transform = `translateY(${dy}px) scale(1.03)`;
-      placeIndicator(clientY);
-    };
-
-    const onMove = (ev: PointerEvent) => {
-      const ds = dragState.current;
-      if (!ds || finished) return;
-      if (!ds.held) {
-        // 普通模式长按等待期：位移过大视为滚动意图，取消本次长按
-        if (Math.abs(ev.clientY - startY) > 10) {
-          clearTimeout(ds.timer);
-          clearDrag();
-        }
-        return;
-      }
-      ev.preventDefault();
-      applyDrag(ev.clientY);
-    };
-
-    // 普通模式长按成立后，浏览器可能对手势发 pointercancel（触摸滚动竞争），
-    // pointermove 随即失效。改用 passive:false 的原生 touchmove 驱动拖拽并
-    // preventDefault 阻止滚动；touchend / touchcancel 复用 onUp 落位。
-    const onTouchMove = (ev: TouchEvent) => {
-      if (finished) return;
-      ev.preventDefault();
-      applyDrag(ev.touches[0].clientY);
-    };
-    const onTouchEnd = () => onUp();
-
-    const onUp = () => {
-      const ds = dragState.current;
-      if (finished) return;
-      finished = true;
-      if (ds) clearTimeout(ds.timer);
-      if (held && ds) {
-        // 轻点（位移 < 6px）不视为排序，避免误写回 store
-        const dyFinal = ds.lastY - ds.startY;
-        if (Math.abs(dyFinal) >= 6) {
-          // 落位：根据指示线当前 DOM 位置计算目标索引
-          const root = listRef.current;
-          const ind = ds.indicator;
-          let to = -1;
-          if (root && ind && ind.isConnected) {
-            const rows = Array.from(root.querySelectorAll<HTMLLIElement>('li[data-todo-id]'));
-            const prev = ind.previousElementSibling as HTMLElement | null;
-            if (prev && prev.hasAttribute('data-todo-id')) {
-              const i = rows.indexOf(prev as HTMLLIElement);
-              to = i >= 0 ? i + 1 : rows.length;
-            } else {
-              to = 0;
-            }
-          }
-          const ids = filtered.map((t) => t.id);
-          const from = ids.indexOf(ds.id);
-          if (from >= 0 && to >= 0) {
-            ids.splice(from, 1);
-            let insert = to;
-            if (to > from) insert = to - 1;
-            ids.splice(insert, 0, ds.id);
-            reorderTodo(ids);
-          }
-        }
-      }
-      clearDrag();
-    };
-
-    const cleanup = () => {
-      const ds = dragState.current;
-      if (!ds) return;
-      if (ds.indicator) ds.indicator.remove();
-      ds.row.style.transform = '';
-      ds.row.classList.remove('vd-dragging');
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      window.removeEventListener('touchcancel', onTouchEnd);
-    };
-
-    pendingCleanup.current = cleanup;
-    const ds: NonNullable<typeof dragState.current> = {
-      id,
-      row,
-      startY,
-      held: false,
-      timer: 0,
-      lastY: startY,
-      indicator: null,
-    };
-    dragState.current = ds;
-    if (sortMode) {
-      // 排序模式：起手即拖（列表已锁 touch-action，无手势竞争）
-      held = true;
-      startDrag(ds);
-    } else {
-      ds.timer = window.setTimeout(() => {
-        const cur = dragState.current;
-        if (!cur || finished) return;
-        held = true;
-        startDrag(cur);
-        // 长按成立后接管原生 touch 事件（passive:false）：浏览器可能已判定
-        // 手势竞争而准备发 pointercancel，touch 事件不受 touch-action 变更影响，
-        // touchmove + preventDefault 是移动端拖动排序的唯一可靠驱动。
-        window.addEventListener('touchmove', onTouchMove, { passive: false });
-        window.addEventListener('touchend', onTouchEnd);
-        window.addEventListener('touchcancel', onTouchEnd);
-      }, 250);
-    }
-    window.addEventListener('pointermove', onMove, { passive: false });
-    window.addEventListener('pointerup', onUp);
-  };
+  // 拖动排序：引擎已抽到 src/lib/useDragSort.ts（v4.7.9），这里只提供列表引用与写回。
+  // 排序模式起手即拖；普通模式长按 250ms —— 细节与移动端注意事项都在那个 hook 里。
+  const { onPointerDown, onContextMenu, clearDrag } = useDragSort({
+    listRef,
+    itemAttr: 'data-todo-id',
+    sortMode,
+    items: filtered,
+    onReorder: reorderTodo,
+  });
 
   const remaining = scoped.filter((t) => !t.done).length;
   const total = scoped.length;
@@ -327,6 +151,7 @@ export function TodoView() {
           ref={listRef}
           className={`space-y-2 ${sortMode ? 'vd-sort-mode' : ''}`}
           onPointerDown={onPointerDown}
+          onContextMenu={onContextMenu}
         >
           {filtered.map((t) => (
             <TodoItem

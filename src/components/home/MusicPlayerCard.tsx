@@ -13,11 +13,14 @@ import {
   Shuffle,
   Repeat,
   Repeat1,
+  GripVertical,
+  Check,
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
 import { useMusicStore, PLAY_MODES, type PlayMode } from '@/stores/useMusicStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useDragSort } from '@/lib/useDragSort';
 import { putFile, deleteFile, getFile } from '@/lib/db';
 import { uid, humanSize } from '@/lib/utils';
 import { revokeFileURL } from '@/lib/fileUrl';
@@ -54,9 +57,14 @@ export function MusicPlayerCard() {
 
   const handlePlay = () => {
     if (!currentTrack) return;
+    // 判断「是不是在响」以**元素的实际状态**为准，不只信 isPlaying：
+    // 万一状态错位（UI 说暂停、声音还在放），用户至少还能按下去把它关掉 ——
+    // 这正是「我关不掉音乐了」那个 bug 的直接兜底（v4.7.9）。
+    const el = useMusicStore.getState().audioEl;
+    const reallyPlaying = el ? !el.paused && !el.ended : music.isPlaying;
     // 播放中则暂停，暂停中则（续）播——原先恒调 play() 会把暂停键变成「从头重播」
-    if (music.isPlaying) music.pause();
-    else music.play(currentTrack);
+    if (reallyPlaying) music.pause();
+    else void music.play(currentTrack);
   };
 
   const handleImport = async (file: File) => {
@@ -278,9 +286,43 @@ function TrackListPanel({
   onDelete: (track: Track) => Promise<void>;
 }) {
   const tracks = useAppStore((s) => s.tracks);
+  const reorderTracks = useAppStore((s) => s.reorderTracks);
   const currentTrackId = useMusicStore((s) => s.currentTrackId);
   const isPlaying = useMusicStore((s) => s.isPlaying);
+  const showToast = useUIStore((s) => s.showToast);
   const fileRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const [sortMode, setSortMode] = useState(false);
+  /** 进入排序时的顺序快照 —— 「取消」用它还原（拖动是即时写回的） */
+  const snapshotRef = useRef<string[]>([]);
+
+  const { onPointerDown, onContextMenu, clearDrag } = useDragSort({
+    listRef,
+    itemAttr: 'data-track-id',
+    sortMode,
+    items: tracks,
+    onReorder: reorderTracks,
+    // 音乐列表的整行主体就是一个按钮（点哪都是「选中这首」），所以排序模式必须允许从按钮起手
+    allowFromButton: true,
+  });
+
+  const enterSort = () => {
+    snapshotRef.current = tracks.map((t) => t.id);
+    setSortMode(true);
+    showToast('已进入排序：按住歌名拖动调整顺序', 'success');
+  };
+  const cancelSort = () => {
+    clearDrag();
+    // 还原进入排序前的顺序（拖动过程是即时写回 store 的）
+    if (snapshotRef.current.length) reorderTracks(snapshotRef.current);
+    setSortMode(false);
+    showToast('已还原原顺序', 'info');
+  };
+  const doneSort = () => {
+    clearDrag();
+    setSortMode(false);
+    showToast('已保存排序', 'success');
+  };
 
   return (
     <div className="space-y-3">
@@ -310,13 +352,58 @@ function TrackListPanel({
         </div>
       ) : (
         <>
-          <ul className="max-h-[46vh] overflow-y-auto rounded-card border border-line/50 bg-ink/15 divide-y divide-line/30">
+          {/* 排序控制条：排序模式给出「取消 / 完成」两个明确出口 */}
+          <div className="flex items-center gap-3 px-1">
+            <span className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase">
+              {tracks.length} 首
+            </span>
+            <div className="flex-1" />
+            {sortMode ? (
+              <>
+                <button
+                  onClick={cancelSort}
+                  className="font-mono text-[10px] tracking-widest text-bronze-deep hover:text-bronze transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={doneSort}
+                  className="flex items-center gap-1 font-mono text-[10px] tracking-widest uppercase text-candle"
+                  aria-pressed
+                >
+                  <Check size={12} strokeWidth={2} /> 完成
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={enterSort}
+                className="flex items-center gap-1 font-mono text-[10px] tracking-widest uppercase text-bronze-deep hover:text-bronze transition-colors"
+                aria-label="排序"
+                title="拖动排序"
+              >
+                <GripVertical size={12} strokeWidth={2} /> 排序
+              </button>
+            )}
+          </div>
+
+          <ul
+            ref={listRef}
+            className={`max-h-[46vh] overflow-y-auto rounded-card border border-line/50 bg-ink/15 divide-y divide-line/30 ${
+              sortMode ? 'vd-sort-mode' : ''
+            }`}
+            onPointerDown={onPointerDown}
+            onContextMenu={onContextMenu}
+          >
             {tracks.map((t) => {
               const active = t.id === currentTrackId;
               return (
-                <li key={t.id} className="flex items-stretch">
+                <li key={t.id} data-track-id={t.id} className="flex items-stretch">
                   <button
-                    onClick={() => onSelect(t)}
+                    onClick={() => {
+                      // 排序模式下点一下是「起手拖」，不该顺手切歌
+                      if (sortMode) return;
+                      onSelect(t);
+                    }}
                     className={`flex flex-1 min-w-0 items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
                       active ? 'bg-wine/15' : 'hover:bg-bronze/10'
                     }`}
@@ -343,17 +430,32 @@ function TrackListPanel({
                       </span>
                     </span>
                   </button>
-                  <button
-                    onClick={() => void onDelete(t)}
-                    aria-label={`删除 ${t.title}`}
-                    className="w-10 flex-shrink-0 flex items-center justify-center text-bronze-deep hover:text-wine-bright transition-colors"
-                  >
-                    <Trash2 size={14} strokeWidth={1.5} />
-                  </button>
+                  {sortMode ? (
+                    // 排序模式：删除键换成拖拽把手（避免拖动时误删）
+                    <span
+                      className="w-10 flex-shrink-0 flex items-center justify-center text-bronze-deep"
+                      aria-hidden
+                    >
+                      <GripVertical size={15} strokeWidth={1.7} />
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => void onDelete(t)}
+                      aria-label={`删除 ${t.title}`}
+                      className="w-10 flex-shrink-0 flex items-center justify-center text-bronze-deep hover:text-wine-bright transition-colors"
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </button>
+                  )}
                 </li>
               );
             })}
           </ul>
+          {sortMode ? (
+            <p className="font-mono text-[10px] tracking-wider text-bronze-deep text-center">
+              按住歌名上下拖动 · 取消可还原 · 播放顺序跟着歌单顺序走
+            </p>
+          ) : null}
           <div className="flex justify-end">
             <button onClick={() => fileRef.current?.click()} className="btn-ghost">
               <Plus size={13} strokeWidth={1.5} /> 导入音乐

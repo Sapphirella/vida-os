@@ -134,6 +134,8 @@ interface Actions {
   // 音乐
   addTrack: (track: Omit<Track, 'id' | 'createdAt'>) => string;
   deleteTrack: (id: string) => void;
+  /** 按给定 id 顺序重排歌单（拖动排序用；未列出的曲目按原相对顺序补在后面） */
+  reorderTracks: (ids: string[]) => void;
 
   // 馆藏（v4.4：取代已移除的碎片流）
   addBook: (b: { title: string; format: 'txt' | 'md'; content: string; charCount: number }) => string;
@@ -805,6 +807,23 @@ export const useAppStore = create<Store>((set, get) => ({
     }));
     persist(get());
     return id;
+  },
+  reorderTracks: (ids) => {
+    set((s) => {
+      const byId = new Map(s.tracks.map((t) => [t.id, t]));
+      const ordered: Track[] = [];
+      const seen = new Set<string>();
+      for (const id of ids) {
+        const t = byId.get(id);
+        if (t && !seen.has(id)) {
+          ordered.push(t);
+          seen.add(id);
+        }
+      }
+      for (const t of s.tracks) if (!seen.has(t.id)) ordered.push(t);
+      return { tracks: ordered };
+    });
+    persist(get());
   },
   deleteTrack: (id) => {
     set((s) => ({
