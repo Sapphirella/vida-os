@@ -27,7 +27,13 @@ export function Modal() {
   const handleConfirm = () => {
     if (modal.inputMode) {
       const v = value.trim();
-      if (!v) return; // 空输入不允许确认
+      if (!v) {
+        // v4.7.11：以前这里直接 return —— 于是所有输入型弹窗（新建/重命名会话、新建合集、
+        // 新建图集…）在空输入时「点了确认什么都不发生」，跟按钮坏了没区别。
+        // 现在明确说一句，并保持弹窗打开让用户继续输入。
+        useUIStore.getState().showToast(modal.inputMode.placeholder ? `请填写${modal.inputMode.placeholder}` : '请先填写内容', 'error');
+        return;
+      }
       modal.onInputConfirm?.(v);
     } else {
       modal.onConfirm?.();

@@ -859,9 +859,15 @@ function ChapterTitleField({
           取消
         </button>
         <button
-          onClick={() => value.trim() && onDone(value.trim())}
-          disabled={!value.trim()}
-          className="btn-primary disabled:opacity-40"
+          onClick={() => {
+            // v4.7.11：改成「变暗 + 说明」，不再用会吞掉点击的 disabled
+            if (!value.trim()) {
+              useUIStore.getState().showToast('内容不能为空', 'error');
+              return;
+            }
+            onDone(value.trim());
+          }}
+          className={`btn-primary ${!value.trim() ? 'opacity-40' : ''}`}
         >
           <Check size={13} strokeWidth={2} /> 确定
         </button>

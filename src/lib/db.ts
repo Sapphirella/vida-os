@@ -62,6 +62,15 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
     ...d,
     ...r,
     version: 3,
+    // v4.7.11：profile 之前是「整体被 r.profile 覆盖」——一个 null 或残缺的 profile
+    // 会让 TopBar/设置页读 profile.name 直接抛错（整页错误边界）。改成与默认值合并。
+    profile: { ...d.profile, ...(r.profile ?? {}) },
+    // v4.7.11：会话逐条兜底 messages（缺这个数组会让 Agent 列表/聊天页 [...s.messages] 直接崩）
+    agentSessions: (r.agentSessions ?? []).map((sess) => ({
+      ...sess,
+      messages: sess.messages ?? [],
+      archived: sess.archived ?? false,
+    })),
     // 旧版本含内置音景轨道（WebAudio 合成，无实体文件），新版已移除
     categories: {
       ...d.categories,
@@ -144,7 +153,6 @@ export function normalizeState(raw: Partial<AppState> | null | undefined): AppSt
       imageIds: g.imageIds ?? [],
     })),
     albumStars: r.albumStars ?? [],
-    agentSessions: r.agentSessions ?? [],
     agentConfig: { ...d.agentConfig, ...(r.agentConfig ?? {}) },
     agentDocs: r.agentDocs ?? [],
     agentMemories: r.agentMemories ?? [],

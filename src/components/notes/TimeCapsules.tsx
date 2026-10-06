@@ -10,7 +10,7 @@
 // 开封日到了它仍然留在这个栏目里，只是状态从「还有 N 天开启」变成「今天开启 / 已开启」。
 //
 // 未到开封日的默认**折起来**（可以点「点开看看」预览）：既不丢内容，又保留「到日子再打开」的感觉。
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Sprout, ChevronDown, ChevronRight, Trash2, Lock } from 'lucide-react';
 import type { FragmentEntry } from '@/types';
 import { formatDate, todayKey } from '@/lib/utils';
@@ -37,7 +37,13 @@ export function TimeCapsules({
   /** 被「点开看看」预览过的未开封胶囊 */
   const [peeked, setPeeked] = useState<Set<string>>(new Set());
 
-  const now = Date.now();
+  // now 必须会走：否则胶囊到点后既不重排、也不会把「还有 N 天开启」变成「今天开启」，
+  // 得等碎片列表变化或离开再回来才更新（v4.7.11）。每分钟刷新一次足够。
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   /**
    * 未开封的在前（按开封日由近到远 = 下一颗要开的排最前），已开封的在后（最近开的排前面）。
    * 两段各自有序，比混在一起按时间排更好读。
@@ -49,9 +55,9 @@ export function TimeCapsules({
     up.sort((a, b) => a.createdAt - b.createdAt);
     op.sort((a, b) => b.createdAt - a.createdAt);
     return { upcoming: up, opened: op };
-    // 依赖 items 就够了；now 每次渲染都会变，不进依赖（否则每秒重排一次）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+    // now 现在每分钟走一次（上面那个 interval），所以它要进依赖：
+    // 到点后胶囊会自动从「未开封」挪到「已开封」那一段
+  }, [items, now]);
 
   return (
     <>

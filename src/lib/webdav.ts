@@ -140,9 +140,26 @@ function pickState(s: AppState): AppState {
     agentConfig: { ...s.agentConfig, apiKey: '' },
     agentDocs: s.agentDocs,
     agentMemories: s.agentMemories,
-    // 备份不携带本机 WebDAV 配置（含密码），避免分享备份时泄露
-    settings: { lastTab: s.settings.lastTab },
+    // 备份不携带本机 WebDAV 配置（含密码），避免分享备份时泄露；
+    // 其余设置项要带上 —— 之前只留 lastTab，于是「云备份 → 换机恢复」后
+    // 「关掉 Agent」与「存原图」这两个开关会被悄悄重置（v4.7.11 修）
+    settings: {
+      lastTab: s.settings.lastTab,
+      agentEnabled: s.settings.agentEnabled,
+      keepOriginalImages: s.settings.keepOriginalImages,
+    },
   };
+}
+
+/**
+ * 只读出云端备份里的 files（上传前用来补齐本机缺失的媒体）。
+ * 加密备份需要口令；拿不到就抛错，让上传方中止 —— 宁可这次没备份，也不能覆盖好副本。
+ */
+async function readRemoteFiles(
+  cfg: WebDavConfig,
+): Promise<Record<string, { mime: string; name: string; size: number; data: string }>> {
+  const info = await downloadFromWebDav(cfg, cfg.passphrase);
+  return info.files ?? {};
 }
 
 // ── 工具 ──────────────────────────────────────────────────────
@@ -235,15 +252,47 @@ export async function syncToWebDav(
           string,
           { mime: string; name: string; size: number; data: string }
         > = {};
+        const missing: string[] = [];
         for (const id of collectFileIds(state)) {
           const f = await db.files.get(id);
-          if (!f) continue;
+          if (!f) {
+            missing.push(id);
+            continue;
+          }
           files[id] = {
             mime: f.mime,
             name: f.name,
             size: f.size,
             data: await blobToBase64(f.blob),
           };
+        }
+        if (!missing.length) return files;
+
+        // v4.7.11：本机缺文件（换了设备 / 清过缓存 / 从云端恢复时旧版本没带回媒体）。
+        // 直接用这份「缺文件的」覆盖云端，会把云端唯一的好副本也毁掉 —— 这是不可逆的数据丢失，
+        // 所以：先试着把云端已有的同名文件补回来；拿不到就**中止上传**，绝不覆盖。
+        try {
+          const remote = await readRemoteFiles(cfg);
+          let kept = 0;
+          for (const id of missing) {
+            const r = remote[id];
+            if (r) {
+              files[id] = r;
+              kept += 1;
+            }
+          }
+          if (kept === 0) {
+            throw new Error('云端备份里也没有这些文件');
+          }
+          missing.forEach((id) => {
+            if (!files[id]) missing.splice(missing.indexOf(id), 1);
+          });
+        } catch (e) {
+          throw new Error(
+            `本机缺少 ${missing.length} 个媒体文件，且无法从云端补齐（${
+              e instanceof Error ? e.message : '未知原因'
+            }）。为避免覆盖云端那份完整备份，本次上传已中止。请先在本机恢复文件（数据页 → 从云端恢复），再重试。`,
+          );
         }
         return files;
       })(),
@@ -270,8 +319,11 @@ export async function syncToWebDav(
     return { bytes: body.size, createdAt: Date.now(), url: target };
   } catch (e) {
     if (e instanceof TypeError) {
+      // v4.7.11：把原始消息带上 —— 之前这里把 TypeError 一律当成 CORS/断网，
+      // 真正的错因（例如序列化失败）被吞掉，用户和排查的人都只能看到一句「网络不可达」。
       throw new Error(
-        '无法连接 WebDAV 服务器：网络不可达，或浏览器直连被跨域（CORS）策略拦截（桌面版可正常使用）',
+        '无法连接 WebDAV 服务器：网络不可达，或浏览器直连被跨域（CORS）策略拦截（桌面版可正常使用）' +
+          `。原始错误：${e.message}`,
       );
     }
     throw e;
@@ -309,6 +361,13 @@ export interface DavBackupInfo {
   encrypted: boolean;
   /** 快照内的纯数据状态（不含本机 webdav 配置） */
   state: AppState;
+  /**
+   * 云端备份里的媒体文件（v4.7.11 之前这里根本没有，恢复时把 files 整段丢掉 ——
+   * 换机/清过缓存后恢复，所有图片音频只剩悬空 id；而且下一次同步会用「本机没有文件」
+   * 的空 files 覆盖云端那份，把唯一的好备份也毁掉）。
+   * 值是**原始 base64**（不含 `data:` 前缀，见本文件 blobToBase64）。
+   */
+  files: Record<string, { mime: string; name: string; size: number; data: string }>;
 }
 
 /**
@@ -342,7 +401,12 @@ export async function downloadFromWebDav(
 
     // 兼容新旧两种云端格式：gzip 快照（旧版）解压，明文 JSON 直接读
     const text = (await isGzipBlob(payload)) ? await gunzipBlob(payload) : await payload.text();
-    let data: { kind?: string; createdAt?: number; state?: AppState };
+    let data: {
+      kind?: string;
+      createdAt?: number;
+      state?: AppState;
+      files?: Record<string, { mime: string; name: string; size: number; data: string }>;
+    };
     try {
       data = JSON.parse(text);
     } catch {
@@ -357,6 +421,8 @@ export async function downloadFromWebDav(
       url: target,
       encrypted,
       state: data.state,
+      // 旧备份可能没有 files 字段（早期版本只存文本）
+      files: data.files ?? {},
     };
   } catch (e) {
     if (e instanceof TypeError) {

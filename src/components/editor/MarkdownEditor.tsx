@@ -741,7 +741,9 @@ export function MarkdownEditor({
                   <button
                     onClick={() => {
                       setImageIds((prev) => prev.filter((x) => x !== id));
-                      setContent((c) => c.replace(new RegExp(`!\\[\\[^\\]]*\\]\\(fileRef:${id}\\)`, 'g'), ''));
+                      // ⚠️ 原正则写成了 !\[\[^\]]*\] —— 多一个 `[`，实际要求正文里有字面量「![[^]]」，
+                      // 所以永远匹配不上：移除缩略图后正文里的内联图片还在（v4.7.11 修）
+                      setContent((c) => c.replace(new RegExp(`!\\[[^\\]]*\\]\\(fileRef:${id}\\)`, 'g'), ''));
                     }}
                     aria-label={`移除第 ${i + 1} 张图片`}
                     className="absolute top-0 right-0 w-4 h-4 flex items-center justify-center bg-ink/80 text-moon text-[11px] leading-none"

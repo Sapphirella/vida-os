@@ -10,7 +10,7 @@
 //   2. 查找替换必须先产出「待确认变更清单」，由用户确认后才落盘
 //   3. 所有变更都会回一条 sys 消息，让用户看见 Agent 到底动了什么
 import { useAppStore } from '@/stores/useAppStore';
-import { errMsg } from '@/lib/utils';
+import { errMsg, todayKey } from '@/lib/utils';
 import { AGENT_BOOK_ID, bookCharCount, markPreview, parseBook, remapMarks } from '@/lib/library';
 
 /** 单条写入结果 */
@@ -98,6 +98,20 @@ function writeBookChapter(title: string, body: string): ToolResult {
 }
 
 /** 写入一条内容到指定模块 */
+/**
+ * Agent 给的日程日期可能是空、也可能是「明天」这类自由文本。
+ * 只接受能解析成 YYYY-MM-DD 的输入，否则回落到今天 —— 宁可日子不对，也别出现 NaN月NaN日。
+ */
+function normalizeScheduleDate(raw?: string): string {
+  const t = (raw ?? '').trim();
+  const m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(t);
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (!Number.isNaN(d.getTime())) return todayKey(d);
+  }
+  return todayKey();
+}
+
 export function writeContent(target: WriteTarget, body: string, extra?: string): ToolResult {
   const text = body.trim();
   if (!text) return { ok: false, message: '写入失败：内容为空' };
@@ -113,12 +127,17 @@ export function writeContent(target: WriteTarget, body: string, extra?: string):
         st.addTodo(text, extra?.trim() || '生活');
         return { ok: true, message: `已加入待办「${text.slice(0, 20)}${text.length > 20 ? '…' : ''}」` };
       case '日程':
+        // v4.7.11：date 之前直接取 extra 的原文（可能为空或「明天」这种自由文本）——
+        // 空串会让这条日程落进「过去」分组、并显示成 NaN月NaN日。
+        // 这里只接受能解析的日期，否则落到今天；顺便去掉越权传进来的 done
+        // （addSchedule 的签名不允许 done，之前用 as never 绕过了类型检查）。
         st.addSchedule({
           title: text,
-          date: extra?.trim() || '',
+          date: normalizeScheduleDate(extra),
+          note: '',
+          time: '',
           category: '生活',
-          done: false,
-        } as never);
+        });
         return { ok: true, message: `已加入日程「${text.slice(0, 20)}${text.length > 20 ? '…' : ''}」` };
       case '动态':
         st.addMoment({ content: text } as never);

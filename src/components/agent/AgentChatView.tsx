@@ -72,11 +72,15 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
   const messages = session?.messages ?? [];
   const isStreamingThis = (m: AgentMessage) => m.id === streamMsgId && streaming;
 
-  // 新消息滚到底部
+  // 新消息滚到底部。
+  // ⚠️ 依赖里必须带**最后一条的正文长度**：流式内容是用 replaceAgentMessage 逐块写进去的，
+  // messages.length 全程不变，只盯条数的话整个流式期间这个 effect 都不会重跑，
+  // 长回复会一路长到屏幕外、用户得手动追（v4.7.11 修）。
+  const lastMsgLen = messages.length ? (messages[messages.length - 1].content?.length ?? 0) : 0;
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, streamMsgId, streaming]);
+  }, [messages.length, lastMsgLen, streamMsgId, streaming]);
 
   /** 执行一轮回复（流式 + 记忆写入 + 工具标记循环）
    *  具体流程抽在 lib/agentTurn.ts —— 与馆藏阅读器的「共读」抽屉共用同一份实现，

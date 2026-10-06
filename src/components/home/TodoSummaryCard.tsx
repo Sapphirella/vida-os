@@ -24,7 +24,11 @@ export function TodoSummaryCard() {
 
   const submit = () => {
     const text = draft.trim();
-    if (!text) return;
+    // 空输入以前静默无效（v4.7.11 修：说清原因）
+    if (!text) {
+      showToast('请先写点什么', 'error');
+      return;
+    }
     addTodo(text);
     setDraft('');
     showToast('待办已添加', 'success');

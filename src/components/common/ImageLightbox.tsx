@@ -27,9 +27,14 @@ export function ImageLightbox() {
     if (lightbox?.fileId) {
       // 开了「存原图」的图，这里显示的是**原始分辨率**那一份（预览图只有长边 2560，
       // 放大看会糊）；没有原图就退回预览图（v4.7.8）
-      void fullImageId(lightbox.fileId).then((id) => fileURL(id)).then((u) => {
-        if (mounted) setUrl(u);
-      });
+      void fullImageId(lightbox.fileId)
+        .then((id) => fileURL(id))
+        .then((u) => {
+          if (!mounted) return;
+          setUrl(u);
+          // 读不到 blob：别让界面一直停在「加载图片…」（v4.7.11）
+          if (!u) showToast('这张图的文件已不在本机（可能被清理过）', 'error');
+        });
     }
     return () => {
       mounted = false;
@@ -48,7 +53,12 @@ export function ImageLightbox() {
   const save = async () => {
     // 保存的也是原图那一份（有的话）
     const f = await getFile(await fullImageId(fileId));
-    if (!f) return;
+    if (!f) {
+      // v4.7.11：文件已被清理过（例如早前的「清除缓存」误删）时，
+      // 以前这里直接 return —— 点了没任何反应，用户以为按钮坏了
+      showToast('这张图的文件已不在本机（可能被清理过），无法保存', 'error');
+      return;
+    }
     const ext = (f.mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
     const name = f.name || `vidaos-${fileId}.${ext}`;
     // 手机：系统分享（可存相册）；电脑：<a download> 直接下载

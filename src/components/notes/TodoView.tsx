@@ -18,7 +18,9 @@ export function TodoView() {
   const toggleTodo = useAppStore((s) => s.toggleTodo);
   const reorderTodo = useAppStore((s) => s.reorderTodo);
   const showToast = useUIStore((s) => s.showToast);
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  // 放 UI store：分栏切走会卸载组件，局部 state 的筛选会被重置（v4.7.11 修）
+  const selectedCat = useUIStore((s) => s.noteCategory.todo);
+  const setSelectedCat = (v: string | null) => useUIStore.getState().setNoteCategory('todo', v);
   const [composing, setComposing] = useState<{ content: string; category: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   // 放 UI store：分页切走会卸载本组件，局部 state 会被重置（v4.7.7 修）
@@ -221,8 +223,15 @@ function TodoItem({ item, isEditing, onEdit, onCancel, onSave, onToggle, onDelet
               取消
             </button>
             <button
-              onClick={() => draft.trim() && onSave(draft.trim())}
-              className="btn-primary"
+              onClick={() => {
+                // 空内容时以前直接不保存也不提示（v4.7.11 修：变暗 + 说明）
+                if (!draft.trim()) {
+                  useUIStore.getState().showToast('内容不能为空', 'error');
+                  return;
+                }
+                onSave(draft.trim());
+              }}
+              className={clsx('btn-primary', !draft.trim() && 'opacity-40')}
               style={{ padding: '4px 12px', fontSize: '0.75rem' }}
             >
               保存

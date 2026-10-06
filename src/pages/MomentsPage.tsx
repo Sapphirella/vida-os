@@ -115,7 +115,11 @@ export function MomentsPage() {
 
   const submitComment = (momentId: string) => {
     const text = (drafts[momentId] || '').trim();
-    if (!text) return;
+    // 空评论以前静默无效（v4.7.11 修）
+    if (!text) {
+      showToast('评论不能为空', 'error');
+      return;
+    }
     addMomentComment(momentId, text);
     setDrafts((d) => ({ ...d, [momentId]: '' }));
   };
@@ -337,9 +341,19 @@ export function MomentsPage() {
                                         </p>
                                       </div>
                                       <button
-                                        onClick={() => deleteMomentComment(m.id, c.id)}
+                                        onClick={async () => {
+                                          // v4.7.11：这里原来既没有 sm: 前缀（手机上一直不透明、
+                                          // 是个 ~20px 的活跃点击区，误触即静默删评论），也没有确认。
+                                          // 按项目约定：手机常显、桌面 hover 才显，并且删前问一句。
+                                          const ok = await useUIStore
+                                            .getState()
+                                            .confirmDialog('删除这条评论？\n\n删了就找不回来了。');
+                                          if (!ok) return;
+                                          deleteMomentComment(m.id, c.id);
+                                          showToast('评论已删除', 'info');
+                                        }}
                                         aria-label="删除评论"
-                                        className="opacity-0 group-hover/c:opacity-100 w-5 h-5 flex items-center justify-center text-bronze hover:text-wine-bright"
+                                        className="opacity-100 sm:opacity-0 sm:group-hover/c:opacity-100 w-5 h-5 flex items-center justify-center text-bronze hover:text-wine-bright"
                                       >
                                         ×
                                       </button>

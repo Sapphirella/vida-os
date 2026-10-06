@@ -26,7 +26,9 @@ export function InspirationView() {
   const showToast = useUIStore((s) => s.showToast);
   const focusRequest = useUIStore((s) => s.focusRequest);
   const setLightbox = useUIStore((s) => s.setLightbox);
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  // 放 UI store：分栏切走会卸载组件，局部 state 的筛选会被重置（v4.7.11 修）
+  const selectedCat = useUIStore((s) => s.noteCategory.inspiration);
+  const setSelectedCat = (v: string | null) => useUIStore.getState().setNoteCategory('inspiration', v);
   const [composing, setComposing] = useState<{ content: string; category: string; imageIds: string[] } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -189,7 +191,6 @@ export function InspirationView() {
               >
                 <ImagePlus size={16} strokeWidth={1.5} />
               </button>
-              <KeepOriginalToggle />
               <KeepOriginalToggle />
             </div>
             <div className="flex items-center gap-2">
@@ -389,15 +390,21 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
                 <ImagePlus size={16} strokeWidth={1.5} />
               </button>
               <KeepOriginalToggle />
-              <KeepOriginalToggle />
             </div>
             <div className="flex items-center gap-2">
               <button onClick={handleCancel} className="btn-text">
                 取消
               </button>
               <button
-                onClick={() => draft.trim() && onSave(draft.trim(), draftImages)}
-                className="btn-primary"
+                onClick={() => {
+                  // 空内容时以前静默无效（v4.7.11 修）
+                  if (!draft.trim()) {
+                    useUIStore.getState().showToast('内容不能为空', 'error');
+                    return;
+                  }
+                  onSave(draft.trim(), draftImages);
+                }}
+                className={clsx('btn-primary', !draft.trim() && 'opacity-40')}
                 style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
               >
                 保存

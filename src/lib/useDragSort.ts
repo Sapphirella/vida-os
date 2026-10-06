@@ -179,6 +179,7 @@ export function useDragSort({
       ds.row.classList.remove('vd-dragging');
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('touchcancel', onTouchEnd);
@@ -215,6 +216,9 @@ export function useDragSort({
     }
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
+    // v4.7.11：安卓把手势判成滚动时会发 pointercancel（本文件注释里点名的那个竞争）。
+    // 之前没人接它 —— 已抬起的行会保持样式、幽灵指示线留在列表里，直到下一次 pointerup。
+    window.addEventListener('pointercancel', onUp);
   };
 
   /** 屏蔽长按菜单（安卓）：挂在列表容器上 */

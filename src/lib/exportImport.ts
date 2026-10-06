@@ -96,7 +96,11 @@ export function scopeSlug(scope: ExportScopes | ExportScope): string {
 
 export function scopedState(state: AppState, scope: ExportScopes | ExportScope): AppState {
   const has = normalizeScopes(scope);
-  if (has.size === ALL_SCOPE_KEYS.length) return state;
+  // ⚠️ 凭据一律不外带，而且必须在下面那个「全选直接返回 state」的短路之前处理 ——
+  // 否则全量导出（最常用的那条路径）会原样带上 settings.webdav 里的明文密码/口令
+  // （v4.7.11 修；webdav.ts 的 pickState 早就剥掉了，只有这条导出路径漏了）
+  const safe: AppState = { ...state, settings: { ...state.settings, webdav: undefined } };
+  if (has.size === ALL_SCOPE_KEYS.length) return safe;
 
   // 收藏夹导出：除收藏记录本身，也带上被收藏的内容，否则导出的收藏夹是空壳
   let favArticles: typeof state.articles = [];
@@ -128,7 +132,10 @@ export function scopedState(state: AppState, scope: ExportScopes | ExportScope):
     notes: has.has('notes') ? state.notes : { inspiration: [], schedule: [], todo: [], fragments: [] },
     categories: state.categories,
     tracks: [],
-    settings: state.settings,
+    // v4.7.11：JSON 导出会落到用户的文件系统/网盘，属于「会被分享出去」的东西，
+    // 不能带本机凭据。webdav.ts 的 pickState 早就这么做了（注释写着「避免分享备份时泄露」），
+    // 这条导出路径此前漏了 —— settings.webdav 里的 password / passphrase 是明文。
+    settings: safe.settings,
     books: has.has('library') ? state.books : [],
     albums: has.has('album') ? state.albums : [],
     albumGroups: has.has('album') ? state.albumGroups : [],
@@ -195,6 +202,26 @@ export function collectFileIds(state: AppState): Set<string> {
   (state.albumStars ?? []).forEach((st) => {
     if (st.imageId) ids.add(st.imageId);
   });
+  // ── v4.7.11：补齐此前漏扫的文本宿主 ──
+  // 漏扫的后果不是「备份少个文件」这么轻：`清除缓存` 正是拿本函数的**反集**当孤儿回收，
+  // 所以漏登记 = 那个文件会被当成垃圾**删掉**（v4.6.1 删掉音乐 blob、v4.7.11 之前删掉
+  // Agent 聊天里的图片，都是同一个形状）。
+  //
+  // 规则：**凡是可能被渲染成图片的文本字段，都要扫**。判断依据是「渲染路径」而不是
+  // 「谁写进去的」—— Agent 聊天消息会被 MarkdownView 渲染（带 fileRef 解析），
+  // 所以模型/用户从任何渠道塞进去的 fileRef 都是活引用。
+  (state.agentSessions ?? []).forEach((sess) => {
+    (sess.messages ?? []).forEach((m) => scanText(m.content));
+  });
+  // 书籍正文：Agent 的 [[写:书【…】|正文]] 会把任意文本（可能含 fileRef）抄进《Agent》书，
+  // 而书页在导出/快照里也会解析内联图片 —— 一并扫掉，代价只是多留几个 id
+  (state.books ?? []).forEach((b) => scanText(b.content ?? ''));
+  // Agent 的资料库 / 记忆馆：同样是「可能被抄进正文」的文本来源
+  (state.agentDocs ?? []).forEach((d) => scanText(d.content ?? ''));
+  (state.agentMemories ?? []).forEach((m) => scanText(m.content ?? ''));
+  // 日程备注：PDF 导出里会走 resolveInline(renderMarkdown(note))
+  (state.notes?.schedule ?? []).forEach((n) => scanText(n.note ?? ''));
+
   if (state.profile.avatarId) ids.add(state.profile.avatarId);
   if (state.profile.backgroundFileId) ids.add(state.profile.backgroundFileId);
 

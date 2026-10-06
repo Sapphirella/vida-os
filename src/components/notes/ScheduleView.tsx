@@ -17,7 +17,9 @@ export function ScheduleView() {
   const deleteSchedule = useAppStore((s) => s.deleteSchedule);
   const toggleDone = useAppStore((s) => s.toggleScheduleDone);
   const showToast = useUIStore((s) => s.showToast);
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  // 放 UI store：分栏切走会卸载组件，局部 state 的筛选会被重置（v4.7.11 修）
+  const selectedCat = useUIStore((s) => s.noteCategory.schedule);
+  const setSelectedCat = (v: string | null) => useUIStore.getState().setNoteCategory('schedule', v);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [composing, setComposing] = useState<Partial<ScheduleNote> | null>(null);
 

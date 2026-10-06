@@ -94,7 +94,7 @@ export function SettingsPage() {
           <section>
             <h4 className="font-serif text-candle font-semibold mb-1">VidaOS 是什么</h4>
             <p className="text-paper">
-              你的私密生活记录空间。文章、动态、灵感、日程、待办、馆藏书籍全部存在
+              你的私密生活记录空间。文章、动态、碎片、灵感、日程、待办、馆藏书籍与照片全部存在
               本机（IndexedDB），不上传任何服务器，可离线使用，也能随时整体导出备份。
             </p>
           </section>
@@ -112,8 +112,10 @@ export function SettingsPage() {
             <p className="text-paper mt-1">
               音乐：把本地音频文件拖进来就能听。播放器右上角的
               <span className="text-candle"> 顺序 / 随机 / 单曲 / 播完暂停 </span>
-              按钮点一下循环切换四种模式——它只决定「一首自然放完之后怎么办」，
-              上一首 / 下一首永远按你导入的列表顺序走。音量在左侧。
+              按钮点一下循环切换四种模式——它只决定「一首自然放完之后怎么办」：
+              顺序往下走、随机挑一首、单曲反复这一首，「播完暂停」则是<span className="text-candle">
+              这首放完就停下</span>、不自动接下一首。上一首 / 下一首永远按你导入的列表顺序走。
+              音量在左侧。
             </p>
             <p className="text-paper mt-1">
               特别说明 <span className="text-candle">单曲循环</span>：
@@ -126,18 +128,36 @@ export function SettingsPage() {
             <p className="text-paper mt-1">
               歌单可以拖动排序：歌单面板右上角点「排序」→ 按住歌名上下拖动 →
               「取消」还原、「完成」保存。自动续播与上一首 / 下一首都按这个顺序走。
+              曲目的音频文件要是丢了（例如早前清理过缓存），播放时会自动跳过它，
+              并在歌单里标出「文件缺失」，重新导入一次即可。
             </p>
           </section>
 
           <section>
             <h4 className="font-serif text-candle font-semibold mb-1">便签</h4>
             <p className="text-paper">
+              <span className="text-candle">碎片</span>（默认落在这一栏）：
+              上方月历选日期（点标题可选年 / 月），下方是当天的<span className="text-candle">极简时间轴</span>——
+              点右下角加号记一句，<span className="text-candle">自动记录当下时间</span>，按天存放。
+              条目可就地编辑、删除，也能加一个轻量标签。输入区的时间入口可以把它补记到别的时刻
+              （今天稍晚、或过去某天）。
+            </p>
+            <p className="text-paper mt-1">
+              <span className="text-candle">时间胶囊</span>：把碎片补记到<span className="text-candle">未来</span>
+              （晚于此刻 5 分钟以上），就种下一颗时间胶囊——时间轴下方会出现【时间胶囊】栏目。
+              没到开封日时它默认折起来（可以点「点开看看」预览）；到了那天它<span className="text-candle">
+              仍然留在栏目里</span>，状态变成「今天开启 / 已开启」并把内容铺开。
+            </p>
+            <p className="text-paper mt-1">
               灵感：像发消息一样随手记碎片；可加图片、星标（标记值得整理）、分类标签
               （点标签筛选，双击重命名，悬停 × 删除）；一条灵感可一键转为文章；
               按最近修改时间排序，有更新会自动提到最前。
             </p>
             <p className="text-paper mt-1">
-              日程：按日期安排事项。待办：随时记下要做的事，完成后勾掉。
+              日程：按日期与时间安排事项（时间用应用内的选择器挑，日期走系统日历）；
+              填了一个标签栏里还没有的分类，保存后<span className="text-candle">会自动加进日程标签栏</span>。
+              待办：随时记下要做的事，回车换行、按住可拖动排序、完成后自动置底；
+              「隐藏已完成」这个开关会被记住——切到别的分栏再回来，它仍然保持你上次的选择。
             </p>
           </section>
 
@@ -145,7 +165,7 @@ export function SettingsPage() {
             <h4 className="font-serif text-candle font-semibold mb-1">动态</h4>
             <p className="text-paper">
               生活时间线：发动态支持 Markdown 与图片，可评论、收藏；按日期分组展示，
-              完全按设置的时间排序（以前的在下，最近的在上）。
+              完全按设置的时间排序（以前的在下，最近的在上）；编辑时可以同时改发布时间。
             </p>
           </section>
 
@@ -163,7 +183,16 @@ export function SettingsPage() {
               但不会出现在文章展示里。
             </p>
             <p className="text-paper mt-1">
-              合集：把文章归到合集里整理。收藏夹：收藏的文章、动态统一查看。
+              <span className="text-candle">标签栏</span>：在合集与文章之间，自动汇总所有文章用到的标签
+              （带使用次数，按用得多的排前面）。点标签即可筛选下面的文章；双击改名会把
+              <span className="text-candle">所有用到它的文章一起改</span>；点 × 删除会从所有文章上摘掉
+              这个标签（文章本身不删，动手前会先确认）。
+            </p>
+            <p className="text-paper mt-1">
+              合集：把文章归到合集里整理。<span className="text-candle">收藏夹</span>：
+              收藏的文章与动态统一查看，每条都标了类型（文章 / 动态）；
+              点动态会直接<span className="text-candle">定位并高亮</span>到那一条
+              （动态没有独立页面，所以是页内跳转）。
             </p>
           </section>
 
@@ -214,6 +243,9 @@ export function SettingsPage() {
             <p className="text-paper">
               多会话聊天助手。底栏是入口，进去可以新建 / 切换会话；
               人设、模型配置在配置页里填（Base URL + API Key + 模型名，模型名可以用「拉取」直接选）。
+              每个会话都可以<span className="text-candle">重命名</span>，用不上的可以
+              <span className="text-candle">归档</span>（归档后收在列表下方，随时能恢复），
+              也能把某个会话导出成 txt。
             </p>
             <p className="text-paper mt-1">
               它能读你的空间文章、动态、灵感、便签、馆藏与收藏夹，也能
@@ -237,16 +269,33 @@ export function SettingsPage() {
           </section>
 
           <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">图片</h4>
+            <p className="text-paper">
+              上传的图片默认压到<span className="text-candle">长边 2560 / JPEG 0.9</span>
+              ——手机满屏和放大看都够清楚。需要原始分辨率的，在上传处点一下
+              <span className="text-candle">「存原图」</span>（会记住你的选择，文章 / 动态编辑器、
+              灵感、相册里都有这个开关）：原图只用在<span className="text-candle">点开大图、保存图片、导出备份</span>，
+              正文、列表、相册网格仍然加载轻量预览图，所以不会因为几张原图就变卡。
+              小于 500KB 的图片原样保存，不做任何压缩。
+            </p>
+          </section>
+
+          <section>
             <h4 className="font-serif text-candle font-semibold mb-1">数据与全局</h4>
             <p className="text-paper">
               数据页：JSON 导出 / 导入（导出范围可选文章、动态、便签、收藏夹、个人资料、
-              馆藏·书架、馆藏·相册、Agent 全数据，支持多选）、WebDAV 云备份、本地文件夹
-              备份、重置。WebDAV 云端保存明文 JSON，每次同步全量覆盖——删除的内容也会同步消失。
+              馆藏·书架、馆藏·相册、Agent 全数据，支持多选），也能导出 Markdown 与 PDF、
+              用 WebDAV 云备份、备份到本地文件夹、或重置。WebDAV 云端保存明文 JSON，
+              每次同步全量覆盖——删除的内容也会同步消失。
             </p>
             <p className="text-paper mt-1">
               外观：可切换主题（跟随系统 / 白昼 / 暗夜 / 猩红书房）。
               顶栏搜索按钮或 ⌘K 打开全局查找替换；页面右上角另有页内查找替换。
               这是 PWA，可「添加到主屏幕」当 App 用。
+            </p>
+            <p className="text-paper mt-1">
+              本页下方的<span className="text-candle">清除缓存</span>只删除正文里已经不再引用的图片文件
+              （例如编辑时留下的废弃图），文章、动态、灵感、相册、收藏夹等数据一律不动。
             </p>
           </section>
         </div>
@@ -335,17 +384,26 @@ export function SettingsPage() {
   };
 
   const saveName = () => {
-    if (name.trim() && name.trim() !== profile.name) {
-      updateProfile({ name: name.trim() });
-      showToast('已保存', 'success');
+    // v4.7.11：以前「名字空着」或「没改动」点保存都毫无反馈，看不出是坏了还是没必要保存
+    if (!name.trim()) {
+      showToast('名字不能为空', 'error');
+      return;
     }
+    if (name.trim() === profile.name) {
+      showToast('名字没有改动', 'info');
+      return;
+    }
+    updateProfile({ name: name.trim() });
+    showToast('已保存', 'success');
   };
 
   const saveSignature = () => {
-    if (signature !== profile.signature) {
-      updateProfile({ signature });
-      showToast('已保存', 'success');
+    if (signature === profile.signature) {
+      showToast('签名没有改动', 'info');
+      return;
     }
+    updateProfile({ signature });
+    showToast('已保存', 'success');
   };
 
   return (

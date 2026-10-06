@@ -37,6 +37,13 @@ interface UIStore {
    * 用户点的「隐藏已完成」于是被重置（用户反馈）。放进 UI store 就跨分页保持了。
    */
   showCompletedTodos: boolean;
+  /**
+   * 便签三个分栏各自选中的分类（v4.7.11 从组件局部 state 搬来）。
+   * 便签页是条件渲染，切分栏会卸载组件 —— 局部 state 里的筛选会被重置，
+   * 用户看到的是「我刚选的分类又回到全部了」。判据同 showCompletedTodos（第 4 节之 31）。
+   */
+  noteCategory: { inspiration: string | null; schedule: string | null; todo: string | null };
+  setNoteCategory: (which: 'inspiration' | 'schedule' | 'todo', v: string | null) => void;
   setNotesTab: (tab: 'fragment' | 'inspiration' | 'schedule' | 'todo') => void;
   setShowCompletedTodos: (v: boolean) => void;
 
@@ -119,6 +126,9 @@ export const useUIStore = create<UIStore>((set) => ({
   setNotesTab: (tab) => set({ notesTab: tab }),
   showCompletedTodos: true,
   setShowCompletedTodos: (v) => set({ showCompletedTodos: v }),
+  noteCategory: { inspiration: null, schedule: null, todo: null },
+  setNoteCategory: (which, v) =>
+    set((s) => ({ noteCategory: { ...s.noteCategory, [which]: v } })),
 
   agentSessionId: null,
   setAgentSessionId: (id) => set({ agentSessionId: id }),

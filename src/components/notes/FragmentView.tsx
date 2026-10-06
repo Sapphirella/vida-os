@@ -517,9 +517,16 @@ function FragmentItem({
               取消
             </button>
             <button
-              onClick={() => onSave(content, tag)}
-              disabled={!content.trim()}
-              className="btn-primary disabled:opacity-40"
+              onClick={() => {
+                // v4.7.11：以前空内容时按钮是 disabled 的 —— 点不动也没有任何解释，
+                // 按项目约定改成「变暗 + 点了说明原因」
+                if (!content.trim()) {
+                  useUIStore.getState().showToast('内容不能为空', 'error');
+                  return;
+                }
+                onSave(content, tag);
+              }}
+              className={`btn-primary ${!content.trim() ? 'opacity-40' : ''}`}
               style={{ padding: '5px 12px', fontSize: '0.8125rem' }}
             >
               保存

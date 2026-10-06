@@ -1224,7 +1224,18 @@ export const useAppStore = create<Store>((set, get) => ({
       const cur = get();
       const merged: AppState = {
         ...cur,
-        profile: incoming.profile ?? cur.profile,
+        // v4.7.11：非全量导出时 scopedState 会给一个 {name:'',signature:''} 的空壳，
+        // 而 `??` 只挡 null/undefined —— 于是「只导出文章 → 合并导入」会把本机昵称/签名清空、
+        // avatarId/backgroundFileId 一起丢，头像与背景随后被清除缓存当孤儿删掉。
+        // 判据：来件里既没有名字也没有任何文件引用 = 空壳，保持本机不变。
+        profile:
+          incoming.profile &&
+          (incoming.profile.name ||
+            incoming.profile.signature ||
+            incoming.profile.avatarId ||
+            incoming.profile.backgroundFileId)
+            ? { ...cur.profile, ...incoming.profile }
+            : cur.profile,
         collections: mergeById(cur.collections, incoming.collections),
         articles: mergeById(cur.articles, incoming.articles),
         moments: mergeById(cur.moments, incoming.moments),

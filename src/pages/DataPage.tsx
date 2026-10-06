@@ -222,8 +222,22 @@ export function DataPage() {
       ) {
         return;
       }
+      // v4.7.11：媒体也要一起写回。此前只灌 state，图片/音频/头像只剩悬空 id ——
+      // 换台设备或清过缓存后「恢复了但图片全没了」，而且下一次同步还会把云端那份覆盖掉。
+      let files = 0;
+      for (const [id, f] of Object.entries(info.files ?? {})) {
+        try {
+          // 注意：webdav 存的是**原始 base64**，而 base64ToBlob 期待 data: URL，
+          // 所以要自己补前缀（两边的 blobToBase64 语义不同，别直接对接）
+          const blob = base64ToBlob(`data:${f.mime || 'application/octet-stream'};base64,${f.data}`);
+          await putFile({ id, blob, mime: f.mime, name: f.name, size: blob.size });
+          files += 1;
+        } catch {
+          // 单个文件坏了不中断整体恢复
+        }
+      }
       importState(info.state, 'overwrite');
-      showToast('已从云端恢复', 'success');
+      showToast(files > 0 ? `已从云端恢复（含 ${files} 个媒体文件）` : '已从云端恢复', 'success');
     } catch (e) {
       if (e instanceof NeedPassphraseError) {
         showModal({
@@ -320,6 +334,12 @@ export function DataPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const doExportJSON = async () => {
+    // v4.7.11：以前全不勾也能导出，产出只剩 settings/categories 的 vidaos-none-*.json，
+    // 界面却提示「导出成功」—— 用户之后再拿这份「覆盖」导入等于清空全部数据。
+    if (scopes.length === 0) {
+      showToast('请至少选择一项导出范围', 'error');
+      return;
+    }
     try {
       setExporting('json');
       const json = await exportJSON(state, scopes);
@@ -333,6 +353,10 @@ export function DataPage() {
   };
 
   const doExportMD = async () => {
+    if (scopes.length === 0) {
+      showToast('请至少选择一项导出范围', 'error');
+      return;
+    }
     try {
       setExporting('md');
       const md = exportMarkdown(state, scopes);
@@ -346,6 +370,10 @@ export function DataPage() {
   };
 
   const doExportTXT = async () => {
+    if (scopes.length === 0) {
+      showToast('请至少选择一项导出范围', 'error');
+      return;
+    }
     try {
       setExporting('txt');
       const txt = exportTXT(state, scopes);
@@ -359,6 +387,10 @@ export function DataPage() {
   };
 
   const doExportPDF = async () => {
+    if (scopes.length === 0) {
+      showToast('请至少选择一项导出范围', 'error');
+      return;
+    }
     try {
       setExporting('pdf');
       const blob = await exportPDF(state, scopes);

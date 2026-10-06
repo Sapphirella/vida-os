@@ -72,7 +72,11 @@ export function SpacePage() {
   });
 
   const handleCreateCollection = () => {
-    if (!newName.trim()) return;
+    // 留空点「创建」以前什么都不发生（v4.7.11 修：说清原因）
+    if (!newName.trim()) {
+      showToast('请填写合集名', 'error');
+      return;
+    }
     addCollection(newName.trim(), newDesc.trim());
     setNewName('');
     setNewDesc('');
