@@ -3,6 +3,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { AppState } from '@/types';
 import { listFiles, getFile } from './db';
+import { origFileId } from './media';
 import { blobToBase64, plainText, formatDate } from './utils';
 import { renderMarkdown } from './markdown';
 
@@ -196,6 +197,13 @@ export function collectFileIds(state: AppState): Set<string> {
   });
   if (state.profile.avatarId) ids.add(state.profile.avatarId);
   if (state.profile.backgroundFileId) ids.add(state.profile.backgroundFileId);
+
+  // 「存原图」写下的兄弟文件 <id>__orig（v4.7.8）：它**不被任何记录引用**（记录引用的是预览图），
+  // 所以必须在这里显式收进来，否则两条后果都会发生：
+  //   ① 三条备份路径（导出 JSON / WebDAV / 本地快照）不带原图，换机后原图永久丢失；
+  //   ② 「清除缓存」拿本函数的反集当孤儿回收，会把原图当垃圾删掉（哪怕用户特意开开关存了它）。
+  // 不存在兄弟文件时多一个 id 也无害：导出侧 getFile 取不到会跳过，回收侧只是白留一个不存在的 id。
+  for (const id of [...ids]) ids.add(origFileId(id));
   return ids;
 }
 

@@ -226,7 +226,18 @@ export async function saveText(text: string, filename: string, mime: string): Pr
 }
 
 // 压缩图片
-export async function compressImage(blob: Blob, maxSide = 1600, quality = 0.82): Promise<Blob> {
+/**
+ * 生成**预览图**（存进 IndexedDB 的那一份）。
+ *
+ * v4.7.8 把默认值从 1600 / q0.82 提到 **2560 / q0.9**：原来 4000px 的手机照片会被砍到
+ * 1600px（长边只剩 1/2.52、像素只剩 15.7%），满屏还行、一放大就糊（实测 PSNR 35.3dB）。
+ * 现在长边 2560、q0.9，日常显示与放大都够清楚，体积约为原来的 5 倍（一张 12MP 照片
+ * 实测 164KB → 859KB）。想完全不降分辨率的，用上传处的「存原图」开关另存一份原图。
+ *
+ * 小于 500KB 的图片**原样返回**（连缩放都不做）——这条保留：那类图本来就不大，
+ * 再压只会白掉画质。`storeImage` 会识别这种「原样返回」并跳过重复存原图。
+ */
+export async function compressImage(blob: Blob, maxSide = 2560, quality = 0.9): Promise<Blob> {
   if (blob.size < 500 * 1024) return blob; // < 500KB 不压缩
   const img = await blobToImage(blob);
   let { width, height } = img;

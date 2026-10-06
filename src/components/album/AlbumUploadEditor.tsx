@@ -9,9 +9,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ArrowUpDown, Check, ImagePlus } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
-import { compressImage, uid, clsx } from '@/lib/utils';
-import { putFile, deleteFile } from '@/lib/db';
+import { useAppStore } from '@/stores/useAppStore';
+import { clsx } from '@/lib/utils';
 import { fileURL, revokeFileURL } from '@/lib/fileUrl';
+import { deleteImage, storeImage } from '@/lib/media';
+import { KeepOriginalToggle } from '@/components/common/KeepOriginalToggle';
 
 export interface AlbumUploadEditorProps {
   /** 初始图片（编辑时传入旧组；发布时传空） */
@@ -67,7 +69,7 @@ export function AlbumUploadEditor({
       if (kept.has(id)) continue;
       sessionIds.current.delete(id);
       revokeFileURL(id);
-      void deleteFile(id).catch(() => {});
+      void deleteImage(id);
     }
   };
 
@@ -139,9 +141,10 @@ export function AlbumUploadEditor({
     // 分批并行（每批 4 张），既快又不会一次性占满内存
     const process = async (file: File): Promise<string | null> => {
       try {
-        const blob = await compressImage(file);
-        const id = uid('img_');
-        await putFile({ id, blob, mime: 'image/jpeg', name: file.name, size: blob.size });
+        const { id } = await storeImage(file, {
+          name: file.name,
+          keepOriginal: useAppStore.getState().settings.keepOriginalImages ?? false,
+        });
         return id;
       } catch {
         showToast(`「${file.name}」处理失败，已跳过`, 'error');
@@ -382,6 +385,7 @@ export function AlbumUploadEditor({
               <ImagePlus size={14} strokeWidth={1.5} />
               {uploading ? '正在上传…' : '添加照片'}
             </button>
+            <KeepOriginalToggle />
           </div>
         )}
 

@@ -6,12 +6,13 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { MediaImage } from '@/components/common/MediaImage';
 import { CategoryChips } from './CategoryChips';
 import { useAppStore } from '@/stores/useAppStore';
+import { deleteImage, storeImage } from '@/lib/media';
+import { KeepOriginalToggle } from '@/components/common/KeepOriginalToggle';
 import { useUIStore } from '@/stores/useUIStore';
 import { usePageFind } from '@/components/search/usePageFind';
 import { PageFindBar } from '@/components/search/PageFindBar';
 import { useGlobalFocus } from '@/lib/focusRequest';
-import { compressImage, uid, relativeTime, clsx } from '@/lib/utils';
-import { putFile, deleteFile } from '@/lib/db';
+import { relativeTime, clsx } from '@/lib/utils';
 import type { InspirationNote } from '@/types';
 
 export function InspirationView() {
@@ -78,9 +79,10 @@ export function InspirationView() {
     const ids: string[] = [];
     for (const file of Array.from(files)) {
       try {
-        const blob = await compressImage(file);
-        const id = uid('img_');
-        await putFile({ id, blob, mime: 'image/jpeg', name: file.name, size: blob.size });
+        const { id } = await storeImage(file, {
+          name: file.name,
+          keepOriginal: useAppStore.getState().settings.keepOriginalImages ?? false,
+        });
         ids.push(id);
       } catch {
         showToast('图片处理失败', 'error');
@@ -187,6 +189,8 @@ export function InspirationView() {
               >
                 <ImagePlus size={16} strokeWidth={1.5} />
               </button>
+              <KeepOriginalToggle />
+              <KeepOriginalToggle />
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -311,7 +315,8 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
   /** 取消编辑：把这次新加、但没保存的图片删掉，避免留下无引用的孤儿 blob */
   const handleCancel = () => {
     const added = draftImages.filter((id) => !item.imageIds.includes(id));
-    added.forEach((id) => void deleteFile(id));
+    // 连原图兄弟一起删（deleteImage 会成对处理，见 lib/media.ts）
+    added.forEach((id) => void deleteImage(id));
     onCancel();
   };
 
@@ -320,9 +325,10 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
     const ids: string[] = [];
     for (const file of Array.from(files)) {
       try {
-        const blob = await compressImage(file);
-        const id = uid('img_');
-        await putFile({ id, blob, mime: 'image/jpeg', name: file.name, size: blob.size });
+        const { id } = await storeImage(file, {
+          name: file.name,
+          keepOriginal: useAppStore.getState().settings.keepOriginalImages ?? false,
+        });
         ids.push(id);
       } catch {
         // silently fail for individual images
@@ -382,6 +388,8 @@ function InspirationItem({ item, isEditing, onEdit, onCancel, onSave, onDelete, 
               >
                 <ImagePlus size={16} strokeWidth={1.5} />
               </button>
+              <KeepOriginalToggle />
+              <KeepOriginalToggle />
             </div>
             <div className="flex items-center gap-2">
               <button onClick={handleCancel} className="btn-text">

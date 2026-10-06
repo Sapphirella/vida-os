@@ -19,9 +19,10 @@ import { useUIStore } from '@/stores/useUIStore';
 import { applyReplace, cancelReplace, type PendingReplace } from '@/lib/agentTools';
 import { MarkdownView } from '@/components/common/MarkdownView';
 import { MediaImage } from '@/components/common/MediaImage';
-import { saveText, formatDate, clsx, compressImage, uid } from '@/lib/utils';
+import { saveText, formatDate, clsx } from '@/lib/utils';
 import { copyText } from '@/lib/clipboard';
-import { putFile, deleteFile } from '@/lib/db';
+import { deleteFile } from '@/lib/db';
+import { storeImage } from '@/lib/media';
 // 逐轮回复的实现已抽到 lib/agentTurn.ts（与馆藏「共读」抽屉共用），
 // 这里只留这个组件自己还要用的几个（导出 / 人设默认值）
 import { hasApiConfig, sessionToTxt } from '@/lib/agentEngine';
@@ -144,9 +145,8 @@ export function AgentChatView({ sessionId }: { sessionId: string }) {
       const ids: string[] = [];
       for (const file of Array.from(files).slice(0, 9 - picked.length)) {
         try {
-          const blob = await compressImage(file);
-          const id = uid('img_');
-          await putFile({ id, blob, mime: 'image/jpeg', name: file.name, size: blob.size });
+          // Agent 的图是发给模型看的，不需要原图（省空间）
+          const { id } = await storeImage(file, { name: file.name });
           ids.push(id);
         } catch {
           showToast(`「${file.name}」处理失败，已跳过`, 'error');

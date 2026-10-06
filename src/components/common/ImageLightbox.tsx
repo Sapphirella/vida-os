@@ -3,6 +3,7 @@ import { X, Download, ImageIcon, Star } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAppStore } from '@/stores/useAppStore';
 import { fileURL } from '@/lib/fileUrl';
+import { fullImageId } from '@/lib/media';
 import { getFile } from '@/lib/db';
 
 /**
@@ -24,7 +25,9 @@ export function ImageLightbox() {
     let mounted = true;
     setUrl(null);
     if (lightbox?.fileId) {
-      void fileURL(lightbox.fileId).then((u) => {
+      // 开了「存原图」的图，这里显示的是**原始分辨率**那一份（预览图只有长边 2560，
+      // 放大看会糊）；没有原图就退回预览图（v4.7.8）
+      void fullImageId(lightbox.fileId).then((id) => fileURL(id)).then((u) => {
         if (mounted) setUrl(u);
       });
     }
@@ -43,7 +46,8 @@ export function ImageLightbox() {
     (window.matchMedia?.('(pointer: coarse)').matches ?? false);
 
   const save = async () => {
-    const f = await getFile(fileId);
+    // 保存的也是原图那一份（有的话）
+    const f = await getFile(await fullImageId(fileId));
     if (!f) return;
     const ext = (f.mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
     const name = f.name || `vidaos-${fileId}.${ext}`;

@@ -330,6 +330,12 @@ export interface Settings {
   webdav?: WebDavConfig;
   /** Agent 入口开关（v4.5.3 新增）。缺省视为开启，保持旧用户行为不变 */
   agentEnabled?: boolean;
+  /**
+   * 上传图片时是否额外保存一份**原始分辨率**（v4.7.8）。
+   * 缺省 false：只存长边 2560 的预览图。开启后每个上传入口旁边那个「存原图」开关就是开的，
+   * 记录里仍然引用轻量预览图（列表/正文不会变卡），灯箱 / 保存图片 / 备份用原图。
+   */
+  keepOriginalImages?: boolean;
 }
 
 export interface AppState {

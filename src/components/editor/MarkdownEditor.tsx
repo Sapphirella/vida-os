@@ -29,11 +29,12 @@ import {
   Waypoints,
 } from 'lucide-react';
 import { MarkdownView, collectInlineImageIds } from '@/components/common/MarkdownView';
-import { compressImage, uid, clsx, formatDate } from '@/lib/utils';
+import { clsx, formatDate } from '@/lib/utils';
 import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { putFile } from '@/lib/db';
 import { MediaImage } from '@/components/common/MediaImage';
+import { storeImage } from '@/lib/media';
+import { KeepOriginalToggle } from '@/components/common/KeepOriginalToggle';
 import { TimePicker } from '@/components/common/TimePicker';
 
 interface MarkdownEditorProps {
@@ -298,9 +299,11 @@ export function MarkdownEditor({
     let ok = 0;
     for (const f of files) {
       try {
-        const compressed = await compressImage(f, 1600, 0.82);
-        const id = uid('img_');
-        await putFile({ id, blob: compressed, mime: compressed.type, name: f.name, size: compressed.size });
+        // 统一走 storeImage：预览图 2560/q0.9，开了「存原图」再另存一份原始分辨率
+        const { id } = await storeImage(f, {
+          name: f.name,
+          keepOriginal: useAppStore.getState().settings.keepOriginalImages ?? false,
+        });
         setImageIds((prev) => [...prev, id]);
         ok++;
       } catch {
@@ -446,6 +449,7 @@ export function MarkdownEditor({
           title="插入图片"
         />
         <ToolbarBtn onClick={() => insert('\n---\n', '', '')} icon={<Minus size={14} />} title="分割线" />
+        <KeepOriginalToggle className="ml-2" />
         <div className="flex-1" />
         <button
           onClick={() => setMode((m) => (m === 'edit' ? 'preview' : 'edit'))}

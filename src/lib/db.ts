@@ -279,6 +279,8 @@ export function defaultState(): AppState {
     agentMemories: [],
     settings: {
       lastTab: 'desk',
+      // v4.7.8：图片默认只存预览图（长边 2560），要原分辨率在上传处开「存原图」
+      keepOriginalImages: false,
       // v4.5.3：Agent 入口开关，默认开启（不用 AI 的用户可在设置页关掉，
       // 底栏会从 5 格变 4 格自动重排）。旧数据没有该字段时按开启处理。
       agentEnabled: true,
