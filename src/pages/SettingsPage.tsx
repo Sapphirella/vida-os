@@ -285,8 +285,16 @@ export function SettingsPage() {
             <p className="text-paper">
               数据页：JSON 导出 / 导入（导出范围可选文章、动态、便签、收藏夹、个人资料、
               馆藏·书架、馆藏·相册、Agent 全数据，支持多选），也能导出 Markdown 与 PDF、
-              用 WebDAV 云备份、备份到本地文件夹、或重置。WebDAV 云端保存明文 JSON，
-              每次同步全量覆盖——删除的内容也会同步消失。
+              用 WebDAV 云备份、备份到本地文件夹、或重置。
+            </p>
+            <p className="text-paper mt-1">
+              <span className="text-candle">云备份保留最近 5 份</span>：最新一份固定覆盖，
+              上一份会在同步前自动改名归档；超出 5 份时自动清理最旧的那份。
+              点<span className="text-candle">「云端历史」</span>可以看到云端现有的各份（时间与大小），
+              并<span className="text-candle">恢复指定的某一份</span>——
+              所以「删掉的内容」虽然不在最新备份里了，但更早的份里还留着，可以从那里找回来
+              （注意：被挤出最近 5 份的旧版本会被清理，删掉后不可恢复）。云端的备份是明文 JSON
+              （除非你开了加密），本地文件夹备份则按时间戳保留最近 10 份。
             </p>
             <p className="text-paper mt-1">
               外观：可切换主题（跟随系统 / 白昼 / 暗夜 / 猩红书房）。

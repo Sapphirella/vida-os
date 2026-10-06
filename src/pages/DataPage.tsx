@@ -17,6 +17,7 @@ import {
   Lock,
   CloudDownload,
   HelpCircle,
+  History,
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAppStore } from '@/stores/useAppStore';
@@ -39,6 +40,9 @@ import {
   hasWebDavConfig,
   hasEncryption,
   syncToWebDav,
+  listDavBackups,
+  DAV_MAX_BACKUPS,
+  type DavBackupEntry,
   normalizeDavUrl,
   BACKUP_FILENAME,
   downloadFromWebDav,
@@ -151,6 +155,9 @@ export function DataPage() {
   const [davPassPhrase, setDavPassPhrase] = useState(davCfg?.passphrase ?? '');
   const [davBusy, setDavBusy] = useState(false);
   const [davRestoring, setDavRestoring] = useState(false);
+  /** 云端历史（点「查看云端历史」时拉取；null = 还没查过） */
+  const [davVersions, setDavVersions] = useState<DavBackupEntry[] | null>(null);
+  const [davVersionsBusy, setDavVersionsBusy] = useState(false);
 
   const doSaveDavConfig = () => {
     if (!davUrl.trim() || !davUser.trim() || !davPass.trim()) {
@@ -189,12 +196,19 @@ export function DataPage() {
     try {
       const info = await syncToWebDav(cfg, state);
       const encrypted = hasEncryption(cfg);
+      const kept = info.backups > 1 ? `，云端保留 ${info.backups} 份` : '';
       showToast(
-        encrypted
+        (encrypted
           ? `云备份完成：已加密上传 ${humanBytes(info.bytes)}（云端只存密文）`
-          : `云备份完成：已上传 ${humanBytes(info.bytes)}（云端存明文 JSON）`,
+          : `云备份完成：已上传 ${humanBytes(info.bytes)}（云端存明文 JSON）`) + kept,
         'success',
       );
+      // 服务端不支持列目录/改名时如实说明（不假装有历史）
+      if (info.warning) showToast(`注意：${info.warning}`, 'info');
+      if (info.pruned.length) {
+        showToast(`已清理 ${info.pruned.length} 份最早的云端备份`, 'info');
+      }
+      setDavVersions(null);   // 列表过期，下次点「查看云端历史」重新拉
     } catch (e) {
       showToast(`云备份失败：${errMsg(e)}`, 'error');
     } finally {
@@ -202,8 +216,27 @@ export function DataPage() {
     }
   };
 
+  /** 列出云端历史（最近 N 份） */
+  const doListDavVersions = async () => {
+    const cfg = hasWebDavConfig(state.settings.webdav) ? state.settings.webdav : null;
+    if (!cfg) {
+      showToast('请先填写并保存 WebDAV 配置', 'error');
+      return;
+    }
+    setDavVersionsBusy(true);
+    try {
+      const list = await listDavBackups(cfg);
+      setDavVersions(list);
+      if (!list.length) showToast('云端还没有备份', 'info');
+    } catch (e) {
+      showToast(`读取云端历史失败：${errMsg(e)}`, 'error');
+    } finally {
+      setDavVersionsBusy(false);
+    }
+  };
+
   /** 从云端取回并覆盖恢复；备份已加密且缺少口令时弹输入框 */
-  const doDavRestore = async (pass?: string) => {
+  const doDavRestore = async (pass?: string, onlyName?: string) => {
     if (davRestoring) return;
     const cfg = hasWebDavConfig(state.settings.webdav)
       ? state.settings.webdav
@@ -214,7 +247,7 @@ export function DataPage() {
     }
     setDavRestoring(true);
     try {
-      const info = await downloadFromWebDav(cfg, pass);
+      const info = await downloadFromWebDav(cfg, pass, onlyName);
       if (
         !(await useUIStore.getState().confirmDialog(
           `用云端这份备份覆盖当前全部数据？\n\n${new Date(info.createdAt).toLocaleString('zh-CN')} · ${humanBytes(info.bytes)}${info.encrypted ? ' · 已加密' : ''}\n\n当前数据将被替换（建议先手动导出一份 JSON 再恢复）。`,
@@ -237,7 +270,10 @@ export function DataPage() {
         }
       }
       importState(info.state, 'overwrite');
-      showToast(files > 0 ? `已从云端恢复（含 ${files} 个媒体文件）` : '已从云端恢复', 'success');
+      showToast(
+        files > 0 ? `已从云端恢复（含 ${files} 个媒体文件）` : '已从云端恢复',
+        'success',
+      );
     } catch (e) {
       if (e instanceof NeedPassphraseError) {
         showModal({
@@ -513,7 +549,7 @@ export function DataPage() {
           <p className="text-bronze text-xs mb-4 leading-relaxed">
             把全部数据（含图片 / 音频）整理成一份{' '}
             <span className="font-mono text-bronze-light">{BACKUP_FILENAME}</span>{' '}
-            上传到你的 WebDAV 空间（坚果云等）。每次同步覆盖同一份，只保留最新备份；<span className="text-bronze-light">删除的内容也会同步消失</span>。
+            上传到你的 WebDAV 空间（坚果云等）。最新一份固定覆盖，同时<span className="text-candle">在云端保留最近 {DAV_MAX_BACKUPS} 份</span>（旧的自动改名归档，超出份数自动清理）；<span className="text-bronze-light">删除的内容同步后不在最新备份里，但旧份里还在 —— 可从「云端历史」恢复</span>。
           </p>
 
           <div className="space-y-3 mb-4">
@@ -582,6 +618,14 @@ export function DataPage() {
               <CloudDownload size={13} strokeWidth={1.6} />
               {davRestoring ? '取回中…' : '云端恢复'}
             </button>
+            <button
+              onClick={() => void doListDavVersions()}
+              disabled={!hasWebDavConfig(state.settings.webdav) || davVersionsBusy}
+              className="btn-ghost disabled:opacity-40"
+            >
+              <History size={13} strokeWidth={1.6} />
+              {davVersionsBusy ? '读取中…' : '云端历史'}
+            </button>
             {hasWebDavConfig(state.settings.webdav) && (
               <span
                 className="font-mono text-[10px] text-bronze-deep ml-auto self-center truncate-1 max-w-[180px]"
@@ -591,6 +635,48 @@ export function DataPage() {
               </span>
             )}
           </div>
+
+          {/* 云端历史：列出云端的备份份数，可恢复指定某一份 */}
+          {davVersions && davVersions.length > 0 && (
+            <div className="mt-3 rounded-card border border-line/40 p-3">
+              <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mb-2">
+                cloud history · {davVersions.length} / {DAV_MAX_BACKUPS}
+              </p>
+              <ul className="space-y-1.5">
+                {davVersions.map((v) => (
+                  <li key={v.name} className="flex items-center gap-2 text-xs">
+                    <span className="font-mono text-[10px] text-bronze-deep w-32 flex-none tabular-nums">
+                      {v.mtime ? new Date(v.mtime).toLocaleString('zh-CN') : '—'}
+                    </span>
+                    <span className="font-mono text-[10px] text-bronze-deep w-16 flex-none tabular-nums">
+                      {v.size ? humanBytes(v.size) : '—'}
+                    </span>
+                    {v.isLatest ? (
+                      <span className="tag tag-wine" style={{ fontSize: 9, padding: '2px 8px' }}>
+                        最新
+                      </span>
+                    ) : (
+                      <span className="text-bronze-deep text-[10px] truncate-1" title={v.name}>
+                        {v.name.replace('vidaos-backup-', '').replace('.json', '')}
+                      </span>
+                    )}
+                    <span className="flex-1" />
+                    <button
+                      onClick={() => void doDavRestore(undefined, v.name)}
+                      disabled={davRestoring}
+                      className="font-mono text-[10px] tracking-wider text-bronze-deep hover:text-candle transition-colors disabled:opacity-40"
+                      aria-label={`恢复 ${v.name}`}
+                    >
+                      恢复这份
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-bronze-deep text-[10px] mt-2 leading-relaxed">
+                恢复某一份会用它覆盖当前全部数据（会先确认）。删除过的内容可以从更早的份里找回来。
+              </p>
+            </div>
+          )}
 
           {/* 端到端加密开关 */}
           <div className="mt-4 rounded-card border border-line/40 p-3">
