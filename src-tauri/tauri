@@ -1,0 +1,11 @@
+// Tauri 的 Android Gradle 任务以 `node tauri android android-studio-script` 调用 CLI，
+// 工作目录是 src-tauri/（app/build.gradle.kts: rust { rootDirRel = "../../../" }）。
+// 本仓库 package.json 是 "type": "module"，所以这个无扩展名文件按 ESM 执行 —— 用
+// createRequire + 子进程转发给真正的 CLI（@tauri-apps/cli/tauri.js）。
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const cli = require.resolve('@tauri-apps/cli/tauri.js');
+const r = spawnSync(process.execPath, [cli, ...process.argv.slice(2)], { stdio: 'inherit' });
+process.exit(r.status ?? 1);

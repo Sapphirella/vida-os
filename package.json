@@ -1,6 +1,6 @@
 {
   "name": "vidaos",
-  "version": "4.4.1",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "VidaOS - 你的私密生活记录空间（暗夜书房风格）",
@@ -8,13 +8,24 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "android:init": "tauri android init",
+    "android:dev": "npm run android:prep && tauri android dev",
+    "android:apk": "npm run android:prep && tauri android build --apk --debug --target aarch64",
+    "android:apk:release": "npm run android:prep && tauri android build --apk --target aarch64",
+    "android:prep": "node scripts/android-prep.mjs",
+    "android:sign": "node scripts/sign-apk.mjs",
+    "android:release": "npm run android:apk:release && npm run android:sign"
   },
   "dependencies": {
     "@fontsource/eb-garamond": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@fontsource/noto-serif-sc": "^5.3.0",
+    "@tauri-apps/api": "^2.12.2",
     "date-fns": "^4.1.0",
     "dexie": "^4.0.8",
     "dompurify": "^3.1.6",
@@ -28,6 +39,7 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.5",

@@ -326,9 +326,20 @@ export function SettingsPage() {
     showModal({
       title: '更新日志',
       content: (
-        <div className="max-h-[60vh] overflow-y-auto pr-1">
-          <p className="text-bronze text-sm leading-relaxed">
-            更新日志整理中，稍后会在这里列出每次更新的内容。
+        <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-4 text-[13px] leading-relaxed">
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">
+              1.0.0 · 首个正式版
+            </h4>
+            <p className="text-paper">
+              你的私密生活记录空间。文章、动态、碎片与时间胶囊、灵感、日程、待办、
+              馆藏书籍与相册、Agent 助手，全部数据只存在本机，离线可用、随时整体备份。
+              这一版把备份链路做成三条（JSON / 云端 / 本地文件夹，云端保留最近 5 份可回滚），
+              图片可选存原图，并支持三套书房主题、全局查找替换与音乐播放。
+            </p>
+          </section>
+          <p className="text-bronze-deep text-[11px] leading-relaxed">
+            开发期的逐条改动记录保留在项目文档 PROJECT_MEMORY.md 的变更日志里。
           </p>
         </div>
       ),
@@ -644,7 +655,7 @@ export function SettingsPage() {
         <Card className="p-5 sm:p-6 text-center">
           <p className="font-serif text-headline text-lg tracking-widest">VidaOS</p>
           <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mt-1">
-            v4.4.1 · night study
+            v1.0.0 · night study
           </p>
           <p className="font-sans text-bronze text-xs mt-3 leading-relaxed">
             你的私密生活记录空间。

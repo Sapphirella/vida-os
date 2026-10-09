@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom';
 import App from './App';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { initTheme } from '@/lib/theme';
+import { disableServiceWorkerInShell } from '@/lib/shell';
 // 自托管 Web 字体（内嵌 woff2，打包进产物；手机端不再依赖 Google Fonts CDN）
 import '@fontsource/eb-garamond/400.css';
 import '@fontsource/eb-garamond/400-italic.css';
@@ -23,6 +24,9 @@ import './styles/globals.css';
 
 // 主题皮肤：render 前应用持久化偏好（配合 index.html 内联脚本实现无闪烁首屏）
 initTheme();
+
+// 跑在 Tauri 壳里时先注销 Service Worker（详见 lib/shell.ts；网页版不受影响）
+disableServiceWorkerInShell();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

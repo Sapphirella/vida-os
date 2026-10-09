@@ -1,0 +1,27 @@
+[package]
+name = "vidaos"
+version = "1.0.0"
+description = "VidaOS — 你的私密生活记录空间"
+authors = ["VidaOS"]
+edition = "2021"
+rust-version = "1.77"
+
+# 移动端要求库产物（Android 通过 cdylib 调用）
+[lib]
+name = "vidaos_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# 只依赖 tauri 本体：壳不需要任何额外能力，依赖越少构建越稳
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

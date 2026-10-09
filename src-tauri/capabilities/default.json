@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "VidaOS 默认权限：壳不需要任何原生能力，只保留核心默认项",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

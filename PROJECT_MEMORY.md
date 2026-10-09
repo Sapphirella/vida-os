@@ -1,7 +1,12 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-10-06（**v4.7.13 = 备份专项加固**：用户强调「数据备份绝对不能有任何差错」，
+> 最后更新：2026-10-09（**v1.0.0 = 首个正式版**：版本号按用户要求从 4.4.1 改为 **1.0.0**，
+> 应用内「更新日志」写上了 1.0.0 本体简介（149 字）；并加了一层 **Tauri 壳**，
+> 目标是 Android APK（见第 4 节之 37）。⚠️ 第 13 节的 v4.x 条目是**开发期内部迭代记录**，
+> 与 1.0.0 之后的发版号不是一套编号。
+>
+> v4.7.13 = 备份专项加固：用户强调「数据备份绝对不能有任何差错」，
 > 于是派只读子代理做了一轮备份专项审计（导出/导入/云/快照/重置全链路），确认并修掉
 > **1 个 P0 回归（我自己在 v4.7.11 引入：云备份对任何有头像/图片/音乐的用户都会永远失败）**
 > 与 8 项数据安全缺陷（读失败会覆盖真实数据、关加密丢口令、快照丢文件名、恢复一半报成功…）。
@@ -97,7 +102,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | 本纪元迭代到 **v4.7.13**（2026-10-06）；`package.json` 仍写 v4.4.1（沿用旧约定，由用户发版时手动 bump） |
+ | **当前版本** | 应用版本 **1.0.0**（2026-10-09，用户要求）；开发期内部迭代记到 v4.7.13（第 13 节变更日志） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -266,6 +271,13 @@
   Agent 段清掉命令式标记语法、按本轮实际功能逐条校准。
   五次提交：`b53f5b4` 音乐 → `6355b6c` 章节解析引擎 + Agent 书兜底 → `66e08a0` 目录页 +
   书架章节展示 → `573e5b3` 写书工具 → `3e34fb6` 标记格式防御 + Agent 书时间显示 → `616bda8` 设置页文档。
+- **v1.0.0（2026-10-09）** —— **首个正式版 + Tauri 壳（Android）**：
+  ① 版本号 `package.json` / `package-lock.json` / README 徽章 / 应用内页脚统一为 **1.0.0**
+  （此前一直停在 4.4.1，是旧约定，用户这次明确要 1.0.0）。
+  ② 应用内「更新日志」不再是占位文字：写上 1.0.0 本体简介（**149 字**，用户要求 ≤150）。
+  ③ **Tauri 壳**（`src-tauri/`，见第 4 节之 37）：`npm run android:apk` 可出 Android APK。
+  壳里唯一的功能性适配是**注销 Service Worker**（`lib/shell.ts`，网页版行为不变）——
+  壳用本地资源协议，SW 没意义还可能引入缓存怪问题。
 - **v4.7.13（2026-10-06）** —— **备份专项加固**（用户要求「数据备份绝不能有任何差错」）。
   做法：派 1 个只读子代理把**导出/导入/云/快照/重置**整条链路审一遍（要求逐条给 file:line 与触发路径），
   我自己写 5 个探针逐条复验（往返、字节保真、损坏输入、云正常路径、快照文件系统层）。
@@ -1379,6 +1391,77 @@ Agent 会话消息、书籍正文、Agent 资料库/记忆馆、日程备注、�
    （`kind`+字典 files）必须都能被 `parseJSONImport` 认出来，否则用户会遇到「自己的备份导不回来」。
 10. **每个"会被写出去"的东西都要过 `stripLocalSecrets`**：导出、云端、快照三条路径一个都不能漏。
 
+### 37) Tauri 壳与 Android 打包（v1.0.0，`src-tauri/`）
+**定位**：壳是**空的**——只负责把 Vite 产物（`dist/`）装进原生 WebView。业务逻辑一行都不进 Rust，
+因为数据层（IndexedDB）本来就在 WebView 里，壳再包一层只会增加出错面。
+- `src-tauri/tauri.conf.json`：`productName: VidaOS`、`identifier: com.vidaos.app`、
+  `version: 1.0.0`（与 `package.json` 手动保持一致）、`frontendDist: ../dist`、
+  `beforeBuildCommand: npm run build`、`security.csp: null`（应用用 blob: 图片与自托管字体，
+  开 CSP 容易误伤，等真要上架再收紧）。
+- `src-tauri/src/lib.rs`：`#[cfg_attr(mobile, tauri::mobile_entry_point)] pub fn run()`，
+  桌面与 Android 共用；依赖只留 `tauri` 本体（依赖越少构建越稳）。
+- `src-tauri/capabilities/default.json`：只给 `core:default`（壳不需要原生能力）。
+- 图标：`npx tauri icon public/icons/icon-512.png` 生成（含 Android mipmap）。
+
+**构建环境（本机实测可用）**：Rust 1.98 + Android 目标（aarch64/armv7/i686/x86_64-linux-android
+都已 `rustup target add`）+ Android SDK（platforms 35/36、build-tools 35/36）+
+**NDK 27.2.12479018** + **JDK 17**。Tauri CLI 走 `@tauri-apps/cli`（`npm run android:apk` 即用）。
+
+⚠️ **沙箱/环境坑（都踩过）**：
+  1. **npm 写不了 `~/.npm` 就装不上任何东西**（本机文件沙箱限制工作区外写入）→
+     构建时把缓存重定向到工作区：`npm_config_cache=$PWD/.toolchain/npm-cache`。
+  2. **Gradle / Cargo / Android 用户目录**同样要重定向：`GRADLE_USER_HOME` / `CARGO_HOME` /
+     `ANDROID_USER_HOME` 全部指到 `.toolchain/` 下；**只读**使用 SDK 与 NDK（`~/Library/Android/sdk`）。
+     现成脚本：`.toolchain/android-env.sh`（`source` 一下即可）。`.toolchain/` 已 gitignore。
+  3. macOS 版 Temurin JDK 的 tarball 结构是 `jdk-x/Contents/Home/...`，
+     `tar --strip-components=1` 之后 JAVA_HOME 是 `.toolchain/jdk17/Contents/Home`（不是 `.toolchain/jdk17`）。
+  4. `/tmp` 会被系统清理（本轮把探针目录整个清掉了）→ **构建/探针脚本要放工作区**（gitignored），别放 /tmp。
+
+**常用命令（v1.0.0 实测跑通，产出了可安装的 APK）**：
+```bash
+source .toolchain/android-env.sh      # JAVA_HOME/ANDROID_HOME/NDK_HOME + 三处缓存重定向
+npm run android:init                  # 仅首次（之后别再跑，会覆盖自定义原生代码）
+npm run android:release               # = apk:release（Rust release 编译 + Gradle）+ 对齐签名
+# 产物：VidaOS-<version>.apk（工作区根目录，13.2MB，自签名，可直接侧载）
+npm run android:dev                   # 真机热更新调试
+npm run desktop:dev / desktop:build   # 桌面
+```
+**⚠️ 一定要出 release，不要用 debug APK 侧载**：Tauri 在 `debug_assertions` 下会去加载
+`devUrl`（`http://localhost:5173`）—— debug APK 装到手机上只会白屏。
+实测对比：debug 的 .so 129MB 且含 `localhost:5173`；release 的 .so 12MB、只含内嵌资源清单。
+（判断是否独立：`strings libvidaos_lib.so | grep -c localhost:5173`。）
+
+**签名**（`scripts/sign-apk.mjs`）：`zipalign -p 4` → `apksigner sign`（密钥 `.toolchain/vidaos-release.jks`，
+首次自动生成，口令默认 `vidaos2026`，可用 `VIDAOS_KEY_PASS` 覆盖）。
+⚠️ **密钥必须备份**：同包名的后续版本要用同一把密钥签名，否则系统拒绝覆盖安装（只能卸载重装、数据会丢）。
+
+**又踩到的坑（都已固化进脚本）**：
+  1. Tauri 的 Android Gradle 任务用 `node tauri android android-studio-script` 调 CLI，工作目录是
+     `src-tauri/`，也就是它要一个**叫 `tauri` 的文件**（不是模块）→ 而本仓库 `"type": "module"`，
+     该文件按 ESM 执行，里面不能用 `require`。`scripts/android-prep.mjs` 会写一个
+     用 `createRequire` + 子进程转发的 ESM 壳（`src-tauri/tauri`）。
+  2. Kotlin 守护进程起不来（沙箱）→ Gradle 自动降级为进程内编译（只是慢，能过）。
+  3. release 编译结果里 `localhost:5173` 字符串仍会出现一次（那是内嵌的 tauri.conf.json 内容），
+     不代表运行时用它；真正的判据是「有没有内嵌资源清单 + 是不是 release」。
+
+**产物核对（本轮实测值）**：`package=com.vidaos.app`、`versionName=1.0.0`、
+`minSdkVersion=24`、`targetSdkVersion=37`、label=VidaOS、arm64-v8a 原生库、5 档启动图标齐备、
+签名校验通过、APK 13.2MB。「安装」= 传到手机点击安装（或 `adb install VidaOS-1.0.0.apk`，
+需打开「USB 调试」与「允许安装未知来源」）。
+
+**Android 实测限制（重要）**：本机**没有模拟器/系统镜像**，所以只能做**静态核对**（aapt2 元数据、
+签名校验、内嵌资源清单、原生库与图标）——**没有在真实 Android 上跑过**。
+真机首启需要你确认：能起来、数据能存住、导出/下载这些浏览器 API 在 WebView 里的表现。
+
+**Android 上的已知差异（不是 bug，是平台限制）**：
+  - 「备份到本地文件夹」在 Android 不可用（`showDirectoryPicker` 只有桌面 Chromium 有）——
+    代码里已有 `supportsFolderPicker()` 守卫，界面上按钮不会出现；
+  - 导出/下载走的是 `<a download>` 与 `navigator.share`，在原生 WebView 里**不一定生效**，
+    要做得跟浏览器一样需要接 Tauri 的 dialog/fs/opener 插件；
+  - **WebDAV 的 CORS 限制在壳里可以彻底解决**（把请求交给 Rust 侧发），代码注释里早就留了这个口子，
+    属于后续增强项；
+  - 桌面与 Android 的「关闭窗口」行为差异由 Tauri 处理，应用侧不用管。
+
 ---
 
 ## 5. 文件结构与职责
@@ -1645,6 +1728,15 @@ VidaOS/
 - **`exportJSON` 有字符串上限**（v4.7.11 审计，未改）：导出把每个媒体文件转成 base64 后
   一次性 `JSON.stringify`，V8 单字符串上限 512MiB —— 单个约 500MB 的音频、或 200 张「存原图」
   的照片就会直接失败（没有 zip 导出路径）。大媒体库请用「备份到本地文件夹」（按文件写成快照）。
+
+- **Android 待办小组件（桌面 widget）尚未实现**（用户提过，优先级不高）：
+  关键约束是**小组件跑在启动器进程里，读不到 WebView 的 IndexedDB** ——
+  所以必须先由应用把待办「镜像」到原生存储（SharedPreferences / Room），
+  再让 `AppWidgetProvider`（或 Jetpack Glance）读它渲染，点击时带回应用。
+  代码位置是 `src-tauri/gen/android/app/src/main/...`（⚠️ 该目录由 `tauri android init` 生成，
+  一旦加了自定义代码就**不要再重跑 init**，否则会被覆盖）。
+  还需要：每次待办变更后主动刷小组件、`updatePeriodMillis` 兜底、以及真机验证。
+  计划与取舍写在第 4 节之 37 的后续增强里。
 
 ### 8.2 平台 / 外部限制（如实告知用户）
 - **WebDAV 纯浏览器直连坚果云被 CORS 拦截**（坚果云未开放跨域头）；代码就绪，

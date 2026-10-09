@@ -6,7 +6,7 @@
 > 取代了原来的「碎片」（**v4.7 碎片以新形态回到「便签」里**：日历 + 当天时间轴，见下）；
 > 底栏改为 **主页 / 便签 / Agent / 数据 / 设置**。
 
-![Version](https://img.shields.io/badge/version-4.4.1-6A080E?style=flat-square) ![Tech](https://img.shields.io/badge/stack-React%20%2B%20TS%20%2B%20Tailwind-947D75?style=flat-square) ![License](https://img.shields.io/badge/license-Personal-BCAAA8?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.0-6A080E?style=flat-square) ![Tech](https://img.shields.io/badge/stack-React%20%2B%20TS%20%2B%20Tailwind-947D75?style=flat-square) ![License](https://img.shields.io/badge/license-Personal-BCAAA8?style=flat-square)
 
 ---
 
@@ -424,3 +424,40 @@ VidaOS/
 ---
 
 **记录生活的每一刻，让回忆有迹可循。**
+
+## 打包（Tauri 壳 / Android APK）
+
+应用本体是纯前端 PWA，`src-tauri/` 只是一层**空壳**（把 Vite 产物装进原生 WebView，
+业务逻辑仍在 WebView 里；数据全部在本机 IndexedDB）。
+
+**桌面**（需要 Rust）：
+
+```bash
+npm install
+npm run desktop:dev      # 开发
+npm run desktop:build    # 打桌面安装包
+```
+
+**Android APK**（需要 Rust + Android SDK + NDK 27 + JDK 17）：
+
+```bash
+source .toolchain/android-env.sh   # JAVA_HOME / ANDROID_HOME / NDK_HOME（+ 构建缓存重定向）
+npm install
+npm run android:init               # 仅首次生成 Android 工程（之后不要再跑，会覆盖自定义原生代码）
+npm run android:release            # 出可直接安装的 VidaOS-<版本>.apk（release + 自动对齐签名）
+npm run android:dev                # 连真机热更新调试
+```
+
+⚠️ **不要用 debug APK 装到手机上**：Tauri 在 debug 模式会去连开发服务器（`localhost:5173`），
+装上去只会白屏 —— 务必用 `android:release`。
+签名密钥在 `.toolchain/vidaos-release.jks`，**请务必备份**：后续版本必须用同一把密钥签名，
+否则系统拒绝覆盖安装（只能卸载重装，数据会丢）。
+安装：把 APK 传到手机点击安装，或 `adb install VidaOS-<版本>.apk`
+（需打开「USB 调试」与「允许安装未知来源」）。
+
+环境要点：Rust 需 `rustup target add aarch64-linux-android`（另有 armv7/i686/x86_64 可选）；
+crates/Gradle 依赖在中文网络下很慢，`scripts/android-prep.mjs` 会自动配好镜像与一处必需的
+CLI 转发文件（详见 PROJECT_MEMORY 第 4 节之 37）。
+
+**Android 上的差异**：「备份到本地文件夹」不可用（桌面专属）；导出/下载按钮的原生分享需要接
+Tauri 插件；WebDAV 的浏览器 CORS 限制在壳里可以彻底绕开（后续增强）。

@@ -43,3 +43,13 @@ pnpm-debug.log*
 # 用户临时放进来的样式参考图（不属于应用资源，别提交）
 /*参考图片*.jpg
 /碎片时间线参考图片.jpg
+
+# Tauri / Android 构建产物
+src-tauri/target/
+src-tauri/gen/
+# 本地构建工具链（JDK / Gradle / Cargo 缓存，体积大，不入库）
+.toolchain/
+
+# 打包产物（体积大，不入库；需要时用 npm run android:release 重新生成）
+/VidaOS-*.apk
+/VidaOS-*.apk.idsig
