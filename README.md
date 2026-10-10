@@ -6,7 +6,7 @@
 > 取代了原来的「碎片」（**v4.7 碎片以新形态回到「便签」里**：日历 + 当天时间轴，见下）；
 > 底栏改为 **主页 / 便签 / Agent / 数据 / 设置**。
 
-![Version](https://img.shields.io/badge/version-1.0.0-6A080E?style=flat-square) ![Tech](https://img.shields.io/badge/stack-React%20%2B%20TS%20%2B%20Tailwind-947D75?style=flat-square) ![License](https://img.shields.io/badge/license-Personal-BCAAA8?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.1-6A080E?style=flat-square) ![Tech](https://img.shields.io/badge/stack-React%20%2B%20TS%20%2B%20Tailwind-947D75?style=flat-square) ![License](https://img.shields.io/badge/license-Personal-BCAAA8?style=flat-square)
 
 ---
 
@@ -459,5 +459,9 @@ npm run android:dev                # 连真机热更新调试
 crates/Gradle 依赖在中文网络下很慢，`scripts/android-prep.mjs` 会自动配好镜像与一处必需的
 CLI 转发文件（详见 PROJECT_MEMORY 第 4 节之 37）。
 
-**Android 上的差异**：「备份到本地文件夹」不可用（桌面专属）；导出/下载按钮的原生分享需要接
-Tauri 插件；WebDAV 的浏览器 CORS 限制在壳里可以彻底绕开（后续增强）。
+**Android 上的差异**（壳里已适配，详见 PROJECT_MEMORY 第 4 节之 38）：
+- 导出/备份/保存图片**真正写盘**（`tauri-plugin-fs`），提示里会告知落点
+  （下载目录/VidaOS → 文档目录 → 应用数据目录依次尝试）；浏览器里的 `<a download>` 在 WebView 中
+  是静默失效的，所以壳里不走它。
+- **WebDAV 请求由原生侧发起**（`tauri-plugin-http`），不再受浏览器同源策略限制。
+- 「备份到本地文件夹」仍不可用（桌面专属，基于 File System Access API）。

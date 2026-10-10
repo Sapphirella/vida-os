@@ -26,6 +26,7 @@
 // ============================================================
 import { db } from './db';
 import { collectFileIds, isOptionalSibling } from './exportImport';
+import { isTauri, shellFetch } from './shell';
 import type { AppState, WebDavConfig } from '@/types';
 
 /** 云端「最新一份」的固定文件名（同步时覆盖写入；明文 JSON） */
@@ -240,7 +241,7 @@ function davError(status: number): string {
 
 /** 确认目标目录存在；目录已存在或不可创建（如根目录）时视为通过 */
 async function ensureDir(base: string, auth: string): Promise<void> {
-  const res = await fetch(base, {
+  const res = await shellFetch(base, {
     method: 'MKCOL',
     headers: { Authorization: auth },
   });
@@ -295,7 +296,7 @@ export async function listDavBackups(cfg: WebDavConfig): Promise<DavBackupEntry[
   const auth = basicAuth(cfg);
   let res: Response;
   try {
-    res = await fetch(base, {
+    res = await shellFetch(base, {
       method: 'PROPFIND',
       headers: { Authorization: auth, Depth: '1', 'Content-Type': 'application/xml' },
     });
@@ -359,7 +360,7 @@ async function rotateLatestToHistory(
 ): Promise<string> {
   const base = normalizeDavUrl(cfg.url);
   const dest = historyName(latestMtime || Date.now(), taken);
-  const res = await fetch(base + BACKUP_FILENAME, {
+  const res = await shellFetch(base + BACKUP_FILENAME, {
     method: 'MOVE',
     headers: {
       Authorization: auth,
@@ -378,7 +379,7 @@ async function rotateLatestToHistory(
 async function deleteDavFile(cfg: WebDavConfig, auth: string, name: string): Promise<boolean> {
   const base = normalizeDavUrl(cfg.url);
   try {
-    const res = await fetch(base + encodeURIComponent(name), {
+    const res = await shellFetch(base + encodeURIComponent(name), {
       method: 'DELETE',
       headers: { Authorization: auth },
     });
@@ -510,7 +511,7 @@ export async function syncToWebDav(
       }
     }
 
-    const res = await fetch(target, {
+    const res = await shellFetch(target, {
       method: 'PUT',
       headers: {
         Authorization: auth,
@@ -547,8 +548,11 @@ export async function syncToWebDav(
       // v4.7.11：把原始消息带上 —— 之前这里把 TypeError 一律当成 CORS/断网，
       // 真正的错因（例如序列化失败）被吞掉，用户和排查的人都只能看到一句「网络不可达」。
       throw new Error(
-        '无法连接 WebDAV 服务器：网络不可达，或浏览器直连被跨域（CORS）策略拦截（桌面版可正常使用）' +
-          `。原始错误：${e.message}`,
+        '无法连接 WebDAV 服务器：' +
+          (isTauri()
+            ? '壳里已改由原生侧发请求（不受同源策略限制），若仍失败请检查地址是否可达、账号与应用密码是否正确'
+            : '浏览器直连可能被跨域（CORS）策略拦截') +
+          `（原因：${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}）`,
       );
     }
     throw e;
@@ -561,7 +565,7 @@ export async function syncToWebDav(
 async function fetchBackupBlob(cfg: WebDavConfig, auth: string): Promise<Blob> {
   const base = normalizeDavUrl(cfg.url);
   for (const name of [BACKUP_FILENAME, BACKUP_FILENAME_LEGACY]) {
-    const res = await fetch(base + name, { method: 'GET', headers: { Authorization: auth } });
+    const res = await shellFetch(base + name, { method: 'GET', headers: { Authorization: auth } });
     if (res.status === 404) continue;
     if (!res.ok) throw new Error(davError(res.status));
     return res.blob();
@@ -572,7 +576,7 @@ async function fetchBackupBlob(cfg: WebDavConfig, auth: string): Promise<Blob> {
     const list = await listDavBackups(cfg);
     const newest = list.find((x) => !x.isLegacy);
     if (newest) {
-      const res = await fetch(base + encodeURIComponent(newest.name), {
+      const res = await shellFetch(base + encodeURIComponent(newest.name), {
         method: 'GET',
         headers: { Authorization: auth },
       });
@@ -683,7 +687,7 @@ export async function downloadFromWebDav(
   try {
     // 指定了具体某一份（从「云端历史」里挑）就只取它
     if (onlyName) {
-      const res = await fetch(normalizeDavUrl(cfg.url) + encodeURIComponent(onlyName), {
+      const res = await shellFetch(normalizeDavUrl(cfg.url) + encodeURIComponent(onlyName), {
         method: 'GET',
         headers: { Authorization: auth },
       });
@@ -696,7 +700,11 @@ export async function downloadFromWebDav(
   } catch (e) {
     if (e instanceof TypeError) {
       throw new Error(
-        '无法连接 WebDAV 服务器：网络不可达，或浏览器直连被跨域（CORS）策略拦截（桌面版可正常使用）',
+        '无法连接 WebDAV 服务器：' +
+          (isTauri()
+            ? '壳里已改由原生侧发请求（不受同源策略限制），若仍失败请检查地址是否可达、账号与应用密码是否正确'
+            : '浏览器直连可能被跨域（CORS）策略拦截') +
+          `（原因：${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}）`,
       );
     }
     throw e;

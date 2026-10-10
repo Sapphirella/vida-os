@@ -1,7 +1,12 @@
 # VidaOS - 项目记忆与交接文档
 
 > 项目迭代历史、关键设计决策、架构约定与踩坑记录。**接手前请先读完第 0、1、3 节。**
-> 最后更新：2026-10-09（**v1.0.0 = 首个正式版**：版本号按用户要求从 4.4.1 改为 **1.0.0**，
+> 最后更新：2026-10-10（**v1.0.1 = Android 真机修复**：用户拿 APK 装到手机上实测，
+> 报了 4 个问题 —— 状态栏压住编辑器保存键、合集内新建文章不归入合集、
+> 云备份失败、备份提示成功但没保存。四条全部修掉并各自给出可验证证据，见第 4 节之 38
+> **「Android WebView 与浏览器不一样的地方」**（这一节是本次最值钱的沉淀）。
+>
+> v1.0.0 = 首个正式版：版本号按用户要求从 4.4.1 改为 **1.0.0**，
 > 应用内「更新日志」写上了 1.0.0 本体简介（149 字）；并加了一层 **Tauri 壳**，
 > 目标是 Android APK（见第 4 节之 37）。⚠️ 第 13 节的 v4.x 条目是**开发期内部迭代记录**，
 > 与 1.0.0 之后的发版号不是一套编号。
@@ -102,7 +107,7 @@
 | **怎么跑** | 双击 `打开VidaOS.command`；或 `npm run dev` → http://localhost:5173 |
 | **怎么构建** | `npm run build`（= `tsc -b && vite build`）→ `dist/`（**已 gitignore，别提交**） |
 | **怎么自检** | `npm run typecheck`（已开启 `noUnusedLocals`/`noUnusedParameters`，编译即闸门） |
- | **当前版本** | 应用版本 **1.0.0**（2026-10-09，用户要求）；开发期内部迭代记到 v4.7.13（第 13 节变更日志） |
+ | **当前版本** | 应用版本 **1.0.1**（2026-10-10，真机修复）；开发期内部迭代记到 v4.7.13（第 13 节变更日志） |
 | **技术栈** | Vite 5 + React 18 + TS + Tailwind 3 + Zustand + Dexie 4 + PWA + Web Crypto |
 | **数据在** | 浏览器 IndexedDB（库名 `vidaos`，表 `state` / `files` / `meta`，Dexie **version 2**）；**无后端、无账号** |
 | **主题** | 暗夜书房（默认）/ 白昼书房 / 猩红书房（独立主题）；`localStorage['vidaos-theme']` |
@@ -271,6 +276,24 @@
   Agent 段清掉命令式标记语法、按本轮实际功能逐条校准。
   五次提交：`b53f5b4` 音乐 → `6355b6c` 章节解析引擎 + Agent 书兜底 → `66e08a0` 目录页 +
   书架章节展示 → `573e5b3` 写书工具 → `3e34fb6` 标记格式防御 + Agent 书时间显示 → `616bda8` 设置页文档。
+- **v1.0.1（2026-10-10）** —— **Android 真机修复**（用户装 APK 实测反馈 4 条，全部修掉）：
+  ① **状态栏压住编辑器「保存」**：壳里 `enableEdgeToEdge()` 让内容画到状态栏下，
+     而 **Android WebView 不填充 `env(safe-area-inset-*)`**（恒为 0）→ 网页侧的安全区补白全失效。
+     改在 `MainActivity.kt` 把系统栏 + 刘海高度作为内边距加在内容根视图上（写法固化在 prep 脚本里，
+     因为 `gen/` 不入库）。**取证**：APK 的 dex 里能搜到 `setOnApplyWindowInsetsListener` 与 `displayCutout`。
+  ② **合集内新建文章不归入该合集**：`EditorOverlay` 的 `initialCollectionId` 只在「编辑既有文章」
+     分支里赋值，新建时永远是 `undefined`（`openEditor({collectionId})` 白传）。
+     顺手堵住反向 bug：全局「新建文章」入口显式传 `collectionId: undefined`，
+     否则 `openEditor` 的合并式 set 会**残留上一次合集的 id**。
+     并把这段推导抽成纯函数 `initialCollectionOf()`，用 SSR 探针断言 4 种情形（全绿）。
+  ③ **云备份失败**：WebView 同样受同源策略约束，而坚果云等 WebDAV 服务商不返回 CORS 头 →
+     浏览器/webview 直连必被拦。**接入 `tauri-plugin-http`，壳里所有 WebDAV 请求改由 Rust 发起**
+     （原生 HTTP 客户端不受同源策略约束）。网页版仍走 `window.fetch`（行为不变）。
+  ④ **提示「保存成功」但实际没保存**：Android WebView **不实现 `<a download>`**（没有下载管理器接管，
+     而且**不报错**）→ `saveBlob()` 走完最后一条路径后静默返回，调用方照样提示成功。
+     现在壳里走 `tauri-plugin-fs` **真正写盘**（下载目录/VidaOS → 文档目录 → 应用数据目录依次尝试），
+     返回落点并提示「已保存到「下载目录/VidaOS」」；写不进去就抛错。灯箱「保存图片」同样接入。
+  另：WebDAV 失败提示补上底层错误名（否则只会看到一句「网络不可达」，没法排查）。
 - **v1.0.0（2026-10-09）** —— **首个正式版 + Tauri 壳（Android）**：
   ① 版本号 `package.json` / `package-lock.json` / README 徽章 / 应用内页脚统一为 **1.0.0**
   （此前一直停在 4.4.1，是旧约定，用户这次明确要 1.0.0）。
@@ -1461,6 +1484,24 @@ npm run desktop:dev / desktop:build   # 桌面
   - **WebDAV 的 CORS 限制在壳里可以彻底解决**（把请求交给 Rust 侧发），代码注释里早就留了这个口子，
     属于后续增强项；
   - 桌面与 Android 的「关闭窗口」行为差异由 Tauri 处理，应用侧不用管。
+
+### 38) Android WebView 与浏览器不一样的地方（v1.0.1 —— **手机端功能必须按这节自检**）
+用户是拿真机测出问题的，浏览器里**一个都复现不出来**。凡是「手机上某个按钮没反应/被挡/白提示」
+先怀疑下面这几条：
+1. **`env(safe-area-inset-*)` 恒为 0**：Android WebView 不填充安全区变量，而 targetSdk 35+
+   又强制边到边显示 → 顶部/底部会被状态栏与导航栏盖住。
+   解法只有原生层：把 `WindowInsets` 作为 padding 加到内容根视图（见 `scripts/android-prep.mjs`
+   写入的 `MainActivity.kt`）。**不要**指望在 CSS 里修。
+2. **`<a download>` 什么都不做，而且不报错**：WebView 没有下载管理器接管 → 静默失败。
+   所有「导出/保存/备份」都必须走 `tauri-plugin-fs` 真写盘（`lib/shell.ts` 的 `shellSaveFile`），
+   并把**真实落点**告诉用户。判断「到底存没存」只能靠返回值，不能靠「没抛异常」。
+3. **同源策略照旧生效**：WebView 是浏览器内核，跨域请求照样被 CORS 拦；WebDAV 服务商基本不发
+   CORS 头 → **跨域请求一律走 `tauri-plugin-http`**（`lib/shell.ts` 的 `shellFetch`，Rust 侧发请求）。
+4. **没有 `navigator.share`、没有 `showSaveFilePicker`、没有 `showDirectoryPicker`**：
+   → 保存走 fs 插件；「备份到本地文件夹」在 Android 不可用（已有 `supportsFolderPicker()` 守卫）。
+5. **Service Worker 没有意义**（本地资源协议）：壳里主动注销（`lib/shell.ts`）。
+6. **debug 构建会去连 `localhost:5173`**：手机装上只会白屏 → 侧载一律用 release（第 4 节之 37）。
+7. 本机**没有模拟器**：真机问题只能在真机上验，报告时要如实说明「只做了静态核对」。
 
 ---
 

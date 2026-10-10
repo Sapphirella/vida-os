@@ -136,4 +136,52 @@ if (!fs.existsSync(initGradle)) {
   );
   says('已写入 Gradle 依赖镜像 init.gradle');
 }
+/* ④ Android 原生修补：状态栏/导航栏安全区（真机反馈「文章保存键被状态栏挡住」）
+ *
+ * 原因：MainActivity 调了 enableEdgeToEdge()（targetSdk 35+ 也强制全屏边到边），
+ * 内容因此画到状态栏下面；而 **Android WebView 不填充 env(safe-area-inset-*)**（恒为 0），
+ * 网页侧那套安全区补白在壳里完全失效 → 顶部工具栏与编辑器「保存」被状态栏盖住。
+ * 修法：把系统栏 + 刘海的高度作为**内边距**加在内容根视图上（WebView 整体下移），
+ * 网页里原本为 0 的补白不会造成双重留白。
+ */
+const mainActivity = path.join(
+  root, 'src-tauri/gen/android/app/src/main/java/com/vidaos/app/MainActivity.kt',
+);
+const mainActivityBody = `package com.vidaos.app
+
+import android.os.Bundle
+import android.view.ViewGroup
+import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+class MainActivity : TauriActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    enableEdgeToEdge()
+    super.onCreate(savedInstanceState)
+
+    // 安全区修补（由 scripts/android-prep.mjs 写入，勿手改；改了会被覆盖）：
+    // WebView 不认 env(safe-area-inset_*)，这里把系统栏/刘海高度加在内容根视图上。
+    val content = findViewById<ViewGroup>(android.R.id.content)
+    ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+      val bars = insets.getInsets(
+        WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+      )
+      view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+      insets
+    }
+  }
+}
+`;
+if (fs.existsSync(path.dirname(mainActivity))) {
+  const cur = fs.existsSync(mainActivity) ? fs.readFileSync(mainActivity, 'utf8') : '';
+  if (cur !== mainActivityBody) {
+    fs.writeFileSync(mainActivity, mainActivityBody);
+    says('已修补 MainActivity.kt（状态栏安全区）');
+  } else {
+    says('MainActivity.kt 安全区补丁已就位');
+  }
+} else {
+  says('还没生成 Android 工程（先跑 npm run android:init），跳过 MainActivity 修补');
+}
 says('准备完成');

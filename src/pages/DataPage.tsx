@@ -24,6 +24,7 @@ import { useAppStore } from '@/stores/useAppStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { putFile, db } from '@/lib/db';
 import { flushPersist } from '@/stores/useAppStore';
+import type { ShellSave } from '@/lib/shell';
 import { base64ToBlob, saveBlob, saveText, clsx, errMsg } from '@/lib/utils';
 import {
   exportJSON,
@@ -356,6 +357,14 @@ export function DataPage() {
     }
   };
 
+  /**
+   * 保存结果提示（v1.0.1）：壳里保存会返回真实落点，必须告诉用户存到哪了 ——
+   * 真机反馈「提示保存成功但实际没保存」正是 Android WebView 不支持 <a download> 造成的。
+   */
+  const reportSaved = (res: ShellSave | null, label: string) => {
+    showToast(res ? `${label}已保存到「${res.label}」` : `${label}成功`, 'success');
+  };
+
   const doSaveSnapshot = async () => {
     if (snapBusy) return;
     setSnapBusy(true);
@@ -420,8 +429,12 @@ export function DataPage() {
     try {
       setExporting('json');
       const json = await exportJSON(state, scopes);
-      await saveText(json, `vidaos-${scopeSlug(scopes)}-${timestamp()}.json`, 'application/json');
-      showToast('导出成功', 'success');
+      const res = await saveText(
+        json,
+        `vidaos-${scopeSlug(scopes)}-${timestamp()}.json`,
+        'application/json',
+      );
+      reportSaved(res, '导出');
     } catch (e) {
       showToast(`导出失败：${errMsg(e)}`, 'error');
     } finally {
@@ -437,8 +450,8 @@ export function DataPage() {
     try {
       setExporting('md');
       const md = exportMarkdown(state, scopes);
-      await saveText(md, `vidaos-${scopeSlug(scopes)}-${timestamp()}.md`, 'text/markdown');
-      showToast('导出成功', 'success');
+      const res = await saveText(md, `vidaos-${scopeSlug(scopes)}-${timestamp()}.md`, 'text/markdown');
+      reportSaved(res, '导出');
     } catch (e) {
       showToast(`导出失败：${errMsg(e)}`, 'error');
     } finally {
@@ -454,8 +467,8 @@ export function DataPage() {
     try {
       setExporting('txt');
       const txt = exportTXT(state, scopes);
-      await saveText(txt, `vidaos-${scopeSlug(scopes)}-${timestamp()}.txt`, 'text/plain');
-      showToast('导出成功', 'success');
+      const res = await saveText(txt, `vidaos-${scopeSlug(scopes)}-${timestamp()}.txt`, 'text/plain');
+      reportSaved(res, '导出');
     } catch (e) {
       showToast(`导出失败：${errMsg(e)}`, 'error');
     } finally {
@@ -471,8 +484,8 @@ export function DataPage() {
     try {
       setExporting('pdf');
       const blob = await exportPDF(state, scopes);
-      await saveBlob(blob, `vidaos-${scopeSlug(scopes)}-${timestamp()}.pdf`);
-      showToast('PDF 导出成功', 'success');
+      const res = await saveBlob(blob, `vidaos-${scopeSlug(scopes)}-${timestamp()}.pdf`);
+      reportSaved(res, 'PDF 导出');
     } catch (e) {
       showToast(`PDF 失败：${errMsg(e)}`, 'error');
     } finally {
@@ -485,8 +498,9 @@ export function DataPage() {
     try {
       setExporting('json');
       const json = await exportJSON(state, ['all']);
-      await saveText(json, `vidaos-backup-${timestamp()}.json`, 'application/json');
-      showToast('备份已生成', 'success');
+      const res = await saveText(json, `vidaos-backup-${timestamp()}.json`, 'application/json');
+      // 完整备份是用户最在意的一条：必须说清到底存到哪了
+      reportSaved(res, '完整备份');
     } catch (e) {
       showToast(`备份失败：${errMsg(e)}`, 'error');
     } finally {

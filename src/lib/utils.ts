@@ -1,4 +1,5 @@
 // 通用工具函数
+import { isTauri, shellSaveFile, type ShellSave } from './shell';
 
 export function uid(prefix = ''): string {
   const r = Math.random().toString(36).slice(2, 10);
@@ -162,7 +163,17 @@ function isIOSBrowser(): boolean {
  *      Android Chrome（含 PWA standalone）会把文件自动存入系统「下载」文件夹，无需分享面板。
  *      该机制与 Chambre「参考文件-IB机」的 downloadBlob 实现一致。
  */
-export async function saveBlob(blob: Blob, filename: string): Promise<void> {
+/**
+ * 保存文件。
+ * @returns 壳里保存时返回落点（用于告诉用户存到哪了）；浏览器路径返回 null。
+ *
+ * ⚠️ v1.0.1 修：Android WebView **不实现** `<a download>`（没有下载管理器接管，且不报错），
+ * 以前代码在这条路径上会「提示保存成功但其实什么都没发生」（真机反馈）。
+ * 现在壳里改走 fs 插件**真正写盘**，写不进去就抛错，让调用方如实报错。
+ */
+export async function saveBlob(blob: Blob, filename: string): Promise<ShellSave | null> {
+  if (isTauri()) return shellSaveFile(blob, filename);
+
   // 1) 桌面 Chromium：系统「另存为」—— 用户可自由选择保存到本地文件夹
   const picker = (window as Window & {
     showSaveFilePicker?: (opts?: {
@@ -178,10 +189,10 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-      return; // 已写入用户选择的本地位置
+      return null; // 已写入用户选择的本地位置
     } catch (err) {
       // 用户取消保存对话框时静默退出，其余错误继续走后面的路径
-      if ((err as Error)?.name === 'AbortError') return;
+      if ((err as Error)?.name === 'AbortError') return null;
     }
   }
 
@@ -201,10 +212,10 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
     ) {
       try {
         await nav.share({ files: [file], title: filename });
-        return; // 已交给系统（可能已保存，用户也可能取消了分享）
+        return null; // 已交给系统（可能已保存，用户也可能取消了分享）
       } catch (err) {
         // 用户主动取消分享面板时静默退出，其余错误继续走下载兜底
-        if ((err as Error)?.name === 'AbortError') return;
+        if ((err as Error)?.name === 'AbortError') return null;
       }
     }
   }
@@ -219,9 +230,14 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return null;
 }
 
-export async function saveText(text: string, filename: string, mime: string): Promise<void> {
+export async function saveText(
+  text: string,
+  filename: string,
+  mime: string,
+): Promise<ShellSave | null> {
   return saveBlob(new Blob([text], { type: `${mime};charset=utf-8` }), filename);
 }
 

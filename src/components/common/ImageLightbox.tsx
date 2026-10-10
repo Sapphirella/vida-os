@@ -5,6 +5,8 @@ import { useAppStore } from '@/stores/useAppStore';
 import { fileURL } from '@/lib/fileUrl';
 import { fullImageId } from '@/lib/media';
 import { getFile } from '@/lib/db';
+import { isTauri } from '@/lib/shell';
+import { saveBlob } from '@/lib/utils';
 
 /**
  * 图片放大预览（全局，App 挂载）：
@@ -62,6 +64,17 @@ export function ImageLightbox() {
     // mime 可能缺失（手改过的备份/极旧的记录）→ 别让它把「保存图片」整条打挂
     const ext = ((f.mime || 'image/jpeg').split('/')[1] || 'jpg').replace('jpeg', 'jpg');
     const name = f.name || `vidaos-${fileId}.${ext}`;
+    // 原生壳（Android）：WebView 既没有 navigator.share 也不理 <a download>，
+    // 必须走壳的文件写入（v1.0.1，真机反馈「提示保存成功但没保存」）
+    if (isTauri()) {
+      try {
+        const saved = await saveBlob(f.blob, name);
+        showToast(saved ? `图片已保存到「${saved.label}」` : '图片已保存', 'success');
+      } catch (e) {
+        showToast(`保存失败：${e instanceof Error ? e.message : '未知原因'}`, 'error');
+      }
+      return;
+    }
     // 手机：系统分享（可存相册）；电脑：<a download> 直接下载
     if (isTouch && typeof navigator.share === 'function' && navigator.canShare) {
       try {

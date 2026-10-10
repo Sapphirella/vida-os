@@ -1,6 +1,6 @@
 [package]
 name = "vidaos"
-version = "1.0.0"
+version = "1.0.1"
 description = "VidaOS — 你的私密生活记录空间"
 authors = ["VidaOS"]
 edition = "2021"
@@ -15,8 +15,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# 只依赖 tauri 本体：壳不需要任何额外能力，依赖越少构建越稳
 tauri = { version = "2", features = [] }
+# 三个官方插件，都只为一个目的：让「手机上的 VidaOS」真正能用
+#   http   —— WebDAV 请求交给 Rust 发，绕开 WebView 的同源策略（坚果云等不发 CORS 头）
+#   fs     —— 导出/备份真正写盘（Android WebView 不支持 <a download>，会静默什么都不做）
+#   opener —— 把刚保存的文件交给系统「打开方式」，从而能另存/分享出去
+tauri-plugin-http = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

@@ -91,7 +91,7 @@ export function SpacePage() {
         <div className="flex items-center gap-2 mt-6 mb-4">
           <button
             onClick={() =>
-              openEditor({ mode: 'article', open: true })
+              openEditor({ mode: 'article', open: true, collectionId: undefined })
             }
             className="btn-primary"
             style={{ padding: '7px 14px', fontSize: '0.8125rem' }}
@@ -245,7 +245,7 @@ export function SpacePage() {
               hint="写下你的第一篇长文，把想法安放"
               action={
                 <button
-                  onClick={() => openEditor({ mode: 'article', open: true })}
+                  onClick={() => openEditor({ mode: 'article', open: true, collectionId: undefined })}
                   className="btn-primary"
                 >
                   <Plus size={14} strokeWidth={1.6} /> 写文章

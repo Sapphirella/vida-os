@@ -69,7 +69,13 @@ export function EditorOverlay() {
   let initialTitle = editor.initialTitle || '';
   let initialContent = editor.initialContent || '';
   let initialImageIds: string[] = editor.imageIds ?? EMPTY_IDS;
-  let initialCollectionId: string | undefined;
+  // 新建文章时的归属合集：从 openEditor({collectionId}) 取（v1.0.1 修）。
+  // 之前这里没有初值，只有「编辑已存在文章」那条分支才会赋值 —— 于是在合集页点「写文章」
+  // 新建出来的文章 collectionId 永远是 undefined，不会被加进当前合集。
+  let initialCollectionId: string | undefined = initialCollectionOf({
+    editorCollectionId: editor.collectionId,
+    editingId,
+  });
   let initialTags: string[] = editor.tags ?? EMPTY_TAGS;
   let initialCreatedAt = editor.initialCreatedAt;
 
@@ -80,7 +86,11 @@ export function EditorOverlay() {
         initialTitle = art.title;
         initialContent = art.content;
         initialImageIds = art.imageIds;
-        initialCollectionId = art.collectionId;
+        initialCollectionId = initialCollectionOf({
+          editorCollectionId: editor.collectionId,
+          editingId,
+          articleCollectionId: art.collectionId,
+        });
         initialTags = art.tags;
       }
     } else if (mode === 'moment') {
@@ -117,6 +127,23 @@ export function EditorOverlay() {
       onClose={closeEditor}
     />
   );
+}
+
+/**
+ * 编辑器初值里的「归属合集」。
+ *
+ * 抽成纯函数是为了能被**直接验证**（本轮真机 bug 就出在这里）：
+ *   - 新建文章：取 openEditor({ collectionId }) 传进来的那个（否则合集页点「写文章」白点）；
+ *   - 编辑既有文章：以文章自己存的 collectionId 为准；
+ *   - 编辑但文章已不存在（数据被清/并发删除）：退回传进来的那个，不要丢。
+ */
+export function initialCollectionOf(args: {
+  editorCollectionId?: string;
+  editingId?: string;
+  articleCollectionId?: string;
+}): string | undefined {
+  if (args.editingId) return args.articleCollectionId ?? args.editorCollectionId;
+  return args.editorCollectionId;
 }
 
 function getEditorTitle(mode: 'article' | 'moment', isEdit: boolean): string {

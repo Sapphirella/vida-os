@@ -14,6 +14,11 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 见 Cargo.toml 的注释：这三个插件分别解决「云备份被 CORS 拦」「导出文件写不进去」
+        // 「保存的图片/备份打不开」——都是真机反馈出来、浏览器里根本不会暴露的问题。
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())
         .expect("VidaOS 启动失败");
 }

@@ -329,6 +329,17 @@ export function SettingsPage() {
         <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-4 text-[13px] leading-relaxed">
           <section>
             <h4 className="font-serif text-candle font-semibold mb-1">
+              1.0.1 · 真机修复
+            </h4>
+            <ul className="text-paper space-y-1 list-disc pl-5">
+              <li>修「文章编辑器的保存键被手机顶部状态栏挡住」（壳里补上系统栏安全区）。</li>
+              <li>修「在合集里新建文章没有自动归入该合集」。</li>
+              <li>修手机壳里云备份失败（WebDAV 请求改由原生侧发起，不再被同源策略拦截）。</li>
+              <li>修「提示备份保存成功、其实没保存」（WebView 不支持 <code>&lt;a download&gt;</code>，改为真正写盘并告知保存位置）。</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="font-serif text-candle font-semibold mb-1">
               1.0.0 · 首个正式版
             </h4>
             <p className="text-paper">
@@ -655,7 +666,7 @@ export function SettingsPage() {
         <Card className="p-5 sm:p-6 text-center">
           <p className="font-serif text-headline text-lg tracking-widest">VidaOS</p>
           <p className="font-mono text-[10px] tracking-widest text-bronze-deep uppercase mt-1">
-            v1.0.0 · night study
+            v1.0.1 · night study
           </p>
           <p className="font-sans text-bronze text-xs mt-3 leading-relaxed">
             你的私密生活记录空间。
