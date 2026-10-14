@@ -4,9 +4,7 @@
 >
 > **English**: A privacy-first, offline PWA for personal life journaling. Styled as a private study with a Morandi color palette, it features notes, articles, a library, AI agent chat, and end-to-end encrypted cloud backup. All data stays local in IndexedDB — no servers, no tracking, fully yours.
 >
-> v4.4：**馆藏**（书架 + 阅读器：导入 txt/md、划线高亮、引用问 AI 的共读抽屉）上线，
-> 取代了原来的「碎片」（**v4.7 碎片以新形态回到「便签」里**：日历 + 当天时间轴，见下）；
-> 底栏改为 **主页 / 便签 / Agent / 数据 / 设置**。
+> 
 
 ![Version](https://img.shields.io/badge/version-1.0.1-6A080E?style=flat-square) ![Tech](https://img.shields.io/badge/stack-React%20%2B%20TS%20%2B%20Tailwind-947D75?style=flat-square) ![License](https://img.shields.io/badge/license-Personal-BCAAA8?style=flat-square)
 
