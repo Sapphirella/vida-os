@@ -2,6 +2,8 @@
 
 > 你的私密生活记录空间 —— **暗夜书房**风格，纯本地离线运行，数据完全属于你自己。
 >
+> **English**: A privacy-first, offline PWA for personal life journaling. Styled as a private study with a Morandi color palette, it features notes, articles, a library, AI agent chat, and end-to-end encrypted cloud backup. All data stays local in IndexedDB — no servers, no tracking, fully yours.
+>
 > v4.4：**馆藏**（书架 + 阅读器：导入 txt/md、划线高亮、引用问 AI 的共读抽屉）上线，
 > 取代了原来的「碎片」（**v4.7 碎片以新形态回到「便签」里**：日历 + 当天时间轴，见下）；
 > 底栏改为 **主页 / 便签 / Agent / 数据 / 设置**。
@@ -86,7 +88,7 @@
 
 ---
 
-## ✦ 功能一览
+## ✦ 功能一览 / Features
 
 ### 桌面（首页）
 - **大时间日期标题区**：打字机风大时钟 + 日期 + 问候语 + 个性签名；
