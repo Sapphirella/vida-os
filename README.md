@@ -1,6 +1,6 @@
 # VidaOS
 
-> 你的私密生活记录空间 —— **暗夜书房**风格，纯本地离线运行，数据完全属于你自己。
+> 你的私密生活记录空间 —— 纯本地离线运行，数据完全属于你自己。
 >
 > **English**: A privacy-first, offline PWA for personal life journaling. Styled as a private study with a Morandi color palette, it features notes, articles, a library, AI agent chat, and end-to-end encrypted cloud backup. All data stays local in IndexedDB — no servers, no tracking, fully yours.
 >
@@ -25,7 +25,7 @@
 主题选择持久化在 `localStorage`（键 `vidaos-theme`），支持「跟随系统」；
 `index.html` 内联脚本在首帧前设置 `data-theme`，避免刷新白屏闪烁。
 
-### 暗夜书房 · 色板（用户亲自选定，**不要擅自改**）
+### 暗夜书房 · 色板
 
 视觉灵感来自私人书房里最安静的时刻——老打字机、陈年波尔多酒、烛光、羊皮纸、旧木桌。
 色板在 `tailwind.config.js` 与 `globals.css` 的 `:root` 两处保持一致：
